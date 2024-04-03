@@ -1,5 +1,5 @@
 """
-    implementation of the sparse spatial sampling algorithm for 2D & 3D (no 1D)
+    implementation of the sparse spatial sampling algorithm (s_cube) for 2D & 3D (no 1D)
 """
 import torch as pt
 
@@ -269,14 +269,16 @@ class SamplingTree(object):
             self._update_gain()
             self._update_min_ref_level()
 
-            # delete cells which are outside the domain or inside a geometry
-            self.remove_invalid_cells()
+            # delete cells which are outside the domain or inside a geometry, in order to save execution time only check
+            # 10 iterations or when the number of cells is in the vicinity of max. number of cells
+            if iteration_count % 10 == 0 or (self._n_cells_max - self._n_cells) < 50:
+                self.remove_invalid_cells()
 
             iteration_count += 1
         end_time = time()
-        print("Finished refinement in {:2.8f}s ({:d} iterations).".format(end_time - start_time, iteration_count))
-        print("Time for uniform refinement: {:2.8f}s".format(end_time_uniform - start_time))
-        print("Time for adaptive refinement: {:2.8f}s".format(end_time - end_time_uniform))
+        print("Finished refinement in {:2.4f} s ({:d} iterations).".format(end_time - start_time, iteration_count))
+        print("Time for uniform refinement: {:2.4f} s".format(end_time_uniform - start_time))
+        print("Time for adaptive refinement: {:2.4f} s".format(end_time - end_time_uniform))
         print(self)
 
     def leaf_cells(self):

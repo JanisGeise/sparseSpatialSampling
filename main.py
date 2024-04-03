@@ -1,15 +1,21 @@
 """
-    execute the sparse spatial sampling algorithm on 2D CFD data, export the resulting mesh as XDMF and plot the results
+    execute the sparse spatial sampling algorithm on 2D & 3D CFD data for testing purposes, export the resulting mesh
+    as XDMF and HDF5 files. The test cases are OpenFoam tutorials with some adjustments wrt number of cells and Reynolds
+    number, currently:
+
+        - cylinder2D (at Re = 1000), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/laminar/
+        - surfaceMountedCube (coarser grid), located under: $FOAM_TUTORIALS/incmpressible/pimpleFoam/LES/
 """
 import torch as pt
 
+from time import time
 from typing import Tuple
 from os.path import join
 from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
-from export_data import DataWriter
-from s3_implementation import SamplingTree
+from s_cube.export_data import DataWriter
+from s_cube.s_cube import SamplingTree
 
 
 def load_cylinder_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, list]:
@@ -70,44 +76,48 @@ def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tenso
 
 
 if __name__ == "__main__":
-    # load path to the CFD data
-    load_path_cylinder = join("data", "2D", "cylinder2D_re1000")
-    save_path_cylinder = join("data", "2D", "exported_grids")
+    # -----------------------------------------   execute for cube   -----------------------------------------
+    load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
+    save_path_cube = join("", "data", "3D", "exported_grids")
 
-    load_path_cube = join("data", "3D", "surfaceMountedCube", "fullCase")
-    save_path_cube = join("data", "3D", "exported_grids")
-
-    # target number of cells in the coarsened grid
+    # target number of cells in the coarsened grid (orig. 27974 cells for chosen bounds)
     n_cells_cube = 500
-    n_cells_cylinder = 500     # (orig: 14150 cells for chosen bounds)
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
     geometry = [[3.5, 4, -1], [4.5, 5, 1]]       # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
 
-    # create directory for plots
-    if not path.exists(save_path_cylinder) or not path.exists(save_path_cube):
-        makedirs(save_path_cylinder)
-        makedirs(save_path_cube)
-
     # load the CFD data
     pressure, coord, times = load_cube_data(load_path_cube, bounds)
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(0, 25), cells_per_iter=10,
+    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(1, 25), cells_per_iter=10,
                             n_neighbors=26, boundaries=bounds, geometry=geometry, write_times=times)
     sampling.refine()
 
     # compute the cell centers and vertices of each leaf cell
     sampling.compute_nodes_final_mesh()
 
+    # create directory for plots
+    if not path.exists(save_path_cube):
+        makedirs(save_path_cube)
+
     # fit the pressure field onto the new mesh and export the data
+    t_start = time()
     export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cube, field_names=["p", "U"],
                              save_dir=save_path_cube, domain_boundaries=bounds,
                              save_name=f"final_mesh_{n_cells_cube}_cells_cube", grid_name="cube")
     export_data.export()
+    print(f"Export required {round((time() - t_start), 3)} s.\n")
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
+    # load paths to the CFD data
+    load_path_cylinder = join("", "data", "2D", "cylinder2D_re1000")
+    save_path_cylinder = join("", "data", "2D", "exported_grids")
+
+    # target number of cells in the coarsened grid (orig: 14150 cells for chosen bounds)
+    n_cells_cylinder = 500
+
     # boundaries of the masked domain for the cylinder
     bounds = [[0.1, 0], [1.0, 0.41]]      # [[xmin, ymin], [xmax, ymax]]
     geometry = [[0.2, 0.2], 0.05]       # [[x, y], r]
@@ -116,15 +126,21 @@ if __name__ == "__main__":
     pressure, coord, times = load_cylinder_data(load_path_cylinder, bounds)
 
     # coarsen the cylinder2D mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(0, 25),
-                            cells_per_iter=1, n_neighbors=8, boundaries=bounds, geometry=geometry)
+    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(1, 25),
+                            cells_per_iter=10, n_neighbors=8, boundaries=bounds, geometry=geometry)
     sampling.refine()
 
     # compute the cell centers and vertices of each leaf cell
     sampling.compute_nodes_final_mesh()
 
+    # create directory for plots
+    if not path.exists(save_path_cylinder):
+        makedirs(save_path_cylinder)
+
     # fit the pressure field onto the new mesh and export the data
+    t_start = time()
     export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cylinder, field_names=["p", "U"],
                              save_dir=save_path_cylinder, domain_boundaries=bounds,
                              save_name=f"final_mesh_{n_cells_cylinder}_cells_cylinder", grid_name="cylinder")
     export_data.export()
+    print(f"Export required {round((time() - t_start), 3)} s.")
