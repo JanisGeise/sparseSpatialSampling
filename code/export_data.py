@@ -3,9 +3,10 @@
     with the s^3 algorithm. Export the interpolated data to HDF5 and XDMF in order to be able to load them into paraview
 """
 import h5py
+import numpy as np
 import torch as pt
 
-from tqdm import tqdm       # progressbar
+from numba import njit
 from os.path import join
 from sklearn.neighbors import KNeighborsRegressor
 from flowtorch.data import mask_box, FOAMDataloader
@@ -27,7 +28,7 @@ class DataWriter:
 
         # compute and resort the cell faces for loading in paraview
         print("Computing cell faces and nodes of final grid...")
-        self._resort_grid()
+        self._faces = resort_grid(self._faces.numpy(), self._vertices.numpy(), self._n_dimensions)
         print("Done.")
 
         # empty dict which stores the interpolated fields, created when calling the '_load_and_fit_data' method, if no
@@ -39,27 +40,6 @@ class DataWriter:
         self._n_neighbors = 8 if self._n_dimensions == 2 else 26
         self._knn = KNeighborsRegressor(n_neighbors=self._n_neighbors, weights="distance")
         self._interpolated_fields = {}
-
-    def _resort_grid(self):
-        # map the faces to the corresponding idx of the vertices, therefore loop over all faces
-        _indices = pt.zeros((self._faces.size()[0], self._faces.size()[1]))
-        for f in tqdm(range(self._faces.size()[0])):
-            # check to which positions the vertices of the current face correspond within the vertices list
-            tmp, counter = pt.zeros(self._faces.size()[1]), 0
-
-            for idx in range(self._vertices.size()[0]):
-                # check if the current node matches any of the nodes of the current cell
-                if (pt.isin(self._faces[f, :, :], self._vertices[idx, :]).int().sum(dim=1) == self._n_dimensions).any():
-                    # if that is the case, add the current node to the list of nodes, which make up the cell
-                    tmp[counter] = idx
-                    counter += 1
-            _indices[f, :] = tmp
-
-        # replace the vertices with the computed cell faces
-        if self._n_dimensions == 2:
-            self._faces = pt.index_select(_indices.int(), 1, pt.tensor([0, 1, 3, 2]))
-        else:
-            self._faces = pt.index_select(_indices.int(), 1, pt.tensor([0, 1, 3, 2, 4, 5, 7, 6]))
 
     def _write_data(self):
         _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
@@ -166,7 +146,7 @@ class DataWriter:
             coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask)], dim=1)
         else:
             coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
-                             pt.masked_select(vertices[:, 2], mask)], dim=1)
+                              pt.masked_select(vertices[:, 2], mask)], dim=1)
 
         # get all available time steps, skip the zero folder
         _write_time = [t for t in loader.write_times[1:]]
@@ -215,6 +195,31 @@ class DataWriter:
         self._load_and_fit_data()
         self._write_data()
         print("Finished export.")
+
+
+@njit
+def resort_grid(_faces, _vertices, _n_dimensions):
+    # map the faces to the corresponding idx of the vertices, therefore loop over all faces
+    _indices = np.zeros((_faces.shape[0], _faces.shape[1]), dtype=np.int64)
+    for f in range(_faces.shape[0]):
+        # check to which positions the vertices of the current face correspond within the vertices list
+        tmp, counter = np.zeros(_faces.shape[1], dtype=np.int64), 0
+
+        for idx in range(_vertices.shape[0]):
+            # check if the current node matches any of the nodes of the current cell (np.isin() not supported by numba)
+            if (np.sum(_faces[f, :, :] == _vertices[idx, :], axis=1) == _n_dimensions).any():
+                # if that is the case, add the current node to the list of nodes, which make up the cell
+                tmp[counter] = idx
+                counter += 1
+        _indices[f, :] = tmp
+
+    # replace the vertices with the computed cell faces, swap the last columns to avoid issues in paraview, note:
+    # idx slicing not supported in numba, e.g. _indices[:, (0, 1, 3, 2)] or _indices[:, (0, 1, 3, 2, 4, 5, 7, 6)]
+    if _n_dimensions == 2:
+        return np.column_stack((_indices[:, :2], _indices[:, 3], _indices[:, 2]))
+    else:
+        return np.column_stack((_indices[:, :2], _indices[:, 3], _indices[:, 2], _indices[:, 4:6], _indices[:, 7],
+                                _indices[:, 6]))
 
 
 if __name__ == "__main__":

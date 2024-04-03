@@ -1,16 +1,15 @@
 """
     execute the sparse spatial sampling algorithm on 2D CFD data, export the resulting mesh as XDMF and plot the results
 """
-from os import path, makedirs
-
 import torch as pt
 
 from typing import Tuple
 from os.path import join
+from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s3_implementation import SamplingTree
 from export_data import DataWriter
+from s3_implementation import SamplingTree
 
 
 def load_cylinder_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, list]:
@@ -72,11 +71,11 @@ def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tenso
 
 if __name__ == "__main__":
     # load path to the CFD data
-    load_path_cylinder = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path_cylinder = join("..", "data", "2D", "exported_grids")
+    load_path_cylinder = join("data", "2D", "cylinder2D_re1000")
+    save_path_cylinder = join("data", "2D", "exported_grids")
 
-    load_path_cube = join("..", "data", "3D", "surfaceMountedCube", "fullCase")
-    save_path_cube = join("..", "data", "3D", "exported_grids")
+    load_path_cube = join("data", "3D", "surfaceMountedCube", "fullCase")
+    save_path_cube = join("data", "3D", "exported_grids")
 
     # target number of cells in the coarsened grid
     n_cells_cube = 500
@@ -95,7 +94,7 @@ if __name__ == "__main__":
     pressure, coord, times = load_cube_data(load_path_cube, bounds)
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(0, 25), cells_per_iter=1,
+    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(0, 25), cells_per_iter=10,
                             n_neighbors=26, boundaries=bounds, geometry=geometry, write_times=times)
     sampling.refine()
 

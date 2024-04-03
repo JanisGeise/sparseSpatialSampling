@@ -70,7 +70,7 @@ class SamplingTree(object):
             self._directions = pt.tensor([[-1, -1, -1], [-1, 1, -1], [1, 1, -1], [1, -1, -1],
                                           [-1, -1, 1], [-1, 1, 1], [1, 1, 1], [1, -1, 1]])
 
-        # create inital cell
+        # create initial cell
         self._create_first_cell()
 
         # boundary of the domain, assume rectangular domain [[xmin, ymin], [xmax, ymax]], currently cell center is used
@@ -143,330 +143,16 @@ class SamplingTree(object):
             new_index = len(self._cells)
             for cell in self._cells:
                 if cell.leaf_cell():
-                    cell_tmp = []
-
                     # find the neighbors of current cell
                     neighbors = self._find_neighbors(cell)
 
                     # compute cell centers
                     loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
-                    # each cell gets new idx
-                    for idx, loc in enumerate(loc_center):
-                        cell_tmp.append(Cell(new_index + idx, cell, len(neighbors) * [None], loc,
-                                             cell.level + 1, dimensions=self._n_dimensions))
+                    # assign the neighbors of current cell and add all new cells as children
+                    cell.children = tuple(assign_neighbors(loc_center, cell, neighbors, new_index, self._n_dimensions))
 
-                    # add the neighbors for each of the child cells
-                    # neighbors for new upper left cell
-                    cell_tmp[0].nb[0] = neighbors[0]
-                    cell_tmp[0].nb[1] = neighbors[1]
-                    cell_tmp[0].nb[2] = neighbors[2]
-                    cell_tmp[0].nb[3] = neighbors[2]
-                    cell_tmp[0].nb[4] = cell_tmp[1]
-                    cell_tmp[0].nb[5] = cell_tmp[2]
-                    cell_tmp[0].nb[6] = cell_tmp[3]
-                    cell_tmp[0].nb[7] = neighbors[0]
-
-                    # neighbors for new upper right cell
-                    cell_tmp[1].nb[0] = cell_tmp[0]
-                    cell_tmp[1].nb[1] = neighbors[2]
-                    cell_tmp[1].nb[2] = neighbors[2]
-                    cell_tmp[1].nb[3] = neighbors[3]
-                    cell_tmp[1].nb[4] = neighbors[4]
-                    cell_tmp[1].nb[5] = neighbors[4]
-                    cell_tmp[1].nb[6] = cell_tmp[2]
-                    cell_tmp[1].nb[7] = cell_tmp[3]
-
-                    # neighbors for new lower right cell
-                    cell_tmp[2].nb[0] = cell_tmp[3]
-                    cell_tmp[2].nb[1] = cell_tmp[0]
-                    cell_tmp[2].nb[2] = cell_tmp[1]
-                    cell_tmp[2].nb[3] = neighbors[4]
-                    cell_tmp[2].nb[4] = neighbors[4]
-                    cell_tmp[2].nb[5] = neighbors[5]
-                    cell_tmp[2].nb[6] = neighbors[6]
-                    cell_tmp[2].nb[7] = neighbors[6]
-
-                    # neighbors for new lower left cell
-                    cell_tmp[3].nb[0] = neighbors[0]
-                    cell_tmp[3].nb[1] = neighbors[0]
-                    cell_tmp[3].nb[2] = cell_tmp[0]
-                    cell_tmp[3].nb[3] = cell_tmp[1]
-                    cell_tmp[3].nb[4] = cell_tmp[2]
-                    cell_tmp[3].nb[5] = neighbors[6]
-                    cell_tmp[3].nb[6] = neighbors[6]
-                    cell_tmp[3].nb[7] = neighbors[7]
-
-                    # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
-                    if self._n_dimensions == 3:
-                        # ----------------  upper left cell center, upper plane  ----------------
-                        # same plane as the current cell (same as for 2D)
-                        cell_tmp[0].nb[0] = neighbors[0]
-                        cell_tmp[0].nb[1] = neighbors[1]
-                        cell_tmp[0].nb[2] = neighbors[2]
-                        cell_tmp[0].nb[3] = neighbors[2]
-                        cell_tmp[0].nb[4] = cell_tmp[1]
-                        cell_tmp[0].nb[5] = cell_tmp[2]
-                        cell_tmp[0].nb[6] = cell_tmp[3]
-                        cell_tmp[0].nb[7] = neighbors[0]
-
-                        # plane under the current cell
-                        cell_tmp[0].nb[8] = neighbors[0]
-                        cell_tmp[0].nb[9] = neighbors[1]
-                        cell_tmp[0].nb[10] = neighbors[2]
-                        cell_tmp[0].nb[11] = neighbors[2]
-                        cell_tmp[0].nb[12] = cell_tmp[5]
-                        cell_tmp[0].nb[13] = cell_tmp[6]
-                        cell_tmp[0].nb[14] = cell_tmp[7]
-                        cell_tmp[0].nb[15] = neighbors[0]
-                        cell_tmp[0].nb[16] = neighbors[4]
-
-                        # plane above the current cell
-                        cell_tmp[0].nb[17] = neighbors[17]
-                        cell_tmp[0].nb[18] = neighbors[18]
-                        cell_tmp[0].nb[19] = neighbors[19]
-                        cell_tmp[0].nb[20] = neighbors[19]
-                        cell_tmp[0].nb[21] = neighbors[25]
-                        cell_tmp[0].nb[22] = neighbors[25]
-                        cell_tmp[0].nb[23] = neighbors[25]
-                        cell_tmp[0].nb[24] = neighbors[17]
-                        cell_tmp[0].nb[25] = neighbors[25]
-
-                        # ----------------  upper right cell center, upper plane  ----------------
-                        # same plane as the current cell (same as for 2D)
-                        cell_tmp[1].nb[0] = cell_tmp[0]
-                        cell_tmp[1].nb[1] = neighbors[2]
-                        cell_tmp[1].nb[2] = neighbors[2]
-                        cell_tmp[1].nb[3] = neighbors[3]
-                        cell_tmp[1].nb[4] = neighbors[4]
-                        cell_tmp[1].nb[5] = neighbors[4]
-                        cell_tmp[1].nb[6] = cell_tmp[2]
-                        cell_tmp[1].nb[7] = cell_tmp[3]
-
-                        # plane under the current cell
-                        cell_tmp[1].nb[8] = cell_tmp[4]
-                        cell_tmp[1].nb[9] = neighbors[2]
-                        cell_tmp[1].nb[10] = neighbors[2]
-                        cell_tmp[1].nb[11] = neighbors[3]
-                        cell_tmp[1].nb[12] = neighbors[4]
-                        cell_tmp[1].nb[13] = neighbors[4]
-                        cell_tmp[1].nb[14] = cell_tmp[6]
-                        cell_tmp[1].nb[15] = cell_tmp[7]
-                        cell_tmp[1].nb[16] = cell_tmp[5]
-
-                        # plane above the current cell
-                        cell_tmp[1].nb[17] = neighbors[25]
-                        cell_tmp[1].nb[18] = neighbors[19]
-                        cell_tmp[1].nb[19] = neighbors[19]
-                        cell_tmp[1].nb[20] = neighbors[20]
-                        cell_tmp[1].nb[21] = neighbors[21]
-                        cell_tmp[1].nb[22] = neighbors[21]
-                        cell_tmp[1].nb[23] = neighbors[25]
-                        cell_tmp[1].nb[24] = neighbors[25]
-                        cell_tmp[1].nb[25] = neighbors[25]
-
-                        # ----------------  lower right cell center, upper plane  ----------------
-                        # same plane as the current cell (same as for 2D)
-                        cell_tmp[2].nb[0] = cell_tmp[3]
-                        cell_tmp[2].nb[1] = cell_tmp[0]
-                        cell_tmp[2].nb[2] = cell_tmp[1]
-                        cell_tmp[2].nb[3] = neighbors[4]
-                        cell_tmp[2].nb[4] = neighbors[4]
-                        cell_tmp[2].nb[5] = neighbors[5]
-                        cell_tmp[2].nb[6] = neighbors[6]
-                        cell_tmp[2].nb[7] = neighbors[6]
-
-                        # plane under the current cell
-                        cell_tmp[2].nb[8] = cell_tmp[7]
-                        cell_tmp[2].nb[9] = cell_tmp[4]
-                        cell_tmp[2].nb[10] = cell_tmp[5]
-                        cell_tmp[2].nb[11] = neighbors[4]
-                        cell_tmp[2].nb[12] = neighbors[4]
-                        cell_tmp[2].nb[13] = neighbors[5]
-                        cell_tmp[2].nb[14] = neighbors[6]
-                        cell_tmp[2].nb[15] = neighbors[6]
-                        cell_tmp[2].nb[16] = cell_tmp[6]
-
-                        # plane above the current cell
-                        cell_tmp[2].nb[17] = neighbors[25]
-                        cell_tmp[2].nb[18] = neighbors[25]
-                        cell_tmp[2].nb[19] = neighbors[25]
-                        cell_tmp[2].nb[20] = neighbors[21]
-                        cell_tmp[2].nb[21] = neighbors[21]
-                        cell_tmp[2].nb[22] = neighbors[22]
-                        cell_tmp[2].nb[23] = neighbors[23]
-                        cell_tmp[2].nb[24] = neighbors[23]
-                        cell_tmp[2].nb[25] = neighbors[25]
-
-                        # ----------------  lower left cell center, upper plane  ----------------
-                        # same plane as the current cell (same as for 2D)
-                        cell_tmp[3].nb[0] = neighbors[0]
-                        cell_tmp[3].nb[1] = neighbors[0]
-                        cell_tmp[3].nb[2] = cell_tmp[0]
-                        cell_tmp[3].nb[3] = cell_tmp[1]
-                        cell_tmp[3].nb[4] = cell_tmp[2]
-                        cell_tmp[3].nb[5] = neighbors[6]
-                        cell_tmp[3].nb[6] = neighbors[6]
-                        cell_tmp[3].nb[7] = neighbors[7]
-
-                        # plane under the current cell
-                        cell_tmp[3].nb[8] = neighbors[0]
-                        cell_tmp[3].nb[9] = neighbors[0]
-                        cell_tmp[3].nb[10] = cell_tmp[4]
-                        cell_tmp[3].nb[11] = cell_tmp[5]
-                        cell_tmp[3].nb[12] = cell_tmp[7]
-                        cell_tmp[3].nb[13] = neighbors[6]
-                        cell_tmp[3].nb[14] = neighbors[6]
-                        cell_tmp[3].nb[15] = neighbors[7]
-                        cell_tmp[3].nb[16] = cell_tmp[7]
-
-                        # plane above the current cell
-                        cell_tmp[3].nb[17] = neighbors[17]
-                        cell_tmp[3].nb[18] = neighbors[17]
-                        cell_tmp[3].nb[19] = neighbors[25]
-                        cell_tmp[3].nb[20] = neighbors[25]
-                        cell_tmp[3].nb[21] = neighbors[25]
-                        cell_tmp[3].nb[22] = neighbors[23]
-                        cell_tmp[3].nb[23] = neighbors[23]
-                        cell_tmp[3].nb[24] = neighbors[24]
-                        cell_tmp[3].nb[25] = neighbors[25]
-
-                        # ----------------  upper left cell center, lower plane  ----------------
-                        # same plane as the current cell
-                        cell_tmp[4].nb[0] = neighbors[0]
-                        cell_tmp[4].nb[1] = neighbors[1]
-                        cell_tmp[4].nb[2] = neighbors[2]
-                        cell_tmp[4].nb[3] = neighbors[2]
-                        cell_tmp[4].nb[4] = cell_tmp[5]
-                        cell_tmp[4].nb[5] = cell_tmp[6]
-                        cell_tmp[4].nb[6] = cell_tmp[7]
-                        cell_tmp[4].nb[7] = neighbors[0]
-
-                        # plane under the current cell
-                        cell_tmp[4].nb[8] = neighbors[8]
-                        cell_tmp[4].nb[9] = neighbors[9]
-                        cell_tmp[4].nb[10] = neighbors[10]
-                        cell_tmp[4].nb[11] = neighbors[10]
-                        cell_tmp[4].nb[12] = neighbors[16]
-                        cell_tmp[4].nb[13] = neighbors[16]
-                        cell_tmp[4].nb[14] = neighbors[16]
-                        cell_tmp[4].nb[15] = neighbors[8]
-                        cell_tmp[4].nb[16] = neighbors[16]
-
-                        # plane above the current cell
-                        cell_tmp[4].nb[17] = neighbors[0]
-                        cell_tmp[4].nb[18] = neighbors[1]
-                        cell_tmp[4].nb[19] = neighbors[2]
-                        cell_tmp[4].nb[20] = neighbors[2]
-                        cell_tmp[4].nb[21] = cell_tmp[1]
-                        cell_tmp[4].nb[22] = cell_tmp[2]
-                        cell_tmp[4].nb[23] = cell_tmp[3]
-                        cell_tmp[4].nb[24] = neighbors[0]
-                        cell_tmp[4].nb[25] = cell_tmp[0]
-
-                        # ----------------  upper right cell center, lower plane  ----------------
-                        # same plane as the current cell
-                        cell_tmp[5].nb[0] = cell_tmp[4]
-                        cell_tmp[5].nb[1] = neighbors[2]
-                        cell_tmp[5].nb[2] = neighbors[2]
-                        cell_tmp[5].nb[3] = neighbors[3]
-                        cell_tmp[5].nb[4] = neighbors[4]
-                        cell_tmp[5].nb[5] = neighbors[4]
-                        cell_tmp[5].nb[6] = cell_tmp[6]
-                        cell_tmp[5].nb[7] = cell_tmp[7]
-
-                        # plane under the current cell
-                        cell_tmp[5].nb[8] = neighbors[16]
-                        cell_tmp[5].nb[9] = neighbors[10]
-                        cell_tmp[5].nb[10] = neighbors[10]
-                        cell_tmp[5].nb[11] = neighbors[11]
-                        cell_tmp[5].nb[12] = neighbors[12]
-                        cell_tmp[5].nb[13] = neighbors[12]
-                        cell_tmp[5].nb[14] = neighbors[16]
-                        cell_tmp[5].nb[15] = neighbors[16]
-                        cell_tmp[5].nb[16] = neighbors[16]
-
-                        # plane above the current cell
-                        cell_tmp[5].nb[17] = cell_tmp[0]
-                        cell_tmp[5].nb[18] = neighbors[2]
-                        cell_tmp[5].nb[19] = neighbors[2]
-                        cell_tmp[5].nb[20] = neighbors[3]
-                        cell_tmp[5].nb[21] = neighbors[4]
-                        cell_tmp[5].nb[22] = neighbors[4]
-                        cell_tmp[5].nb[23] = cell_tmp[2]
-                        cell_tmp[5].nb[24] = cell_tmp[3]
-                        cell_tmp[5].nb[25] = cell_tmp[1]
-
-                        # ----------------  lower right cell center, lower plane  ----------------
-                        # same plane as the current cell
-                        cell_tmp[6].nb[0] = cell_tmp[7]
-                        cell_tmp[6].nb[1] = cell_tmp[4]
-                        cell_tmp[6].nb[2] = cell_tmp[5]
-                        cell_tmp[6].nb[3] = neighbors[4]
-                        cell_tmp[6].nb[4] = neighbors[4]
-                        cell_tmp[6].nb[5] = neighbors[5]
-                        cell_tmp[6].nb[6] = neighbors[6]
-                        cell_tmp[6].nb[7] = neighbors[6]
-
-                        # plane under the current cell
-                        cell_tmp[6].nb[8] = neighbors[16]
-                        cell_tmp[6].nb[9] = neighbors[16]
-                        cell_tmp[6].nb[10] = neighbors[16]
-                        cell_tmp[6].nb[11] = neighbors[12]
-                        cell_tmp[6].nb[12] = neighbors[12]
-                        cell_tmp[6].nb[13] = neighbors[13]
-                        cell_tmp[6].nb[14] = neighbors[14]
-                        cell_tmp[6].nb[15] = neighbors[14]
-                        cell_tmp[6].nb[16] = neighbors[16]
-
-                        # plane above the current cell
-                        cell_tmp[6].nb[17] = cell_tmp[3]
-                        cell_tmp[6].nb[18] = cell_tmp[0]
-                        cell_tmp[6].nb[19] = cell_tmp[1]
-                        cell_tmp[6].nb[20] = neighbors[4]
-                        cell_tmp[6].nb[21] = neighbors[4]
-                        cell_tmp[6].nb[22] = neighbors[5]
-                        cell_tmp[6].nb[23] = neighbors[6]
-                        cell_tmp[6].nb[24] = neighbors[6]
-                        cell_tmp[6].nb[25] = cell_tmp[2]
-
-                        # ----------------  lower left cell center, lower plane  ----------------
-                        # same plane as the current cell
-                        cell_tmp[7].nb[0] = neighbors[0]
-                        cell_tmp[7].nb[1] = neighbors[0]
-                        cell_tmp[7].nb[2] = cell_tmp[4]
-                        cell_tmp[7].nb[3] = cell_tmp[5]
-                        cell_tmp[7].nb[4] = cell_tmp[6]
-                        cell_tmp[7].nb[5] = neighbors[6]
-                        cell_tmp[7].nb[6] = neighbors[6]
-                        cell_tmp[7].nb[7] = neighbors[7]
-
-                        # plane under the current cell
-                        cell_tmp[7].nb[8] = neighbors[8]
-                        cell_tmp[7].nb[9] = neighbors[8]
-                        cell_tmp[7].nb[10] = neighbors[16]
-                        cell_tmp[7].nb[11] = neighbors[16]
-                        cell_tmp[7].nb[12] = neighbors[16]
-                        cell_tmp[7].nb[13] = neighbors[14]
-                        cell_tmp[7].nb[14] = neighbors[14]
-                        cell_tmp[7].nb[15] = neighbors[15]
-                        cell_tmp[7].nb[16] = neighbors[16]
-
-                        # plane above the current cell
-                        cell_tmp[7].nb[17] = neighbors[0]
-                        cell_tmp[7].nb[18] = neighbors[0]
-                        cell_tmp[7].nb[19] = cell_tmp[0]
-                        cell_tmp[7].nb[20] = cell_tmp[1]
-                        cell_tmp[7].nb[21] = cell_tmp[2]
-                        cell_tmp[7].nb[22] = neighbors[6]
-                        cell_tmp[7].nb[23] = neighbors[6]
-                        cell_tmp[7].nb[24] = neighbors[7]
-                        cell_tmp[7].nb[25] = cell_tmp[3]
-
-                    # add all new cells as children
-                    cell.children = tuple(cell_tmp)
-
-                    new_cells.extend(cell_tmp)
+                    new_cells.extend(cell.children)
                     self._n_cells += (pow(2, self._n_dimensions) - 1)
                     new_index += pow(2, self._n_dimensions)
             self._cells.extend(new_cells)
@@ -526,6 +212,7 @@ class SamplingTree(object):
             self._update_leaf_cells()
         end_time_uniform = time()
         iteration_count = 0
+
         while self._n_cells < self._n_cells_max:
             if iteration_count % 100 == 0:
                 print(f"\tIteration no. {iteration_count}:\t{round(len(self._leaf_cells) / self._n_cells_max * 100, 2)}"
@@ -559,7 +246,6 @@ class SamplingTree(object):
             new_cells = []
             new_index = len(self._cells)
             for i in to_refine:
-                cell_tmp = []
                 cell = self._cells[i]
 
                 # find the neighbors of current cell
@@ -568,243 +254,10 @@ class SamplingTree(object):
                 # compute cell centers
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
-                # each cell gets new idx (compare to line 180 in 1D implementation)
-                for idx, loc in enumerate(loc_center):
-                    cell_tmp.append(Cell(new_index + idx, cell, len(neighbors) * [None], loc, cell.level + 1,
-                                         dimensions=self._n_dimensions))
+                # assign the neighbors of current cell and add all new cells as children
+                cell.children = tuple(assign_neighbors(loc_center, cell, neighbors, new_index, self._n_dimensions))
 
-                # add the neighbors for each of the child cells
-                # neighbors for new upper left cell
-                cell_tmp[0].nb[0] = neighbors[0]
-                cell_tmp[0].nb[1] = neighbors[1]
-                cell_tmp[0].nb[2] = neighbors[2]
-                cell_tmp[0].nb[3] = neighbors[2]
-                cell_tmp[0].nb[4] = cell_tmp[1]
-                cell_tmp[0].nb[5] = cell_tmp[2]
-                cell_tmp[0].nb[6] = cell_tmp[3]
-                cell_tmp[0].nb[7] = neighbors[0]
-
-                # neighbors for new upper right cell
-                cell_tmp[1].nb[0] = cell_tmp[0]
-                cell_tmp[1].nb[1] = neighbors[2]
-                cell_tmp[1].nb[2] = neighbors[2]
-                cell_tmp[1].nb[3] = neighbors[3]
-                cell_tmp[1].nb[4] = neighbors[4]
-                cell_tmp[1].nb[5] = neighbors[4]
-                cell_tmp[1].nb[6] = cell_tmp[2]
-                cell_tmp[1].nb[7] = cell_tmp[3]
-
-                # neighbors for new lower right cell
-                cell_tmp[2].nb[0] = cell_tmp[3]
-                cell_tmp[2].nb[1] = cell_tmp[0]
-                cell_tmp[2].nb[2] = cell_tmp[1]
-                cell_tmp[2].nb[3] = neighbors[4]
-                cell_tmp[2].nb[4] = neighbors[4]
-                cell_tmp[2].nb[5] = neighbors[5]
-                cell_tmp[2].nb[6] = neighbors[6]
-                cell_tmp[2].nb[7] = neighbors[6]
-
-                # neighbors for new lower left cell
-                cell_tmp[3].nb[0] = neighbors[0]
-                cell_tmp[3].nb[1] = neighbors[0]
-                cell_tmp[3].nb[2] = cell_tmp[0]
-                cell_tmp[3].nb[3] = cell_tmp[1]
-                cell_tmp[3].nb[4] = cell_tmp[2]
-                cell_tmp[3].nb[5] = neighbors[6]
-                cell_tmp[3].nb[6] = neighbors[6]
-                cell_tmp[3].nb[7] = neighbors[7]
-
-                # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
-                # same plane as current cell is always the same as for 2D
-                if self._n_dimensions == 3:
-                    # ----------------  upper left cell center, upper plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[0].nb[8] = neighbors[0]
-                    cell_tmp[0].nb[9] = neighbors[1]
-                    cell_tmp[0].nb[10] = neighbors[2]
-                    cell_tmp[0].nb[11] = neighbors[2]
-                    cell_tmp[0].nb[12] = cell_tmp[5]
-                    cell_tmp[0].nb[13] = cell_tmp[6]
-                    cell_tmp[0].nb[14] = cell_tmp[7]
-                    cell_tmp[0].nb[15] = neighbors[0]
-                    cell_tmp[0].nb[16] = neighbors[4]
-
-                    # plane above the current cell
-                    cell_tmp[0].nb[17] = neighbors[17]
-                    cell_tmp[0].nb[18] = neighbors[18]
-                    cell_tmp[0].nb[19] = neighbors[19]
-                    cell_tmp[0].nb[20] = neighbors[19]
-                    cell_tmp[0].nb[21] = neighbors[25]
-                    cell_tmp[0].nb[22] = neighbors[25]
-                    cell_tmp[0].nb[23] = neighbors[25]
-                    cell_tmp[0].nb[24] = neighbors[17]
-                    cell_tmp[0].nb[25] = neighbors[25]
-
-                    # ----------------  upper right cell center, upper plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[1].nb[8] = cell_tmp[4]
-                    cell_tmp[1].nb[9] = neighbors[2]
-                    cell_tmp[1].nb[10] = neighbors[2]
-                    cell_tmp[1].nb[11] = neighbors[3]
-                    cell_tmp[1].nb[12] = neighbors[4]
-                    cell_tmp[1].nb[13] = neighbors[4]
-                    cell_tmp[1].nb[14] = cell_tmp[6]
-                    cell_tmp[1].nb[15] = cell_tmp[7]
-                    cell_tmp[1].nb[16] = cell_tmp[5]
-
-                    # plane above the current cell
-                    cell_tmp[1].nb[17] = neighbors[25]
-                    cell_tmp[1].nb[18] = neighbors[19]
-                    cell_tmp[1].nb[19] = neighbors[19]
-                    cell_tmp[1].nb[20] = neighbors[20]
-                    cell_tmp[1].nb[21] = neighbors[21]
-                    cell_tmp[1].nb[22] = neighbors[21]
-                    cell_tmp[1].nb[23] = neighbors[25]
-                    cell_tmp[1].nb[24] = neighbors[25]
-                    cell_tmp[1].nb[25] = neighbors[25]
-
-                    # ----------------  lower right cell center, upper plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[2].nb[8] = cell_tmp[7]
-                    cell_tmp[2].nb[9] = cell_tmp[4]
-                    cell_tmp[2].nb[10] = cell_tmp[5]
-                    cell_tmp[2].nb[11] = neighbors[4]
-                    cell_tmp[2].nb[12] = neighbors[4]
-                    cell_tmp[2].nb[13] = neighbors[5]
-                    cell_tmp[2].nb[14] = neighbors[6]
-                    cell_tmp[2].nb[15] = neighbors[6]
-                    cell_tmp[2].nb[16] = cell_tmp[6]
-
-                    # plane above the current cell
-                    cell_tmp[2].nb[17] = neighbors[25]
-                    cell_tmp[2].nb[18] = neighbors[25]
-                    cell_tmp[2].nb[19] = neighbors[25]
-                    cell_tmp[2].nb[20] = neighbors[21]
-                    cell_tmp[2].nb[21] = neighbors[21]
-                    cell_tmp[2].nb[22] = neighbors[22]
-                    cell_tmp[2].nb[23] = neighbors[23]
-                    cell_tmp[2].nb[24] = neighbors[23]
-                    cell_tmp[2].nb[25] = neighbors[25]
-
-                    # ----------------  lower left cell center, upper plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[3].nb[8] = neighbors[0]
-                    cell_tmp[3].nb[9] = neighbors[0]
-                    cell_tmp[3].nb[10] = cell_tmp[4]
-                    cell_tmp[3].nb[11] = cell_tmp[5]
-                    cell_tmp[3].nb[12] = cell_tmp[7]
-                    cell_tmp[3].nb[13] = neighbors[6]
-                    cell_tmp[3].nb[14] = neighbors[6]
-                    cell_tmp[3].nb[15] = neighbors[7]
-                    cell_tmp[3].nb[16] = cell_tmp[7]
-
-                    # plane above the current cell
-                    cell_tmp[3].nb[17] = neighbors[17]
-                    cell_tmp[3].nb[18] = neighbors[17]
-                    cell_tmp[3].nb[19] = neighbors[25]
-                    cell_tmp[3].nb[20] = neighbors[25]
-                    cell_tmp[3].nb[21] = neighbors[25]
-                    cell_tmp[3].nb[22] = neighbors[23]
-                    cell_tmp[3].nb[23] = neighbors[23]
-                    cell_tmp[3].nb[24] = neighbors[24]
-                    cell_tmp[3].nb[25] = neighbors[25]
-
-                    # ----------------  upper left cell center, lower plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[4].nb[8] = neighbors[8]
-                    cell_tmp[4].nb[9] = neighbors[9]
-                    cell_tmp[4].nb[10] = neighbors[10]
-                    cell_tmp[4].nb[11] = neighbors[10]
-                    cell_tmp[4].nb[12] = neighbors[16]
-                    cell_tmp[4].nb[13] = neighbors[16]
-                    cell_tmp[4].nb[14] = neighbors[16]
-                    cell_tmp[4].nb[15] = neighbors[8]
-                    cell_tmp[4].nb[16] = neighbors[16]
-
-                    # plane above the current cell
-                    cell_tmp[4].nb[17] = neighbors[0]
-                    cell_tmp[4].nb[18] = neighbors[1]
-                    cell_tmp[4].nb[19] = neighbors[2]
-                    cell_tmp[4].nb[20] = neighbors[2]
-                    cell_tmp[4].nb[21] = cell_tmp[1]
-                    cell_tmp[4].nb[22] = cell_tmp[2]
-                    cell_tmp[4].nb[23] = cell_tmp[3]
-                    cell_tmp[4].nb[24] = neighbors[0]
-                    cell_tmp[4].nb[25] = cell_tmp[0]
-
-                    # ----------------  upper right cell center, lower plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[5].nb[8] = neighbors[16]
-                    cell_tmp[5].nb[9] = neighbors[10]
-                    cell_tmp[5].nb[10] = neighbors[10]
-                    cell_tmp[5].nb[11] = neighbors[11]
-                    cell_tmp[5].nb[12] = neighbors[12]
-                    cell_tmp[5].nb[13] = neighbors[12]
-                    cell_tmp[5].nb[14] = neighbors[16]
-                    cell_tmp[5].nb[15] = neighbors[16]
-                    cell_tmp[5].nb[16] = neighbors[16]
-
-                    # plane above the current cell
-                    cell_tmp[5].nb[17] = cell_tmp[0]
-                    cell_tmp[5].nb[18] = neighbors[2]
-                    cell_tmp[5].nb[19] = neighbors[2]
-                    cell_tmp[5].nb[20] = neighbors[3]
-                    cell_tmp[5].nb[21] = neighbors[4]
-                    cell_tmp[5].nb[22] = neighbors[4]
-                    cell_tmp[5].nb[23] = cell_tmp[2]
-                    cell_tmp[5].nb[24] = cell_tmp[3]
-                    cell_tmp[5].nb[25] = cell_tmp[1]
-
-                    # ----------------  lower right cell center, lower plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[6].nb[8] = neighbors[16]
-                    cell_tmp[6].nb[9] = neighbors[16]
-                    cell_tmp[6].nb[10] = neighbors[16]
-                    cell_tmp[6].nb[11] = neighbors[12]
-                    cell_tmp[6].nb[12] = neighbors[12]
-                    cell_tmp[6].nb[13] = neighbors[13]
-                    cell_tmp[6].nb[14] = neighbors[14]
-                    cell_tmp[6].nb[15] = neighbors[14]
-                    cell_tmp[6].nb[16] = neighbors[16]
-
-                    # plane above the current cell
-                    cell_tmp[6].nb[17] = cell_tmp[3]
-                    cell_tmp[6].nb[18] = cell_tmp[0]
-                    cell_tmp[6].nb[19] = cell_tmp[1]
-                    cell_tmp[6].nb[20] = neighbors[4]
-                    cell_tmp[6].nb[21] = neighbors[4]
-                    cell_tmp[6].nb[22] = neighbors[5]
-                    cell_tmp[6].nb[23] = neighbors[6]
-                    cell_tmp[6].nb[24] = neighbors[6]
-                    cell_tmp[6].nb[25] = cell_tmp[2]
-
-                    # ----------------  lower left cell center, lower plane  ----------------
-                    # plane under the current cell
-                    cell_tmp[7].nb[8] = neighbors[8]
-                    cell_tmp[7].nb[9] = neighbors[8]
-                    cell_tmp[7].nb[10] = neighbors[16]
-                    cell_tmp[7].nb[11] = neighbors[16]
-                    cell_tmp[7].nb[12] = neighbors[16]
-                    cell_tmp[7].nb[13] = neighbors[14]
-                    cell_tmp[7].nb[14] = neighbors[14]
-                    cell_tmp[7].nb[15] = neighbors[15]
-                    cell_tmp[7].nb[16] = neighbors[16]
-
-                    # plane above the current cell
-                    cell_tmp[7].nb[17] = neighbors[0]
-                    cell_tmp[7].nb[18] = neighbors[0]
-                    cell_tmp[7].nb[19] = cell_tmp[0]
-                    cell_tmp[7].nb[20] = cell_tmp[1]
-                    cell_tmp[7].nb[21] = cell_tmp[2]
-                    cell_tmp[7].nb[22] = neighbors[6]
-                    cell_tmp[7].nb[23] = neighbors[6]
-                    cell_tmp[7].nb[24] = neighbors[7]
-                    cell_tmp[7].nb[25] = cell_tmp[3]
-
-                # add all new cells as children
-                cell.children = tuple(cell_tmp)
-
-                new_cells.extend(cell_tmp)
+                new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
 
@@ -851,6 +304,7 @@ class SamplingTree(object):
     def remove_invalid_cells(self):
         # check for each cell if it is located outside the domain
         cells_invalid, idx = [], []
+        # TODO: currently bottleneck wrt execution time
         for cell in self._leaf_cells:
             # compute the node locations
             nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
@@ -859,11 +313,11 @@ class SamplingTree(object):
             domain = mask_box(nodes, self._domain_boundary[0], self._domain_boundary[1])
 
             # if we have a geometry check if the cell is inside the geometry, otherwise we are not outside
-            # cylinder2D test case for 2D
+            # cylinder2D test case for 2D TODO: generalization for arbitrary geometries
             if self._n_dimensions == 2:
                 geometry = mask_sphere(nodes, self._geometry[0],
                                        self._geometry[1]) if self._geometry is not None else True
-            # cube test case for 3D
+            # cube test case for 3D TODO: generalization for arbitrary geometries
             elif self._n_dimensions == 3:
                 geometry = mask_box(nodes, self._geometry[0], self._geometry[1]) if self._geometry is not None else True
             else:
@@ -881,6 +335,7 @@ class SamplingTree(object):
                 idx.append(cell)
 
         # loop over all cells and replace the invalid cells as neighbors with None
+        # TODO: these loops contribute ~6% to execution time of the removal method (in total)
         for cell in self._leaf_cells:
             for n in range(len(self._cells[cell].nb)):
                 if self._cells[cell].nb[n] is not None and self._cells[cell].nb[n] in cells_invalid:
@@ -940,6 +395,252 @@ class SamplingTree(object):
             counter_ += 2
 
         return idx_list
+
+
+def assign_neighbors(loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int, dimensions: int) -> list:
+    """
+    assign the neighbors of the parent cell correctly to each child cell
+
+    :param loc_center: center coordinates of the cell and its sub-cells
+    :param cell: current cell
+    :param neighbors: list containing all neighbors of current cell
+    :param new_idx: new index of the cell
+    :param dimensions: number of physical dimensions
+    :return:
+    """
+    # each cell gets new idx (compare to line 180 in 1D implementation)
+    cell_tmp = [Cell(new_idx + idx, cell, len(neighbors) * [None], loc, cell.level + 1, dimensions=dimensions) for
+                idx, loc in enumerate(loc_center)]
+
+    # add the neighbors for each of the child cells
+    # neighbors for new upper left cell
+    cell_tmp[0].nb[0] = neighbors[0]
+    cell_tmp[0].nb[1] = neighbors[1]
+    cell_tmp[0].nb[2] = neighbors[2]
+    cell_tmp[0].nb[3] = neighbors[2]
+    cell_tmp[0].nb[4] = cell_tmp[1]
+    cell_tmp[0].nb[5] = cell_tmp[2]
+    cell_tmp[0].nb[6] = cell_tmp[3]
+    cell_tmp[0].nb[7] = neighbors[0]
+
+    # neighbors for new upper right cell
+    cell_tmp[1].nb[0] = cell_tmp[0]
+    cell_tmp[1].nb[1] = neighbors[2]
+    cell_tmp[1].nb[2] = neighbors[2]
+    cell_tmp[1].nb[3] = neighbors[3]
+    cell_tmp[1].nb[4] = neighbors[4]
+    cell_tmp[1].nb[5] = neighbors[4]
+    cell_tmp[1].nb[6] = cell_tmp[2]
+    cell_tmp[1].nb[7] = cell_tmp[3]
+
+    # neighbors for new lower right cell
+    cell_tmp[2].nb[0] = cell_tmp[3]
+    cell_tmp[2].nb[1] = cell_tmp[0]
+    cell_tmp[2].nb[2] = cell_tmp[1]
+    cell_tmp[2].nb[3] = neighbors[4]
+    cell_tmp[2].nb[4] = neighbors[4]
+    cell_tmp[2].nb[5] = neighbors[5]
+    cell_tmp[2].nb[6] = neighbors[6]
+    cell_tmp[2].nb[7] = neighbors[6]
+
+    # neighbors for new lower left cell
+    cell_tmp[3].nb[0] = neighbors[0]
+    cell_tmp[3].nb[1] = neighbors[0]
+    cell_tmp[3].nb[2] = cell_tmp[0]
+    cell_tmp[3].nb[3] = cell_tmp[1]
+    cell_tmp[3].nb[4] = cell_tmp[2]
+    cell_tmp[3].nb[5] = neighbors[6]
+    cell_tmp[3].nb[6] = neighbors[6]
+    cell_tmp[3].nb[7] = neighbors[7]
+
+    # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
+    # same plane as current cell is always the same as for 2D
+    if dimensions == 3:
+        # ----------------  upper left cell center, upper plane  ----------------
+        # plane under the current cell
+        cell_tmp[0].nb[8] = neighbors[0]
+        cell_tmp[0].nb[9] = neighbors[1]
+        cell_tmp[0].nb[10] = neighbors[2]
+        cell_tmp[0].nb[11] = neighbors[2]
+        cell_tmp[0].nb[12] = cell_tmp[5]
+        cell_tmp[0].nb[13] = cell_tmp[6]
+        cell_tmp[0].nb[14] = cell_tmp[7]
+        cell_tmp[0].nb[15] = neighbors[0]
+        cell_tmp[0].nb[16] = neighbors[4]
+
+        # plane above the current cell
+        cell_tmp[0].nb[17] = neighbors[17]
+        cell_tmp[0].nb[18] = neighbors[18]
+        cell_tmp[0].nb[19] = neighbors[19]
+        cell_tmp[0].nb[20] = neighbors[19]
+        cell_tmp[0].nb[21] = neighbors[25]
+        cell_tmp[0].nb[22] = neighbors[25]
+        cell_tmp[0].nb[23] = neighbors[25]
+        cell_tmp[0].nb[24] = neighbors[17]
+        cell_tmp[0].nb[25] = neighbors[25]
+
+        # ----------------  upper right cell center, upper plane  ----------------
+        # plane under the current cell
+        cell_tmp[1].nb[8] = cell_tmp[4]
+        cell_tmp[1].nb[9] = neighbors[2]
+        cell_tmp[1].nb[10] = neighbors[2]
+        cell_tmp[1].nb[11] = neighbors[3]
+        cell_tmp[1].nb[12] = neighbors[4]
+        cell_tmp[1].nb[13] = neighbors[4]
+        cell_tmp[1].nb[14] = cell_tmp[6]
+        cell_tmp[1].nb[15] = cell_tmp[7]
+        cell_tmp[1].nb[16] = cell_tmp[5]
+
+        # plane above the current cell
+        cell_tmp[1].nb[17] = neighbors[25]
+        cell_tmp[1].nb[18] = neighbors[19]
+        cell_tmp[1].nb[19] = neighbors[19]
+        cell_tmp[1].nb[20] = neighbors[20]
+        cell_tmp[1].nb[21] = neighbors[21]
+        cell_tmp[1].nb[22] = neighbors[21]
+        cell_tmp[1].nb[23] = neighbors[25]
+        cell_tmp[1].nb[24] = neighbors[25]
+        cell_tmp[1].nb[25] = neighbors[25]
+
+        # ----------------  lower right cell center, upper plane  ----------------
+        # plane under the current cell
+        cell_tmp[2].nb[8] = cell_tmp[7]
+        cell_tmp[2].nb[9] = cell_tmp[4]
+        cell_tmp[2].nb[10] = cell_tmp[5]
+        cell_tmp[2].nb[11] = neighbors[4]
+        cell_tmp[2].nb[12] = neighbors[4]
+        cell_tmp[2].nb[13] = neighbors[5]
+        cell_tmp[2].nb[14] = neighbors[6]
+        cell_tmp[2].nb[15] = neighbors[6]
+        cell_tmp[2].nb[16] = cell_tmp[6]
+
+        # plane above the current cell
+        cell_tmp[2].nb[17] = neighbors[25]
+        cell_tmp[2].nb[18] = neighbors[25]
+        cell_tmp[2].nb[19] = neighbors[25]
+        cell_tmp[2].nb[20] = neighbors[21]
+        cell_tmp[2].nb[21] = neighbors[21]
+        cell_tmp[2].nb[22] = neighbors[22]
+        cell_tmp[2].nb[23] = neighbors[23]
+        cell_tmp[2].nb[24] = neighbors[23]
+        cell_tmp[2].nb[25] = neighbors[25]
+
+        # ----------------  lower left cell center, upper plane  ----------------
+        # plane under the current cell
+        cell_tmp[3].nb[8] = neighbors[0]
+        cell_tmp[3].nb[9] = neighbors[0]
+        cell_tmp[3].nb[10] = cell_tmp[4]
+        cell_tmp[3].nb[11] = cell_tmp[5]
+        cell_tmp[3].nb[12] = cell_tmp[7]
+        cell_tmp[3].nb[13] = neighbors[6]
+        cell_tmp[3].nb[14] = neighbors[6]
+        cell_tmp[3].nb[15] = neighbors[7]
+        cell_tmp[3].nb[16] = cell_tmp[7]
+
+        # plane above the current cell
+        cell_tmp[3].nb[17] = neighbors[17]
+        cell_tmp[3].nb[18] = neighbors[17]
+        cell_tmp[3].nb[19] = neighbors[25]
+        cell_tmp[3].nb[20] = neighbors[25]
+        cell_tmp[3].nb[21] = neighbors[25]
+        cell_tmp[3].nb[22] = neighbors[23]
+        cell_tmp[3].nb[23] = neighbors[23]
+        cell_tmp[3].nb[24] = neighbors[24]
+        cell_tmp[3].nb[25] = neighbors[25]
+
+        # ----------------  upper left cell center, lower plane  ----------------
+        # plane under the current cell
+        cell_tmp[4].nb[8] = neighbors[8]
+        cell_tmp[4].nb[9] = neighbors[9]
+        cell_tmp[4].nb[10] = neighbors[10]
+        cell_tmp[4].nb[11] = neighbors[10]
+        cell_tmp[4].nb[12] = neighbors[16]
+        cell_tmp[4].nb[13] = neighbors[16]
+        cell_tmp[4].nb[14] = neighbors[16]
+        cell_tmp[4].nb[15] = neighbors[8]
+        cell_tmp[4].nb[16] = neighbors[16]
+
+        # plane above the current cell
+        cell_tmp[4].nb[17] = neighbors[0]
+        cell_tmp[4].nb[18] = neighbors[1]
+        cell_tmp[4].nb[19] = neighbors[2]
+        cell_tmp[4].nb[20] = neighbors[2]
+        cell_tmp[4].nb[21] = cell_tmp[1]
+        cell_tmp[4].nb[22] = cell_tmp[2]
+        cell_tmp[4].nb[23] = cell_tmp[3]
+        cell_tmp[4].nb[24] = neighbors[0]
+        cell_tmp[4].nb[25] = cell_tmp[0]
+
+        # ----------------  upper right cell center, lower plane  ----------------
+        # plane under the current cell
+        cell_tmp[5].nb[8] = neighbors[16]
+        cell_tmp[5].nb[9] = neighbors[10]
+        cell_tmp[5].nb[10] = neighbors[10]
+        cell_tmp[5].nb[11] = neighbors[11]
+        cell_tmp[5].nb[12] = neighbors[12]
+        cell_tmp[5].nb[13] = neighbors[12]
+        cell_tmp[5].nb[14] = neighbors[16]
+        cell_tmp[5].nb[15] = neighbors[16]
+        cell_tmp[5].nb[16] = neighbors[16]
+
+        # plane above the current cell
+        cell_tmp[5].nb[17] = cell_tmp[0]
+        cell_tmp[5].nb[18] = neighbors[2]
+        cell_tmp[5].nb[19] = neighbors[2]
+        cell_tmp[5].nb[20] = neighbors[3]
+        cell_tmp[5].nb[21] = neighbors[4]
+        cell_tmp[5].nb[22] = neighbors[4]
+        cell_tmp[5].nb[23] = cell_tmp[2]
+        cell_tmp[5].nb[24] = cell_tmp[3]
+        cell_tmp[5].nb[25] = cell_tmp[1]
+
+        # ----------------  lower right cell center, lower plane  ----------------
+        # plane under the current cell
+        cell_tmp[6].nb[8] = neighbors[16]
+        cell_tmp[6].nb[9] = neighbors[16]
+        cell_tmp[6].nb[10] = neighbors[16]
+        cell_tmp[6].nb[11] = neighbors[12]
+        cell_tmp[6].nb[12] = neighbors[12]
+        cell_tmp[6].nb[13] = neighbors[13]
+        cell_tmp[6].nb[14] = neighbors[14]
+        cell_tmp[6].nb[15] = neighbors[14]
+        cell_tmp[6].nb[16] = neighbors[16]
+
+        # plane above the current cell
+        cell_tmp[6].nb[17] = cell_tmp[3]
+        cell_tmp[6].nb[18] = cell_tmp[0]
+        cell_tmp[6].nb[19] = cell_tmp[1]
+        cell_tmp[6].nb[20] = neighbors[4]
+        cell_tmp[6].nb[21] = neighbors[4]
+        cell_tmp[6].nb[22] = neighbors[5]
+        cell_tmp[6].nb[23] = neighbors[6]
+        cell_tmp[6].nb[24] = neighbors[6]
+        cell_tmp[6].nb[25] = cell_tmp[2]
+
+        # ----------------  lower left cell center, lower plane  ----------------
+        # plane under the current cell
+        cell_tmp[7].nb[8] = neighbors[8]
+        cell_tmp[7].nb[9] = neighbors[8]
+        cell_tmp[7].nb[10] = neighbors[16]
+        cell_tmp[7].nb[11] = neighbors[16]
+        cell_tmp[7].nb[12] = neighbors[16]
+        cell_tmp[7].nb[13] = neighbors[14]
+        cell_tmp[7].nb[14] = neighbors[14]
+        cell_tmp[7].nb[15] = neighbors[15]
+        cell_tmp[7].nb[16] = neighbors[16]
+
+        # plane above the current cell
+        cell_tmp[7].nb[17] = neighbors[0]
+        cell_tmp[7].nb[18] = neighbors[0]
+        cell_tmp[7].nb[19] = cell_tmp[0]
+        cell_tmp[7].nb[20] = cell_tmp[1]
+        cell_tmp[7].nb[21] = cell_tmp[2]
+        cell_tmp[7].nb[22] = neighbors[6]
+        cell_tmp[7].nb[23] = neighbors[6]
+        cell_tmp[7].nb[24] = neighbors[7]
+        cell_tmp[7].nb[25] = cell_tmp[3]
+
+    return cell_tmp
 
 
 if __name__ == "__main__":
