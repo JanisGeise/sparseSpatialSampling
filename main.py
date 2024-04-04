@@ -15,6 +15,7 @@ from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube.export_data import DataWriter
+from s_cube.geometry import GeometryObject
 from s_cube.s_cube import SamplingTree
 
 
@@ -81,7 +82,7 @@ if __name__ == "__main__":
     save_path_cube = join("", "data", "3D", "exported_grids")
 
     # target number of cells in the coarsened grid (orig. 27974 cells for chosen bounds)
-    n_cells_cube = 500
+    n_cells_cube = 10000
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -92,7 +93,13 @@ if __name__ == "__main__":
 
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(1, 25), cells_per_iter=10,
-                            n_neighbors=26, boundaries=bounds, geometry=geometry, write_times=times)
+                            n_neighbors=26, write_times=times)
+
+    # add the cube and the domain
+    sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
+                                            geometry=False, name="domain"))
+    sampling.geometry.append(GeometryObject(lower_bound=geometry[0], upper_bound=geometry[1], obj_type="cube"))
+
     sampling.refine()
 
     # compute the cell centers and vertices of each leaf cell
@@ -116,7 +123,7 @@ if __name__ == "__main__":
     save_path_cylinder = join("", "data", "2D", "exported_grids")
 
     # target number of cells in the coarsened grid (orig: 14150 cells for chosen bounds)
-    n_cells_cylinder = 500
+    n_cells_cylinder = 10000
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0.1, 0], [1.0, 0.41]]      # [[xmin, ymin], [xmax, ymax]]
@@ -127,7 +134,14 @@ if __name__ == "__main__":
 
     # coarsen the cylinder2D mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(1, 25),
-                            cells_per_iter=10, n_neighbors=8, boundaries=bounds, geometry=geometry)
+                            cells_per_iter=10, n_neighbors=8)
+
+    # add the cube and the domain
+    sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
+                                            geometry=False, name="domain"))
+    sampling.geometry.append(GeometryObject(lower_bound=geometry[0], upper_bound=geometry[1], obj_type="sphere",
+                                            name="cylinder"))
+
     sampling.refine()
 
     # compute the cell centers and vertices of each leaf cell
@@ -142,5 +156,6 @@ if __name__ == "__main__":
     export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cylinder, field_names=["p", "U"],
                              save_dir=save_path_cylinder, domain_boundaries=bounds,
                              save_name=f"final_mesh_{n_cells_cylinder}_cells_cylinder", grid_name="cylinder")
+
     export_data.export()
     print(f"Export required {round((time() - t_start), 3)} s.")

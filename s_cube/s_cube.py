@@ -4,6 +4,8 @@
 import torch as pt
 
 from time import time
+
+from numba import njit
 from sklearn.neighbors import KNeighborsRegressor
 from flowtorch.data import mask_box, mask_sphere
 
@@ -46,7 +48,7 @@ class Cell(object):
 
 class SamplingTree(object):
     def __init__(self, vertices, target, n_cells, level_bounds=(0, 10), cells_per_iter=1, n_neighbors=2,
-                 boundaries=None, geometry=None, write_times=None):
+                 write_times=None):
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -73,23 +75,8 @@ class SamplingTree(object):
         # create initial cell
         self._create_first_cell()
 
-        # boundary of the domain, assume rectangular domain [[xmin, ymin], [xmax, ymax]], currently cell center is used
-        # as boundary if no domain boundary is given
-        if boundaries is None:
-            if self._n_dimensions == 2:
-                self._domain_boundary = [[pt.min(self._vertices[:, 0]).item(), pt.min(self._vertices[:, 1]).item()],
-                                         [pt.max(self._vertices[:, 0]).item(), pt.max(self._vertices[:, 1]).item()]]
-            else:
-                self._domain_boundary = [[pt.min(self._vertices[:, 0]).item(), pt.min(self._vertices[:, 1]).item(),
-                                          pt.min(self._vertices[:, 2]).item()],
-                                         [pt.max(self._vertices[:, 0]).item(), pt.max(self._vertices[:, 1]).item(),
-                                          pt.max(self._vertices[:, 2]).item()]]
-        # otherwise use specified domain boundaries -> still needs to be generalized
-        else:
-            self._domain_boundary = boundaries
-
-        # define the geometry as [[center_x, center_y], radius] or as [[xmin, ymin], [xmax, ymax]] (cube) if given
-        self._geometry = geometry if geometry is not None else None
+        # define the geometry as empty list
+        self._geometry = []
 
         # the available time steps of the simulation, used later for exporting the data to hdf5
         self._write_times = write_times if write_times is not None else [0]
@@ -304,40 +291,21 @@ class SamplingTree(object):
         return self._width
 
     def remove_invalid_cells(self):
-        # check for each cell if it is located outside the domain
-        cells_invalid, idx = [], []
-        # TODO: currently bottleneck wrt execution time
+        # check for each cell if it is located outside the domain or inside a geometry
+        cells_invalid, idx = set(), set()
         for cell in self._leaf_cells:
-            # compute the node locations
+            # compute the node locations of current cell
             nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
-            # now check if all nodes of the cell are outside the domain
-            domain = mask_box(nodes, self._domain_boundary[0], self._domain_boundary[1])
-
-            # if we have a geometry check if the cell is inside the geometry, otherwise we are not outside
-            # cylinder2D test case for 2D TODO: generalization for arbitrary geometries
-            if self._n_dimensions == 2:
-                geometry = mask_sphere(nodes, self._geometry[0],
-                                       self._geometry[1]) if self._geometry is not None else True
-            # cube test case for 3D TODO: generalization for arbitrary geometries
-            elif self._n_dimensions == 3:
-                geometry = mask_box(nodes, self._geometry[0], self._geometry[1]) if self._geometry is not None else True
-            else:
-                geometry = True
-
-            # any(~geometry), because mask returns False if we are outside, but we want True if we are outside
-            if any(domain) and any(~geometry):
-                invalid = False
-            else:
-                invalid = True
+            # check for each geometry object if the cell is inside the geometry or outside the domain
+            invalid = [g.check_geometry(nodes) for g in self._geometry]
 
             # save the cell if outside of domain
-            if invalid:
-                cells_invalid.append(self._cells[cell])
-                idx.append(cell)
+            if any(invalid):
+                cells_invalid.add(self._cells[cell])
+                idx.add(cell)
 
         # loop over all cells and replace the invalid cells as neighbors with None
-        # TODO: these loops contribute ~6% to execution time of the removal method (in total)
         for cell in self._leaf_cells:
             for n in range(len(self._cells[cell].nb)):
                 if self._cells[cell].nb[n] is not None and self._cells[cell].nb[n] in cells_invalid:
@@ -398,6 +366,10 @@ class SamplingTree(object):
 
         return idx_list
 
+    @property
+    def geometry(self):
+        return self._geometry
+
 
 def assign_neighbors(loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int, dimensions: int) -> list:
     """
@@ -408,7 +380,7 @@ def assign_neighbors(loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx
     :param neighbors: list containing all neighbors of current cell
     :param new_idx: new index of the cell
     :param dimensions: number of physical dimensions
-    :return:
+    :return: the child cells with correctly assigned neighbors
     """
     # each cell gets new idx (compare to line 180 in 1D implementation)
     cell_tmp = [Cell(new_idx + idx, cell, len(neighbors) * [None], loc, cell.level + 1, dimensions=dimensions) for
