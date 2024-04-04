@@ -158,7 +158,12 @@ class DataWriter:
         # assemble data matrix for each field and interpolate the values onto the coarser grid
         for field in self._field_names:
             # determine if we have a vector or a scalar
-            _field_size = loader.load_snapshot(field, _write_time[0]).size()
+            try:
+                _field_size = loader.load_snapshot(field, _write_time[0]).size()
+            except ValueError:
+                print(f"\tField '{field}' is not available. Skipping this field...")
+                continue
+
             if len(_field_size) == 1:
                 data = pt.zeros((mask.sum().item(), len(_write_time)), dtype=pt.float32)
             else:
@@ -166,12 +171,20 @@ class DataWriter:
                 mask_vec = mask.unsqueeze(-1).expand(list(_field_size))
                 out = list(data.size()[:-1])
 
-            for i, t in enumerate(_write_time):
-                # load the field
-                if len(_field_size) == 1:
-                    data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
-                else:
-                    data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
+            try:
+                for i, t in enumerate(_write_time):
+                    # load the field
+                    if len(_field_size) == 1:
+                        data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
+                    else:
+                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
+
+            # if fields are written out only for specific parts of domain, this leads to dimension mismatch between
+            # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
+            # part of this mask
+            except RuntimeError:
+                print(f"\tField '{field}' is does not match the size of the masked domain. Skipping this field...")
+                continue
 
             # fit the KNN
             if len(_field_size) == 1:
