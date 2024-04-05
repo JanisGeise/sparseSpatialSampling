@@ -4,7 +4,7 @@
     number, currently:
 
         - cylinder2D (at Re = 1000), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/laminar/
-        - surfaceMountedCube (coarser grid), located under: $FOAM_TUTORIALS/incmpressible/pimpleFoam/LES/
+        - surfaceMountedCube (coarser grid), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/LES/
 """
 import torch as pt
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     save_path_cube = join("", "data", "3D", "exported_grids")
 
     # target number of cells in the coarsened grid (orig. 27974 cells for chosen bounds)
-    n_cells_cube = 500
+    n_cells_cube = 10000
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -92,8 +92,8 @@ if __name__ == "__main__":
     pressure, coord, times = load_cube_data(load_path_cube, bounds)
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(1, 25), cells_per_iter=10,
-                            n_neighbors=26, write_times=times)
+    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(3, 25), cells_per_iter=25,
+                            n_neighbors=26)
 
     # add the cube and the domain
     sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
@@ -111,12 +111,11 @@ if __name__ == "__main__":
 
     # fit the pressure field onto the new mesh and export the data
     t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cube,
-                             save_dir=save_path_cube, domain_boundaries=bounds,
-                             save_name=f"final_mesh_{n_cells_cube}_cells_cube_all_fields", grid_name="cube")
+    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cube, save_dir=save_path_cube,
+                             domain_boundaries=bounds, save_name=f"final_mesh_{n_cells_cube}_cells_cube",
+                             grid_name="cube")
     export_data.export()
     print(f"Export required {round((time() - t_start), 3)} s.\n")
-    exit()
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
@@ -134,8 +133,8 @@ if __name__ == "__main__":
     pressure, coord, times = load_cylinder_data(load_path_cylinder, bounds)
 
     # coarsen the cylinder2D mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(5, 25),
-                            cells_per_iter=10, n_neighbors=8)
+    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(3, 25),
+                            cells_per_iter=25, n_neighbors=8)
 
     # add the cube and the domain
     sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
@@ -154,9 +153,9 @@ if __name__ == "__main__":
 
     # fit the pressure field onto the new mesh and export the data
     t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cylinder, field_names=["p", "U"],
-                             save_dir=save_path_cylinder, domain_boundaries=bounds,
-                             save_name=f"final_mesh_{n_cells_cylinder}_cells_cylinder", grid_name="cylinder")
+    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cylinder, save_dir=save_path_cylinder,
+                             domain_boundaries=bounds, save_name=f"final_mesh_{n_cells_cylinder}_cells_cylinder",
+                             grid_name="cylinder")
 
     export_data.export()
     print(f"Export required {round((time() - t_start), 3)} s.")

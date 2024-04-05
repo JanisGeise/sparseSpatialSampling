@@ -2,12 +2,16 @@
 Mesh reduction algorithm for CFD post-processing
 
 ## TODO
-- post-processing of the sparse grid -> fitting to original domain boundaries & geometry
-- further optimization of the code (wrt execution time)
+- further optimization of the code (wrt execution time) -> maybe with cython (depending on support and runtime)
+- refine grid near geometry objects (post-processing of the coarse grid prior mapping the original data onto it)
 - write unit tests
 - perform tests on larger cases and datasets
 - complete documentation of code and repository
-- determination of parameters (`n_cells_per_iter`, `level_bounds`, metric for computing the gain, ...)
+- provide general interface for export routine -> not only for for OpenFoam, goal:  
+  -> only pass field for each time step into export function
+  -> export function interpolates the given field onto coarser grid for each time step and writes it into xdmf & HDF5
+- determination of parameters (`n_cells_per_iter`, `level_bounds`, metric for computing the gain, ...) -> especially 
+`n_cells_per_iter` can decrease runtime significantly
 
 ## Potential features / Ideas
 - automatic determination of optimal number of cells in sparse grid -> stopping criteria of refinement process
@@ -18,4 +22,7 @@ Mesh reduction algorithm for CFD post-processing
 - generalization for arbitrary geometries and domain boundaries, handle stl files as input
 
 ## References
-Idea & 1D implementation taken from [Andre Weiner](https://github.com/AndreWeiner)
+- Exisiting version of the $S^3$ algorithm can be found under: 
+  - **D. Fernex, A. Weine, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
+  processing of big simulation data*, DOI: https://doi.org/10.2514/6.2021-1484 (January, 2021).
+- Idea & 1D implementation of the current version taken from [Andre Weiner](https://github.com/AndreWeiner)

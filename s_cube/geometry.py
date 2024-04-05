@@ -31,10 +31,11 @@ class GeometryObject:
                 invalid = True
 
         # if we are outside the domain we want to return False
-        elif any(mask):
-            invalid = False
         else:
-            invalid = True
+            if any(mask):
+                invalid = False
+            else:
+                invalid = True
 
         return invalid
 

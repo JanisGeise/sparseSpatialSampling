@@ -35,7 +35,6 @@ class DataWriter:
         # fields are specified all available fields will be interpolated onto the coarser mesh
         self._load_dir = load_dir
         self._field_names = field_names
-        # boundaries need to be the same as used for creating the coarse grid, otherwise mismatch(?)
         self._boundaries = domain_boundaries
         self._n_neighbors = 8 if self._n_dimensions == 2 else 26
         self._knn = KNeighborsRegressor(n_neighbors=self._n_neighbors, weights="distance")

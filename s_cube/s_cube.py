@@ -4,10 +4,7 @@
 import torch as pt
 
 from time import time
-
-from numba import njit
 from sklearn.neighbors import KNeighborsRegressor
-from flowtorch.data import mask_box, mask_sphere
 
 
 class Cell(object):
@@ -47,8 +44,7 @@ class Cell(object):
 
 
 class SamplingTree(object):
-    def __init__(self, vertices, target, n_cells, level_bounds=(0, 10), cells_per_iter=1, n_neighbors=2,
-                 write_times=None):
+    def __init__(self, vertices, target, n_cells, level_bounds=(1, 25), cells_per_iter=1, n_neighbors=8):
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -64,6 +60,7 @@ class SamplingTree(object):
         self._knn.fit(self._vertices, self._target)
         self._cells = None
         self._leaf_cells = None
+        self._geometry = []
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -74,12 +71,6 @@ class SamplingTree(object):
 
         # create initial cell
         self._create_first_cell()
-
-        # define the geometry as empty list
-        self._geometry = []
-
-        # the available time steps of the simulation, used later for exporting the data to hdf5
-        self._write_times = write_times if write_times is not None else [0]
 
     def _create_first_cell(self):
         self._width = max([self._vertices[:, i].max() - self._vertices[:, i].min() for i in
@@ -128,28 +119,30 @@ class SamplingTree(object):
         for i in range(self._min_level):
             new_cells = []
             new_index = len(self._cells)
-            for cell in self._cells:
-                if cell.leaf_cell():
-                    # find the neighbors of current cell
-                    neighbors = self._find_neighbors(cell)
+            for i in self._leaf_cells:
+                cell = self._cells[i]
 
-                    # compute cell centers
-                    loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
+                # find the neighbors of current cell
+                neighbors = self._find_neighbors(cell)
 
-                    # assign the neighbors of current cell and add all new cells as children
-                    cell.children = tuple(assign_neighbors(loc_center, cell, neighbors, new_index, self._n_dimensions))
+                # compute cell centers
+                loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
-                    new_cells.extend(cell.children)
-                    self._n_cells += (pow(2, self._n_dimensions) - 1)
-                    new_index += pow(2, self._n_dimensions)
+                # assign the neighbors of current cell and add all new cells as children
+                cell.children = tuple(assign_neighbors(loc_center, cell, neighbors, new_index, self._n_dimensions))
+
+                new_cells.extend(cell.children)
+                self._n_cells += (pow(2, self._n_dimensions) - 1)
+                new_index += pow(2, self._n_dimensions)
+
             self._cells.extend(new_cells)
+            self._update_leaf_cells()
+            self._update_gain()
             self._current_min_level += 1
             self._current_max_level += 1
-        self._update_leaf_cells()
-        self._update_gain()
 
-        # delete cells which are outside the domain or inside a geometry
-        self.remove_invalid_cells()
+            # delete cells which are outside the domain or inside a geometry (here we update all cells every iteration)
+            self.remove_invalid_cells([c.index for c in new_cells])
 
     def _update_gain(self):
         indices, centers = ([], [])
@@ -256,10 +249,8 @@ class SamplingTree(object):
             self._update_gain()
             self._update_min_ref_level()
 
-            # delete cells which are outside the domain or inside a geometry, in order to save execution time only check
-            # 10 iterations or when the number of cells is in the vicinity of max. number of cells
-            if iteration_count % 10 == 0 or (self._n_cells_max - self._n_cells) < 50:
-                self.remove_invalid_cells()
+            # check the newly generated cells if they are outside the domain or inside a geometry, if so delete them
+            self.remove_invalid_cells([c.index for c in new_cells])
 
             iteration_count += 1
         end_time = time()
@@ -282,37 +273,36 @@ class SamplingTree(object):
                   """.format(self._n_cells, self._current_min_level, self._current_max_level)
         return message
 
-    @property
-    def n_dimensions(self):
-        return self._n_dimensions
-
-    @property
-    def width(self):
-        return self._width
-
-    def remove_invalid_cells(self):
+    def remove_invalid_cells(self, _refined_cells):
         # check for each cell if it is located outside the domain or inside a geometry
         cells_invalid, idx = set(), set()
-        for cell in self._leaf_cells:
+        for cell in _refined_cells:
             # compute the node locations of current cell
             nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
             # check for each geometry object if the cell is inside the geometry or outside the domain
             invalid = [g.check_geometry(nodes) for g in self._geometry]
 
-            # save the cell if outside of domain
+            # save the cell and corresponding index, set the gain to zero and make sure this cell is not changed to
+            # leaf cell in future iterations resulting from delta level
             if any(invalid):
                 cells_invalid.add(self._cells[cell])
                 idx.add(cell)
+                self._cells[cell].children, self._cells[cell].gain = [], 0
 
-        # loop over all cells and replace the invalid cells as neighbors with None
-        for cell in self._leaf_cells:
-            for n in range(len(self._cells[cell].nb)):
-                if self._cells[cell].nb[n] is not None and self._cells[cell].nb[n] in cells_invalid:
-                    self._cells[cell].nb[n] = None
+        # if we didn't find any invalid cells, we are done here. Else we need to reset the nb of the cells affected by
+        # the removal of the masked cells
+        if cells_invalid == set():
+            return
+        else:
+            # loop over all cells and check all neighbors for each cell, if invalid replace with None
+            for cell in self._leaf_cells:
+                for n in range(len(self._cells[cell].nb)):
+                    if self._cells[cell].nb[n] in cells_invalid:
+                        self._cells[cell].nb[n] = None
 
-        # remove all invalid cells as leaf cells if we have any
-        self._leaf_cells = [i for i in self._leaf_cells if i not in idx] if cells_invalid else self._leaf_cells
+            # remove all invalid cells as leaf cells if we have any
+            self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
 
     def compute_nodes_final_mesh(self):
         # loop over all leaf cells
@@ -321,24 +311,20 @@ class SamplingTree(object):
             self._cells[cell].nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
     def _compute_cell_centers(self, idx_: int, factor_: float = 0.25, keep_parent_center_: bool = True):
-        # empty tensor with size of (n_children, n_dims)
+        # empty tensor with size of (parent_cell + n_children, n_dims)
         coord_ = pt.zeros((pow(2, self._n_dimensions) + 1, self._n_dimensions))
 
-        # fill with cell centers of parent cells (all entries are column-wise the same)
-        for node in range(pow(2, self._n_dimensions) + 1):
-            for d in range(self._n_dimensions):
-                coord_[node, d] = self._cells[idx_].center[d]
+        # fill with cell centers of parent & child cells, the first row corresponds to parent cell
+        coord_[0, :] = self._cells[idx_].center
 
-        # correct the cell centers of the children wrt parent cell center location -> offset in each direction is
-        # +- 0.25 * cell_width (in case the cell center of each cell should be computed it is 0.5 * cell_width)
-        coord_[1:, :] += self._directions * factor_ * self._width / pow(2, self._cells[idx_].level)
+        # compute the cell centers of the children relative to the  parent cell center location
+        # -> offset in each direction is +- 0.25 * cell_width (in case the cell center of each cell should be computed
+        # it is 0.5 * cell_width)
+        coord_[1:, :] = self._cells[idx_].center + self._directions * factor_ * self._width / pow(2, self._cells[idx_].level)
 
         # remove parent cell center if flag is set (no parent cell center if we just want to compute the cell centers of
         # each cell, but we need the parent cell center e.g. for computing the gain)
-        if not keep_parent_center_:
-            coord_ = coord_[1:, :]
-
-        return coord_
+        return coord_[1:, :] if not keep_parent_center_ else coord_
 
     def _check_constraint(self, cell_no_, counter_, start_=0, stop_=4):
         # check if the level difference of current cell is larger than one wrt nb cells -> if so, then refine the nb
@@ -367,13 +353,21 @@ class SamplingTree(object):
         return idx_list
 
     @property
+    def n_dimensions(self):
+        return self._n_dimensions
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
     def geometry(self):
         return self._geometry
 
 
 def assign_neighbors(loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int, dimensions: int) -> list:
     """
-    assign the neighbors of the parent cell correctly to each child cell
+    create a child cell from a given parent cell, assign its neighbors correctly to each child cell
 
     :param loc_center: center coordinates of the cell and its sub-cells
     :param cell: current cell
@@ -382,7 +376,7 @@ def assign_neighbors(loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx
     :param dimensions: number of physical dimensions
     :return: the child cells with correctly assigned neighbors
     """
-    # each cell gets new idx (compare to line 180 in 1D implementation)
+    # each cell gets new index within all cells
     cell_tmp = [Cell(new_idx + idx, cell, len(neighbors) * [None], loc, cell.level + 1, dimensions=dimensions) for
                 idx, loc in enumerate(loc_center)]
 
