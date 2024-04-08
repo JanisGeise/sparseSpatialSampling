@@ -8,15 +8,11 @@
 """
 import torch as pt
 
-from time import time
 from typing import Tuple
 from os.path import join
-from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.export_data import DataWriter
-from s_cube.geometry import GeometryObject
-from s_cube.s_cube import SamplingTree
+from s_cube.execute_grid_generation import execute_grid_generation
 
 
 def load_cylinder_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, list]:
@@ -86,36 +82,17 @@ if __name__ == "__main__":
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    geometry = [[3.5, 4, -1], [4.5, 5, 1]]       # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    cube = [[3.5, 4, -1], [4.5, 5, 1]]       # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
 
     # load the CFD data
-    pressure, coord, times = load_cube_data(load_path_cube, bounds)
+    pressure, coord, _ = load_cube_data(load_path_cube, bounds)
 
-    # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cube, level_bounds=(3, 25), cells_per_iter=25,
-                            n_neighbors=26)
+    # generate the grid, export the data
+    domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
+    geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
 
-    # add the cube and the domain
-    sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
-                                            geometry=False, name="domain"))
-    sampling.geometry.append(GeometryObject(lower_bound=geometry[0], upper_bound=geometry[1], obj_type="cube"))
-
-    sampling.refine()
-
-    # compute the cell centers and vertices of each leaf cell
-    sampling.compute_nodes_final_mesh()
-
-    # create directory for plots
-    if not path.exists(save_path_cube):
-        makedirs(save_path_cube)
-
-    # fit the pressure field onto the new mesh and export the data
-    t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cube, save_dir=save_path_cube,
-                             domain_boundaries=bounds, save_name=f"final_mesh_{n_cells_cube}_cells_cube",
-                             grid_name="cube")
-    export_data.export()
-    print(f"Export required {round((time() - t_start), 3)} s.\n")
+    execute_grid_generation(coord, pt.std(pressure, 1), n_cells_cube, [domain, geometry], load_path_cube,
+                            save_path_cube, f"final_mesh_{n_cells_cube}_cells_cube_refined", "cube")
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
@@ -127,35 +104,15 @@ if __name__ == "__main__":
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0.1, 0], [1.0, 0.41]]      # [[xmin, ymin], [xmax, ymax]]
-    geometry = [[0.2, 0.2], 0.05]       # [[x, y], r]
+    cylinder = [[0.2, 0.2], [0.05]]       # [[x, y], [r]]
 
     # load the CFD data
-    pressure, coord, times = load_cylinder_data(load_path_cylinder, bounds)
+    pressure, coord, _ = load_cylinder_data(load_path_cylinder, bounds)
 
-    # coarsen the cylinder2D mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coord, pt.std(pressure, 1), n_cells=n_cells_cylinder, level_bounds=(3, 25),
-                            cells_per_iter=25, n_neighbors=8)
+    # generate the grid, export the data
+    domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
+    geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
-    # add the cube and the domain
-    sampling.geometry.append(GeometryObject(lower_bound=bounds[0], upper_bound=bounds[1], obj_type="cube",
-                                            geometry=False, name="domain"))
-    sampling.geometry.append(GeometryObject(lower_bound=geometry[0], upper_bound=geometry[1], obj_type="sphere",
-                                            name="cylinder"))
+    execute_grid_generation(coord, pt.std(pressure, 1), n_cells_cylinder, [domain, geometry], load_path_cylinder,
+                            save_path_cylinder, f"final_mesh_{n_cells_cylinder}_cells_cylinder_refined", "cylinder2D")
 
-    sampling.refine()
-
-    # compute the cell centers and vertices of each leaf cell
-    sampling.compute_nodes_final_mesh()
-
-    # create directory for plots
-    if not path.exists(save_path_cylinder):
-        makedirs(save_path_cylinder)
-
-    # fit the pressure field onto the new mesh and export the data
-    t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), load_dir=load_path_cylinder, save_dir=save_path_cylinder,
-                             domain_boundaries=bounds, save_name=f"final_mesh_{n_cells_cylinder}_cells_cylinder",
-                             grid_name="cylinder")
-
-    export_data.export()
-    print(f"Export required {round((time() - t_start), 3)} s.")

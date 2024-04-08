@@ -3,7 +3,7 @@ Mesh reduction algorithm for CFD post-processing
 
 ## TODO
 - further optimization of the code (wrt execution time) -> maybe with cython (depending on support and runtime)
-- refine grid near geometry objects (post-processing of the coarse grid prior mapping the original data onto it)
+-> computation of cell faces still requires long time (although already in numba) -> more efficient algorithm?
 - write unit tests
 - perform tests on larger cases and datasets
 - complete documentation of code and repository

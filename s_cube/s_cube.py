@@ -44,7 +44,8 @@ class Cell(object):
 
 
 class SamplingTree(object):
-    def __init__(self, vertices, target, n_cells, level_bounds=(1, 25), cells_per_iter=1, n_neighbors=8):
+    def __init__(self, vertices, target, n_cells, level_bounds=(1, 25), cells_per_iter=1, n_neighbors=8,
+                 _smooth_geometry: bool = True):
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -56,11 +57,13 @@ class SamplingTree(object):
         self._cells_per_iter = cells_per_iter
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
-        self._knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance")
+        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance")
         self._knn.fit(self._vertices, self._target)
         self._cells = None
         self._leaf_cells = None
         self._geometry = []
+        self._smooth_geometry = _smooth_geometry
+        self._geometry_refinement_cycles = 1
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -183,6 +186,9 @@ class SamplingTree(object):
     def _freeze(self):
         pass
 
+    def leaf_cells(self):
+        return [self._cells[i] for i in self._leaf_cells]
+
     def refine(self):
         print("Starting refinement:")
         start_time = time()
@@ -253,27 +259,18 @@ class SamplingTree(object):
             self.remove_invalid_cells([c.index for c in new_cells])
 
             iteration_count += 1
+
+        # refine the grid near geometry objects is specified
+        if self._smooth_geometry:
+            self._refine_geometry()
+
         end_time = time()
         print("Finished refinement in {:2.4f} s ({:d} iterations).".format(end_time - start_time, iteration_count))
         print("Time for uniform refinement: {:2.4f} s".format(end_time_uniform - start_time))
         print("Time for adaptive refinement: {:2.4f} s".format(end_time - end_time_uniform))
         print(self)
 
-    def leaf_cells(self):
-        return [self._cells[i] for i in self._leaf_cells]
-
-    def __len__(self):
-        return self._n_cells
-
-    def __str__(self):
-        message = """
-                        Number of cells: {:d}
-                        Minimum ref. level: {:d}
-                        Maximum ref. level: {:d}
-                  """.format(self._n_cells, self._current_min_level, self._current_max_level)
-        return message
-
-    def remove_invalid_cells(self, _refined_cells):
+    def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False) -> None or list:
         # check for each cell if it is located outside the domain or inside a geometry
         cells_invalid, idx = set(), set()
         for cell in _refined_cells:
@@ -281,7 +278,7 @@ class SamplingTree(object):
             nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
             # check for each geometry object if the cell is inside the geometry or outside the domain
-            invalid = [g.check_geometry(nodes) for g in self._geometry]
+            invalid = [g.check_geometry(nodes, _refine_geometry) for g in self._geometry]
 
             # save the cell and corresponding index, set the gain to zero and make sure this cell is not changed to
             # leaf cell in future iterations resulting from delta level
@@ -294,6 +291,8 @@ class SamplingTree(object):
         # the removal of the masked cells
         if cells_invalid == set():
             return
+        elif _refine_geometry:
+            return idx
         else:
             # loop over all cells and check all neighbors for each cell, if invalid replace with None
             for cell in self._leaf_cells:
@@ -351,6 +350,59 @@ class SamplingTree(object):
             counter_ += 2
 
         return idx_list
+
+    def _refine_geometry(self):
+        """
+            stripped down version of the refine() method, this may be changed in the future. The documentation of this
+            method is equivalent to the refine() method
+        """
+        for i in range(self._geometry_refinement_cycles):
+            print("Starting geometry refinement:")
+            self._update_leaf_cells()
+            self._update_gain()
+            to_refine = set()
+
+            for i in set(self.remove_invalid_cells(self._leaf_cells, _refine_geometry=True)):
+                cell = self._cells[i]
+                to_refine.add(cell.index)
+                if self._current_min_level > 1:
+                    to_refine.update(self._check_constraint(i, 0))
+
+                    if self._n_dimensions == 3:
+                        to_refine.update(self._check_constraint(i, 0, 4, 8))
+                        to_refine.update(self._check_constraint(i, 8, 4, 8))
+                        to_refine.update(self._check_constraint(i, 17, 0, 4))
+
+            new_cells = []
+            new_index = len(self._cells)
+            for i in to_refine:
+                cell = self._cells[i]
+                neighbors = self._find_neighbors(cell)
+                loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
+                cell.children = tuple(assign_neighbors(loc_center, cell, neighbors, new_index, self._n_dimensions))
+                new_cells.extend(cell.children)
+                self._n_cells += (pow(2, self._n_dimensions) - 1)
+                self._current_max_level = max(self._current_max_level, cell.level + 1)
+
+                # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
+                new_index += pow(2, self._n_dimensions)
+
+            self._cells.extend(new_cells)
+            self._update_leaf_cells()
+            self._update_gain()
+            self._update_min_ref_level()
+            self.remove_invalid_cells([c.index for c in new_cells])
+
+    def __len__(self):
+        return self._n_cells
+
+    def __str__(self):
+        message = """
+                        Number of cells: {:d}
+                        Minimum ref. level: {:d}
+                        Maximum ref. level: {:d}
+                  """.format(self._n_cells, self._current_min_level, self._current_max_level)
+        return message
 
     @property
     def n_dimensions(self):
