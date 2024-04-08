@@ -76,9 +76,7 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
     save_path_cube = join("", "data", "3D", "exported_grids")
-
-    # target number of cells in the coarsened grid (orig. 27974 cells for chosen bounds)
-    n_cells_cube = 10000
+    save_name = f"final_mesh_cube_test_early_stopping"
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -91,16 +89,14 @@ if __name__ == "__main__":
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
     geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
 
-    execute_grid_generation(coord, pt.std(pressure, 1), n_cells_cube, [domain, geometry], load_path_cube,
-                            save_path_cube, f"final_mesh_{n_cells_cube}_cells_cube_refined", "cube")
+    execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], load_path_cube, save_path_cube, save_name,
+                            "cube")
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
     load_path_cylinder = join("", "data", "2D", "cylinder2D_re1000")
     save_path_cylinder = join("", "data", "2D", "exported_grids")
-
-    # target number of cells in the coarsened grid (orig: 14150 cells for chosen bounds)
-    n_cells_cylinder = 10000
+    save_name = f"final_mesh_cylinder_test_early_stopping_dynamic_cells"
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0.1, 0], [1.0, 0.41]]      # [[xmin, ymin], [xmax, ymax]]
@@ -113,6 +109,6 @@ if __name__ == "__main__":
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
-    execute_grid_generation(coord, pt.std(pressure, 1), n_cells_cylinder, [domain, geometry], load_path_cylinder,
-                            save_path_cylinder, f"final_mesh_{n_cells_cylinder}_cells_cylinder_refined", "cylinder2D")
+    execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], load_path_cylinder, save_path_cylinder,
+                            save_name, "cylinder2D")
 

@@ -5,7 +5,7 @@ Mesh reduction algorithm for CFD post-processing
 - further optimization of the code (wrt execution time) -> maybe with cython (depending on support and runtime)
 -> computation of cell faces still requires long time (although already in numba) -> more efficient algorithm?
 - write unit tests
-- perform tests on larger cases and datasets
+- perform tests on larger cases and datasets -> test current implementation of calculating `n_cells_per_iter`
 - complete documentation of code and repository
 - provide general interface for export routine -> not only for for OpenFoam, goal:  
   -> only pass field for each time step into export function
@@ -14,8 +14,6 @@ Mesh reduction algorithm for CFD post-processing
 `n_cells_per_iter` can decrease runtime significantly
 
 ## Potential features / Ideas
-- automatic determination of optimal number of cells in sparse grid -> stopping criteria of refinement process
-- maybe modify `n_cells_per_iter` during runtime -> at beginning larger (decreases runtime)
 - generalize / simplify pre-processing
 - parallelization, more usage of numba / jit to improve runtime, especially for larger datasets
 - dealing with datasets, which doesn't fit into the RAM at once

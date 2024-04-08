@@ -48,16 +48,15 @@ def check_geometry_objects(_geometries) -> bool:
     return True
 
 
-def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _n_cells_max: int, _geometry_objects: List[dict],
+def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict],
                             _load_path: str, _save_path: str, _save_name: str, _grid_name: str,
-                            _level_bounds: tuple = (3, 25)) -> None:
+                            _level_bounds: tuple = (3, 25), _n_cells_max: int = None) -> None:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
 
     :param coordinates: coordinates of the original grid
     :param metric: quantity which should be used as indicator for refinement of a cell
-    :param _n_cells_max: max. number of cells of the grid
     :param _geometry_objects: list with dict containing information about the domain and geometries in it; each
                               geometry is passed in as dict. The dict must contain the entries:
                               "name", "bounds", "type" and "is_geometry".
@@ -71,6 +70,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _n_cells_
     :param _save_name: name of the files (grid & data)
     :param _grid_name: name of the grid (used in XDMF file)
     :param _level_bounds: Tuple with (min., max.) Level
+    :param _n_cells_max: max. number of cells of the grid, if not set then early stopping will be used
     :return: None
     """
     # check if the dicts for the geometry objects are correct
@@ -78,7 +78,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _n_cells_
         exit()
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=(3, 50), cells_per_iter=25)
+    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=(2, 50))
 
     # add the cube and the domain
     for g in _geometry_objects:

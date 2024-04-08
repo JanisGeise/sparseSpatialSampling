@@ -44,17 +44,18 @@ class Cell(object):
 
 
 class SamplingTree(object):
-    def __init__(self, vertices, target, n_cells, level_bounds=(1, 25), cells_per_iter=1, n_neighbors=8,
-                 _smooth_geometry: bool = True):
+    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = True):
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
-        self._n_cells_max = n_cells
+        self._n_cells_max = 1e9 if n_cells is None else n_cells
         self._min_level = level_bounds[0]
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter = cells_per_iter
+        self._cells_per_iter_start = int(0.01 * vertices.size()[0])       # starting value = 1% of original grid size
+        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)        # end value = 1% of start value
+        self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
         self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance")
@@ -64,6 +65,8 @@ class SamplingTree(object):
         self._geometry = []
         self._smooth_geometry = _smooth_geometry
         self._geometry_refinement_cycles = 1
+        self._global_gain = [1]                # global gain can max. be 1 (scaling with N_leaf_cells)
+        self._stop_thr = 1e-3
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -197,12 +200,21 @@ class SamplingTree(object):
         else:
             self._update_leaf_cells()
         end_time_uniform = time()
+        self._compute_global_gain()
         iteration_count = 0
 
-        while self._n_cells < self._n_cells_max:
+        while abs(self._global_gain[-2] - self._global_gain[-1]) >= self._stop_thr or self._n_cells >= self._n_cells_max:
             if iteration_count % 100 == 0:
                 print(f"\tIteration no. {iteration_count}:\t{round(len(self._leaf_cells) / self._n_cells_max * 100, 2)}"
                       f" % of refinement completed.")
+
+            # update _n_cells_per_iter based on the gain difference and threshold for stopping
+            if len(self._global_gain) > 3:
+                # predict the iterations left until stopping criteria is met (linearly)
+                pred = (self._stop_thr - self._global_gain[-3]) / (self._global_gain[-1] - self._global_gain[-2])
+
+                # set the new n_cells_per_iter based on the distance to this iteration and its boundaries
+                self._cells_per_iter = int(self._cells_per_iter_start / pred + self._cells_per_iter_end)
 
             self._update_gain()
             self._leaf_cells.sort(key=lambda x: self._cells[x].gain, reverse=True)
@@ -258,6 +270,8 @@ class SamplingTree(object):
             # check the newly generated cells if they are outside the domain or inside a geometry, if so delete them
             self.remove_invalid_cells([c.index for c in new_cells])
 
+            # compute global gain after refinement to check if we can stop the refinement
+            self._compute_global_gain()
             iteration_count += 1
 
         # refine the grid near geometry objects is specified
@@ -392,6 +406,9 @@ class SamplingTree(object):
             self._update_gain()
             self._update_min_ref_level()
             self.remove_invalid_cells([c.index for c in new_cells])
+
+    def _compute_global_gain(self):
+        self._global_gain.append(sum([self._cells[c].gain for c in self._leaf_cells]).item() / len(self._leaf_cells))
 
     def __len__(self):
         return self._n_cells
