@@ -6,6 +6,8 @@ import torch as pt
 from time import time
 from os import path, makedirs
 from typing import List
+from typing import Union
+from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube.export_data import DataWriter
 from s_cube.geometry import GeometryObject
@@ -50,7 +52,7 @@ def check_geometry_objects(_geometries) -> bool:
 
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict],
                             _load_path: str, _save_path: str, _save_name: str, _grid_name: str,
-                            _level_bounds: tuple = (3, 25), _n_cells_max: int = None) -> None:
+                            _level_bounds: tuple = (3, 25), _n_cells_max: int = None) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
@@ -100,8 +102,90 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     export_data = DataWriter(sampling.leaf_cells(), load_dir=_load_path, save_dir=_save_path,
                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
                              save_name=_save_name, grid_name=_save_name)
-    export_data.export()
-    print(f"Export required {round((time() - t_start), 3)} s.\n")
+    print(f"Computation of cell faces and nodes required {round((time() - t_start), 3)} s.\n")
+
+    return export_data
+
+
+def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: list,
+                              _field_names: Union[list, str] = None, _write_times: list = None,
+                              _get_field_names_and_times: bool = False):
+    """
+        function for loading fields from OpenFoam either for a single field, multiple fields at once, single time steps
+        or multiple time steps at once. documentation coming soon ...
+    """
+    # create foam loader object
+    loader = FOAMDataloader(_load_dir)
+
+    # check which fields and write times are available
+    if _get_field_names_and_times:
+        _write_times = [t for t in loader.write_times[1:]]
+        return _write_times, loader.field_names[_write_times[0]]
+
+    else:
+        # load vertices
+        vertices = loader.vertices if _n_dimensions == 3 else loader.vertices[:, :2]
+        mask = mask_box(vertices, lower=_boundaries[0], upper=_boundaries[1])
+
+        # the coordinates are independent of the field
+        # stack the coordinates to tuples
+        if _n_dimensions == 2:
+            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask)], dim=1)
+        else:
+            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
+                              pt.masked_select(vertices[:, 2], mask)], dim=1)
+
+        # get all available time steps, skip the zero folder
+        if _write_times is None:
+            _write_times = [t for t in loader.write_times[1:]]
+        elif type(_write_times) == str:
+            _write_times = [_write_times]
+
+        # in case there are no fields specified, take all available fields
+        _field_names = loader.field_names[_write_times[0]] if _field_names is None else _field_names
+
+        # assemble data matrix for each field and interpolate the values onto the coarser grid
+        _fields_out = []
+        for field in _field_names:
+            # determine if we have a vector or a scalar
+            try:
+                _field_size = loader.load_snapshot(field, _write_times[0]).size()
+            except ValueError:
+                print(f"\tField '{field}' is not available. Skipping this field...")
+                continue
+
+            if len(_field_size) == 1:
+                data = pt.zeros((mask.sum().item(), len(_write_times)), dtype=pt.float32)
+            else:
+                data = pt.zeros((mask.sum().item(), _field_size[1], len(_write_times)), dtype=pt.float32)
+                mask_vec = mask.unsqueeze(-1).expand(list(_field_size))
+                out = list(data.size()[:-1])
+
+            try:
+                for i, t in enumerate(_write_times):
+                    # load the field
+                    if len(_field_size) == 1:
+                        data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
+                    else:
+                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
+
+            # if fields are written out only for specific parts of domain, this leads to dimension mismatch between
+            # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
+            # part of this mask
+            except RuntimeError:
+                print(f"\tField '{field}' is does not match the size of the masked domain. Skipping this field...")
+                continue
+
+            # interpolate the KNN for each field over all time steps (for now, later an option to fit N snapshots at
+            # once will be implemented), IMPORTANT: size of data matrix must be:
+            #   - [N_cells, N_dimensions, N_snapshots] (vector field)
+            #   - [N_cells, 1, N_snapshots] (scalar field)
+            if len(_field_size) == 1:
+                data = data.unsqueeze(1)
+
+            _fields_out.append([coord, data])
+
+        return _fields_out if len(_fields_out) > 1 else _fields_out[0]
 
 
 if __name__ == "__main__":
