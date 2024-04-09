@@ -12,6 +12,11 @@ from sklearn.neighbors import KNeighborsRegressor
 from flowtorch.data import mask_box, FOAMDataloader
 
 
+class Fields:
+    def __init__(self):
+        pass
+
+
 class DataWriter:
     def __init__(self, final_grid: list, load_dir: str, save_dir: str, domain_boundaries: list,
                  field_names: list = None, save_name: str = "data_final_grid", grid_name: str = "final grid"):
@@ -24,7 +29,7 @@ class DataWriter:
         self._n_vertices = self._vertices.size()[0]
         self._n_faces = self._faces.size()[0]
         self._n_dimensions = self._vertices.size()[1]
-        self._times = None
+        self.times = None
 
         # compute and resort the cell faces for loading in paraview
         print("Computing cell faces and nodes of final grid...")
@@ -36,9 +41,9 @@ class DataWriter:
         self._load_dir = load_dir
         self._field_names = field_names
         self._boundaries = domain_boundaries
-        self._n_neighbors = 8 if self._n_dimensions == 2 else 26
-        self._knn = KNeighborsRegressor(n_neighbors=self._n_neighbors, weights="distance")
+        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance")
         self._interpolated_fields = {}
+        self._snapshot_counter = 0
 
     def _write_data(self):
         _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
@@ -58,22 +63,22 @@ class DataWriter:
             _center = _writer.create_group(f"{key}_center")
 
             # write the datasets for each time step
-            for i, t in enumerate(self._times):
+            for i, t in enumerate(self.times):
                 # in case we have a scalar
-                if len(self._interpolated_fields[key][0].size()) == 2:
-                    _center.create_dataset(str(t), data=self._interpolated_fields[key][0][:, i])
-                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key][1][:, i])
+                if len(self._interpolated_fields[key].centers.size()) == 2:
+                    _center.create_dataset(str(t), data=self._interpolated_fields[key].centers[:, i])
+                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key].vertices[:, i])
                 # in case we have a vector
                 else:
-                    _center.create_dataset(str(t), data=self._interpolated_fields[key][0][:, :, i])
-                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key][1][:, :, i])
+                    _center.create_dataset(str(t), data=self._interpolated_fields[key].centers[:, :, i])
+                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key].vertices[:, :, i])
 
         # write global header of XDMF file
         with open(join(self._save_dir, f"{self._save_name}.xdmf"), "w") as f_out:
             f_out.write(_global_header)
 
         # loop over all available time steps and write all specified data to XDMF & HDF5 files
-        for i, t in enumerate(self._times):
+        for i, t in enumerate(self.times):
             with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
                 # write grid specific header
                 tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
@@ -102,14 +107,14 @@ class DataWriter:
             with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
                 for key in self._interpolated_fields.keys():
                     # determine 2nd dimension (scalar vs. vector)
-                    if len(self._interpolated_fields[key][0].size()) == 2:
+                    if len(self._interpolated_fields[key].centers.size()) == 2:
                         _second_dim = 1
                     else:
-                        _second_dim = self._interpolated_fields[key][0].size()[1]
+                        _second_dim = self._interpolated_fields[key].centers.size()[1]
 
                     # write header
                     f_out.write(f'<Attribute Name="{key}" Center="Cell">\n<DataItem Format="HDF" Dimensions='
-                                f'"{self._interpolated_fields[key][0].size()[0]} {_second_dim}">\n')
+                                f'"{self._interpolated_fields[key].centers.size()[0]} {_second_dim}">\n')
 
                     # write interpolated field at cell center
                     f_out.write(f"{self._save_name}.h5:/{key}_center/{t}\n")
@@ -117,7 +122,7 @@ class DataWriter:
 
                     # then do the same for field at the vertices
                     f_out.write(f'<Attribute Name="{key}" Center="Node">\n<DataItem Format="HDF" Dimensions='
-                                f'"{self._interpolated_fields[key][1].size()[0]} {_second_dim}">\n')
+                                f'"{self._interpolated_fields[key].vertices.size()[0]} {_second_dim}">\n')
                     f_out.write(f"{self._save_name}.h5:/{key}_vertices/{t}\n")
                     f_out.write("</DataItem>\n</Attribute>\n")
 
@@ -131,80 +136,58 @@ class DataWriter:
         # close hdf file
         _writer.close()
 
-    def _load_and_fit_data(self):
-        # create foam loader object
-        loader = FOAMDataloader(self._load_dir)
+    def fit_data(self, _coord, _data, _field_name, _n_snapshots_total: int = None):
+        """
+        TODO: documentation
 
-        # load vertices
-        vertices = loader.vertices if self._n_dimensions == 3 else loader.vertices[:, :2]
-        mask = mask_box(vertices, lower=self._boundaries[0], upper=self._boundaries[1])
+        Note: the variables centers & vertices are denoting the values of the field at center and nodes of each cell
+        (not the coordinates of the generated mesh)
 
-        # the coordinates are independent of the field
-        # stack the coordinates to tuples
-        if self._n_dimensions == 2:
-            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask)], dim=1)
-        else:
-            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
-                              pt.masked_select(vertices[:, 2], mask)], dim=1)
+        :param _coord:
+        :param _data:
+        :param _field_name:
+        :param _n_snapshots_total:
+        :return: None
+        """
+        # determine the required size of the data matrix
+        _n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
 
-        # get all available time steps, skip the zero folder
-        _write_time = [t for t in loader.write_times[1:]]
-        self._times = list(map(float, _write_time))
+        # currently loaded number of snapshots
+        _nc = _data.size()[-1]
 
-        # in case there are no fields specified, take all available fields
-        self._field_names = loader.field_names[_write_time[0]] if self._field_names is None else self._field_names
+        # add the data to the current field or create a new field if not yet existing
+        if _field_name not in self._interpolated_fields:
+            # reset the snapshot counter, because apparently we create a new field
+            self._snapshot_counter = 0
 
-        # assemble data matrix for each field and interpolate the values onto the coarser grid
-        for field in self._field_names:
-            # determine if we have a vector or a scalar
-            try:
-                _field_size = loader.load_snapshot(field, _write_time[0]).size()
-            except ValueError:
-                print(f"\tField '{field}' is not available. Skipping this field...")
-                continue
+            # instantiate field object
+            self._interpolated_fields[_field_name] = Fields()
 
-            if len(_field_size) == 1:
-                data = pt.zeros((mask.sum().item(), len(_write_time)), dtype=pt.float32)
-            else:
-                data = pt.zeros((mask.sum().item(), _field_size[1], len(_write_time)), dtype=pt.float32)
-                mask_vec = mask.unsqueeze(-1).expand(list(_field_size))
-                out = list(data.size()[:-1])
+            # create empty tensors for the field values at centers & vertices with dimensions:
+            # [N_cells, N_dimensions, N_snapshots_total]
+            self._interpolated_fields[_field_name].centers = pt.zeros((self._centers.size()[0], _data.size()[1],
+                                                                       _n_snapshots_total))
+            self._interpolated_fields[_field_name].vertices = pt.zeros((self._vertices.size()[0], _data.size()[1],
+                                                                        _n_snapshots_total))
 
-            try:
-                for i, t in enumerate(_write_time):
-                    # load the field
-                    if len(_field_size) == 1:
-                        data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
-                    else:
-                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
+        # create empty tensors for the values of the field at the centers & vertices with dimensions:
+        # [N_cells, N_dimensions, N_snapshots_currently]
+        centers = pt.zeros((self._centers.size()[0], _data.size()[1], _nc))
+        vertices = pt.zeros((self._vertices.size()[0], _data.size()[1], _nc))
 
-            # if fields are written out only for specific parts of domain, this leads to dimension mismatch between
-            # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
-            # part of this mask
-            except RuntimeError:
-                print(f"\tField '{field}' is does not match the size of the masked domain. Skipping this field...")
-                continue
+        # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
+        for dimension in range(_data.size()[1]):
+            self._knn.fit(_coord, _data[:, dimension, :])
+            centers[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._centers))
+            vertices[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._vertices))
 
-            # fit the KNN
-            if len(_field_size) == 1:
-                self._knn.fit(coord, data)
+        # update the fields, for which snapshots we already executed the interpolation
+        self._interpolated_fields[_field_name].centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
+        self._interpolated_fields[_field_name].vertices[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = vertices
+        self._snapshot_counter += _nc
 
-                # interpolate the values onto the coarser grid at the cell centers and at the vertices
-                self._interpolated_fields[field] = [pt.from_numpy(self._knn.predict(self._centers)),
-                                                    pt.from_numpy(self._knn.predict(self._vertices))]
-            else:
-                # in case we have a vector, then we need to predict each dimension separately
-                _centers_tmp = pt.zeros(size=(self._centers.size()[0], _field_size[1], data.size()[-1]))
-                _vertices_tmp = pt.zeros(size=(self._vertices.size()[0], _field_size[1], data.size()[-1]))
-                for i in range(_field_size[1]):
-                    self._knn.fit(coord, data[:, i, :])
-                    _centers_tmp[:, i, :] = pt.from_numpy(self._knn.predict(self._centers))
-                    _vertices_tmp[:, i, :] = pt.from_numpy(self._knn.predict(self._vertices))
-                self._interpolated_fields[field] = [_centers_tmp, _vertices_tmp]
-
-    def export(self):
-        print("Exporting the data...")
-        self._load_and_fit_data()
+    def write_data_to_file(self):
+        print("Writing the data ...")
         self._write_data()
         print("Finished export.")
 

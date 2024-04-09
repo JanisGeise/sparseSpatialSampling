@@ -65,7 +65,7 @@ class SamplingTree(object):
         self._geometry = []
         self._smooth_geometry = _smooth_geometry
         self._geometry_refinement_cycles = 1
-        self._global_gain = [1]                # global gain can max. be 1 (scaling with N_leaf_cells)
+        self._global_gain = []
         self._stop_thr = 1e-3
 
         # offset matrix, used for computing the cell centers
@@ -77,6 +77,7 @@ class SamplingTree(object):
 
         # create initial cell
         self._create_first_cell()
+        self._compute_global_gain()
 
     def _create_first_cell(self):
         self._width = max([self._vertices[:, i].max() - self._vertices[:, i].min() for i in
@@ -204,13 +205,13 @@ class SamplingTree(object):
         iteration_count = 0
 
         while abs(self._global_gain[-2] - self._global_gain[-1]) >= self._stop_thr or self._n_cells >= self._n_cells_max:
-            if iteration_count % 100 == 0:
-                print(f"\tIteration no. {iteration_count}:\t{round(len(self._leaf_cells) / self._n_cells_max * 100, 2)}"
-                      f" % of refinement completed.")
+            if iteration_count % 10 == 0:
+                print(f"\tStarting iteration no. {iteration_count}")
 
             # update _n_cells_per_iter based on the gain difference and threshold for stopping
             if len(self._global_gain) > 3:
-                # predict the iterations left until stopping criteria is met (linearly)
+                # predict the iterations left until stopping criteria is met (linearly), '_stop_thr' may be neglectable
+                # due to its small value
                 pred = (self._stop_thr - self._global_gain[-3]) / (self._global_gain[-1] - self._global_gain[-2])
 
                 # set the new n_cells_per_iter based on the distance to this iteration and its boundaries
@@ -408,7 +409,11 @@ class SamplingTree(object):
             self.remove_invalid_cells([c.index for c in new_cells])
 
     def _compute_global_gain(self):
-        self._global_gain.append(sum([self._cells[c].gain for c in self._leaf_cells]).item() / len(self._leaf_cells))
+        tmp = []
+        for c in self._leaf_cells:
+            area = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, self._cells[c].level), self._n_dimensions)
+            tmp.append(self._cells[c].gain / area)
+        self._global_gain.append(sum(tmp).item() / len(self._leaf_cells))
 
     def __len__(self):
         return self._n_cells
