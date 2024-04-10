@@ -194,6 +194,7 @@ class DataWriter:
 
 @njit
 def resort_grid(_faces, _vertices, _n_dimensions):
+    # TODO: find better algorithm
     # map the faces to the corresponding idx of the vertices, therefore loop over all faces
     _indices = np.zeros((_faces.shape[0], _faces.shape[1]), dtype=np.int64)
     for f in range(_faces.shape[0]):

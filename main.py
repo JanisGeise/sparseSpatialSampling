@@ -75,10 +75,10 @@ def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tenso
 if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
-    load_path_cube = join("", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
+    # load_path_cube = join("", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
 
     # surfaceMountedCube simulation with coarser grid for testing purposes
-    # load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
+    load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
     save_path_cube = join("", "data", "3D", "exported_grids")
     save_name = f"test_cube_new_data_from_original_cube"
 
@@ -97,26 +97,31 @@ if __name__ == "__main__":
                                      save_name, "cube")
 
     # export the data
-    times, _ = load_original_Foam_fields(load_path_cube, 2, bounds, _get_field_names_and_times=True)
+    times, fields = load_original_Foam_fields(load_path_cube, 2, bounds, _get_field_names_and_times=True)
 
     # save time steps of all snapshots, which will be exported to HDF5 & XDMF
     export.times = list(map(float, times))
 
-    # TODO: exception handling doesn't work anymore for some reason (if field is not found)
     # interpolate and export the specified fields
-    for f in ["U", "p"]:
+    for f in fields:
         coord, data = load_original_Foam_fields(load_path_cube, 3, bounds, _field_names=f)
-        export.fit_data(coord, data, f, _n_snapshots_total=len(times))
+
+        # in case the field is not available the function will return None
+        if data is not None:
+            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
     export.write_data_to_file()
 
     """
     # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    for f in ["U", "p"]:
+    for f in fields:
         for t in times:
             coord, data = load_original_Foam_fields(load_path_cube, 3, bounds, _field_names=f, _write_times=t)
-            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
+            
+            # in case the field is not available the function will return None
+            if data is not None:
+                export.fit_data(coord, data, f, _n_snapshots_total=len(times))
     export.write_data_to_file()
-    """
+    # """
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
@@ -144,18 +149,23 @@ if __name__ == "__main__":
     # save time step of all snapshots, which will be exported to HDF5 & XDMF
     export.times = list(map(float, times))
 
-    # TODO: exception handling doesn't work anymore for some reason (if field is not found)
     # interpolate and export the specified fields
-    for f in ["U", "p"]:
+    for f in fields:
         coord, data = load_original_Foam_fields(load_path_cylinder, 2, bounds, _field_names=f)
-        export.fit_data(coord, data, f, _n_snapshots_total=len(times))
+
+        # in case the field is not available the function will return None
+        if data is not None:
+            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
     export.write_data_to_file()
 
     """
     # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    for f in ["U", "p"]:
+    for f in fields:
         for t in times:
             coord, data = load_original_Foam_fields(load_path_cylinder, 2, bounds, _field_names=f, _write_times=t)
-            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
+
+            # in case the field is not available the function will return None
+            if data is not None:
+                export.fit_data(coord, data, f, _n_snapshots_total=len(times))
     export.write_data_to_file()
     """

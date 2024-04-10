@@ -142,7 +142,10 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             _write_times = [_write_times]
 
         # in case there are no fields specified, take all available fields
-        _field_names = loader.field_names[_write_times[0]] if _field_names is None else _field_names
+        if _field_names is None:
+            _field_names = loader.field_names[_write_times[0]]
+        elif type(_field_names) == str:
+            _field_names = [_field_names]
 
         # assemble data matrix for each field and interpolate the values onto the coarser grid
         _fields_out = []
@@ -185,7 +188,12 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
             _fields_out.append([coord, data])
 
-        return _fields_out if len(_fields_out) > 1 else _fields_out[0]
+        if len(_fields_out) > 1:
+            return _fields_out
+        elif not _fields_out:
+            return None, None
+        else:
+            return _fields_out[0]
 
 
 if __name__ == "__main__":
