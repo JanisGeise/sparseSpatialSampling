@@ -10,7 +10,7 @@ Mesh reduction algorithm for CFD post-processing
 - parameter studies for `_stop_thr`, `_cells_per_iter_start`, `_cells_per_iter_end`
 
 ## Potential features / Ideas
-- parallelization, more usage of numba / jit to improve runtime, especially for larger datasets
+- progressbar / information on progress when executing the resorting of the grid
 - automatic determination of reasonable value for min. of `level_bounds`
 - dealing with datasets, which doesn't fit into the RAM at once
 - generalization for arbitrary geometries and domain boundaries, handle stl files as input

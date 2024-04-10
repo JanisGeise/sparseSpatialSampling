@@ -5,6 +5,13 @@
 
         - cylinder2D (at Re = 1000), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/laminar/
         - surfaceMountedCube (coarser grid), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/LES/
+
+    IMPORTANT: size of data matrix (of the original CFD data) provided for interpolation onto the generated coarser grid
+               must be:
+                - [N_cells, N_dimensions, N_snapshots] (vector field)
+                - [N_cells, 1, N_snapshots] (scalar field)
+
+                in order to correctly execute the 'fit_data()' method of the DataWriter class
 """
 import torch as pt
 
@@ -75,12 +82,13 @@ def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tenso
 if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
-    # load_path_cube = join("", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
+    load_path_cube = join("", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
+    save_name = f"test_cube_new_data_from_original_cube"
 
     # surfaceMountedCube simulation with coarser grid for testing purposes
-    load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
+    # load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
+    # save_name = "test_cube_new"
     save_path_cube = join("", "data", "3D", "exported_grids")
-    save_name = f"test_cube_new_data_from_original_cube"
 
     # boundaries of the masked domain for the cube
     bounds = [[1.4, 3, 0], [9, 6, 1.5]]          # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -121,8 +129,7 @@ if __name__ == "__main__":
             if data is not None:
                 export.fit_data(coord, data, f, _n_snapshots_total=len(times))
     export.write_data_to_file()
-    # """
-
+    """
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
     load_path_cylinder = join("", "data", "2D", "cylinder2D_re1000")

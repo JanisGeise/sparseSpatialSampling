@@ -6,10 +6,9 @@ import h5py
 import numpy as np
 import torch as pt
 
-from numba import njit
 from os.path import join
+from numba import njit, prange
 from sklearn.neighbors import KNeighborsRegressor
-from flowtorch.data import mask_box, FOAMDataloader
 
 
 class Fields:
@@ -192,22 +191,48 @@ class DataWriter:
         print("Finished export.")
 
 
-@njit
+@njit(fastmath=True, parallel=True)
 def resort_grid(_faces, _vertices, _n_dimensions):
-    # TODO: find better algorithm
+    """
+    resort the grid points, replace coordinates which make up a cell face with the idx of the cells. Goal is to remove
+    duplicate nodes, since each cell has 4 (8) nodes in 2D (3D), but neighboring cells share the same node. However,
+    in the _faces array, each cell has 4 (8) nodes, ignoring the sharing of nodes.
+
+    1.
+        - _faces contains many duplicate nodes, which need to be removed
+    2.
+        - we need to replace the coordinates of the nodes with an index, since we need to describe the cell by idx for
+          export to HDF5 & XDMF. For example:
+
+            o---o           1---2
+            |   |       -> |  A |   meaning that node no. 1, 2, 3, 4 make up cell face A
+            o---o          4---3
+
+        for the neighbouring cells, we already have e.g. idx 2, 3 stored, so we need to assign these nodes to the right
+        neighbor by replacing the upper & lower node of this neighbor cell with these indices
+
+    :param _faces: array containing coord. of all nodes, size _faces = [N_cells, N_nodes_per_cell, N_dimensions]
+    :param _vertices: array containing coord. of all unique nodes in the grid, size _vertices = [N_nodes_total, N_dimensions]
+    :param _n_dimensions: number of physical dimensions (3D / 3D)
+    :return: idx of resorted _faces array, as: [N_cells, N_nodes_per_cell]
+    """
     # map the faces to the corresponding idx of the vertices, therefore loop over all faces
     _indices = np.zeros((_faces.shape[0], _faces.shape[1]), dtype=np.int64)
-    for f in range(_faces.shape[0]):
-        # check to which positions the vertices of the current face correspond within the vertices list
-        tmp, counter = np.zeros(_faces.shape[1], dtype=np.int64), 0
 
-        for idx in range(_vertices.shape[0]):
+    # check to which positions the vertices of the current face correspond within the vertices list
+    for f in prange(_faces.shape[0]):
+        # if parallel = True, we need to assign empty array inside this loop, otherwise the assignment is incorrect
+        n_nodes_per_cell = np.zeros(_faces.shape[1], dtype=np.int64)
+        counter = 0
+
+        for idx in prange(_vertices.shape[0]):
             # check if the current node matches any of the nodes of the current cell (np.isin() not supported by numba)
             if (np.sum(_faces[f, :, :] == _vertices[idx, :], axis=1) == _n_dimensions).any():
                 # if that is the case, add the current node to the list of nodes, which make up the cell
-                tmp[counter] = idx
+                n_nodes_per_cell[counter] = idx
                 counter += 1
-        _indices[f, :] = tmp
+
+        _indices[f, :] = n_nodes_per_cell
 
     # replace the vertices with the computed cell faces, swap the last columns to avoid issues in paraview, note:
     # idx slicing not supported in numba, e.g. _indices[:, (0, 1, 3, 2)] or _indices[:, (0, 1, 3, 2, 4, 5, 7, 6)]

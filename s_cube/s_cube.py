@@ -325,6 +325,16 @@ class SamplingTree(object):
             self._cells[cell].nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
     def _compute_cell_centers(self, idx_: int, factor_: float = 0.25, keep_parent_center_: bool = True):
+        """
+        Note:   although this method is called 'compute_nodes_final_mesh()', it computes the (corner) nodes of a cell if
+                'factor_=0.5', not the cell center. If 'factor_=0.25', it computes the cell centers of all child cells,
+                 hence the name for this method.
+
+        :param idx_:
+        :param factor_:
+        :param keep_parent_center_:
+        :return: either cell centers of child cells (factor_=0.25) or nodes of current cell (factor_=0.5)
+        """
         # empty tensor with size of (parent_cell + n_children, n_dims)
         coord_ = pt.zeros((pow(2, self._n_dimensions) + 1, self._n_dimensions))
 
