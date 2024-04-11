@@ -2,9 +2,7 @@
 Mesh reduction algorithm for CFD post-processing
 
 ## TODO
-- further optimization of the code (wrt execution time) -> maybe with cython (depending on support and runtime)
--> computation of cell faces still requires long time (although already in numba) -> more efficient algorithm?
-- write unit tests
+- find better algorithm for computation of cell faces (still requires long time although already in numba and parallel)
 - perform tests on larger cases and datasets -> test current implementation of calculating `n_cells_per_iter`
 - complete documentation of code and repository
 - parameter studies for `_stop_thr`, `_cells_per_iter_start`, `_cells_per_iter_end`
@@ -13,6 +11,7 @@ Mesh reduction algorithm for CFD post-processing
 - progressbar / information on progress when executing the resorting of the grid
 - automatic determination of reasonable value for min. of `level_bounds`
 - dealing with datasets, which doesn't fit into the RAM at once
+- testing different metrics and combinations thereof
 - generalization for arbitrary geometries and domain boundaries, handle stl files as input
 
 ## References

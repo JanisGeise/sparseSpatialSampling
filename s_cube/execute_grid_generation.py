@@ -1,5 +1,5 @@
 """
-    implements wrapper function for the S^3 algorithm
+    implements wrapper function for executing the S^3 algorithm and a function for loading fields from OpenFoam
 """
 import torch as pt
 
@@ -14,7 +14,7 @@ from s_cube.geometry import GeometryObject
 from s_cube.s_cube import SamplingTree
 
 
-def check_geometry_objects(_geometries) -> bool:
+def check_geometry_objects(_geometries: list) -> bool:
     """
     check if the dict for each given geometry object is correct
 
@@ -50,9 +50,9 @@ def check_geometry_objects(_geometries) -> bool:
     return True
 
 
-def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict],
-                            _load_path: str, _save_path: str, _save_name: str, _grid_name: str,
-                            _level_bounds: tuple = (3, 25), _n_cells_max: int = None) -> DataWriter:
+def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict], _save_path: str,
+                            _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
+                            _n_cells_max: int = None) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
@@ -67,7 +67,6 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
                               "type": type of the geometry, either "cube" or "sphere";
                               "is_geometry": flag if the geometry is the domain (False) or a geometry inside the domain
                               (True)
-    :param _load_path: path to the CFD data
     :param _save_path: path where the interpolated grid and data should be saved to
     :param _save_name: name of the files (grid & data)
     :param _grid_name: name of the grid (used in XDMF file)
@@ -99,7 +98,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     # fit the pressure field onto the new mesh and export the data
     t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), load_dir=_load_path, save_dir=_save_path,
+    export_data = DataWriter(sampling.leaf_cells(), save_dir=_save_path,
                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
                              save_name=_save_name, grid_name=_save_name)
     print(f"Computation of cell faces and nodes required {round((time() - t_start), 3)} s.\n")
@@ -174,15 +173,13 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
             # if fields are written out only for specific parts of domain, this leads to dimension mismatch between
             # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
-            # part of this mask
+            # part of this mask)
             except RuntimeError:
                 print(f"\tField '{field}' is does not match the size of the masked domain. Skipping this field...")
                 continue
 
-            # interpolate the KNN for each field over all time steps (for now, later an option to fit N snapshots at
-            # once will be implemented), IMPORTANT: size of data matrix must be:
-            #   - [N_cells, N_dimensions, N_snapshots] (vector field)
-            #   - [N_cells, 1, N_snapshots] (scalar field)
+            # since size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or
+            # [N_cells, 1, N_snapshots] (scalar field); unsqueeze if we have a scalar field
             if len(_field_size) == 1:
                 data = data.unsqueeze(1)
 

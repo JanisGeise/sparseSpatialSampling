@@ -1,5 +1,5 @@
 """
-    implementation of the sparse spatial sampling algorithm (s_cube) for 2D & 3D (no 1D)
+    implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
 """
 import torch as pt
 
@@ -8,8 +8,45 @@ from sklearn.neighbors import KNeighborsRegressor
 
 
 class Cell(object):
+    """
+    implements a cell for the KNN regressor
+    """
     def __init__(self, index: int, parent, nb: list, center: pt.Tensor, level: int, children=None,
                  metric=None, gain=None, dimensions: int = 2):
+        """
+        each cell has the following attributes:
+
+        :param index: index of the cell (cell number)
+        :param parent: the superior cell, from which this cell was created
+        :param nb: list containing all neighbor of the cell
+        :param center: coordinates of the cell center
+        :param level: refinement level (how often do we need to divide an initial cell to get to this cell)
+        :param children: is this cell a parent cell of other cells (contains this cell other, smaller cells inside it)
+        :param metric: the prediction made by the KNN based on the cell centers
+        :param gain: value indicating the benefit arising from refining this cell
+        :param dimensions: number of physical dimensions (2D / 3D)
+
+        Note:
+                each cell has 8 neighbors (nb) in 2D case: 1 at each side, 1 at each corner of the cell. In 3D, there
+                are additionally 9 neighbors of the plane above and below (in z-direction) present. The neighbors are
+                assigned in clockwise direction starting at the left neighbor. For 3D 1st neighbors in same plane are
+                assigned, then neighbors in lower plane and finally neighbors in upper plane. The indices of the
+                neighbors list refer to the corresponding neighbors as:
+
+                2D:
+                    0 = left nb, 1 = upper left nb, 2 = upper nb, 3 = upper right nb, 4 = right nb, 5 = lower right nb,
+                    6 = lower nb, 7 = lower left nb
+
+                additionally for 3D:
+
+                    8 = left nb lower plane, 9 = upper left nb lower plane,  10 = upper nb lower plane,
+                    11 = upper right nb lower plane, 12 = right nb lower plane, 13 = lower right nb lower plane,
+                    14 = lower nb lower plane, 15 = lower left nb lower plane, 16 = center nb lower plane
+
+                    17 = left nb upper plane, 18 = upper left nb upper plane, 19 = upper nb upper plane,
+                    20 = upper right nb upper plane, 21 = right nb upper plane, 22 = lower right nb upper plane,
+                    23 = lower nb upper plane, 24 = lower left nb upper plane, 25 = center nb upper plane,
+        """
         self.index = index
         self.parent = parent
         self.level = level
@@ -18,25 +55,6 @@ class Cell(object):
         self.metric = metric
         self.gain = gain
         self._n_dims = dimensions
-
-        """
-        each cell has 8 neighbors (nb) in 2D case: 1 at each side, 1 at each corner of the cell. In 3D, there are
-        additionally 9 neighbors of the plane above and below (in z-direction) present. The neighbors are assigned in
-        clockwise direction starting at the left neighbor. For 3D 1st neighbors in same plane are assigned, then
-        neighbors in lower plane and finally neighbors in upper plane. The indices of the neighbors list refer to the
-        corresponding neighbors as:
-        
-        2D:                   0 = left nb, 1 = upper left nb, 2 = upper nb, 3 = upper right nb, 4 = right nb,
-                              5 = lower right nb, 6 = lower nb, 7 = lower left nb
-                              
-        additionally for 3D:  8 = left nb lower plane, 9 = upper left nb lower plane, 10 = upper nb lower plane,
-                              11 = upper right nb lower plane, 12 = right nb lower plane, 13 = lower right nb lower plane,
-                              14 = lower nb lower plane, 15 = lower left nb lower plane, 16 = center nb lower plane
-                              
-                              17 = left nb upper plane, 18 = upper left nb upper plane, 19 = upper nb upper plane,
-                              20 = upper right nb upper plane, 21 = right nb upper plane, 22 = lower right nb upper plane,
-                              23 = lower nb upper plane, 24 = lower left nb upper plane, 25 = center nb upper plane,
-        """
         self.nb = nb
 
     def leaf_cell(self):
@@ -44,7 +62,19 @@ class Cell(object):
 
 
 class SamplingTree(object):
+    """
+    class implementing the SamplingTree, which is creates the grid (tree structure)
+    """
     def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = True):
+        """
+        initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
+
+        :param vertices: coordinates of the nodes of the original mesh (CFD)
+        :param target: the metric based on which the grid should be created, e.g. std. deviation of pressure wrt time
+        :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically
+        :param level_bounds: min. and max. number of levels of the final grid
+        :param _smooth_geometry: flag for final refinement of the mesh around geometries and domain boundaries
+        """
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -75,11 +105,21 @@ class SamplingTree(object):
             self._directions = pt.tensor([[-1, -1, -1], [-1, 1, -1], [1, 1, -1], [1, -1, -1],
                                           [-1, -1, 1], [-1, 1, 1], [1, 1, 1], [1, -1, 1]])
 
-        # create initial cell
+        # create initial cell and compute its gain
         self._create_first_cell()
         self._compute_global_gain()
 
-    def _create_first_cell(self):
+        # remove the vertices and target to free up memory since they are only required for fitting the KNN and
+        # computing the dominant width of the domain
+        self._remove_original_cfd_data()
+
+    def _create_first_cell(self) -> None:
+        """
+        creates a single cell based on the dominant dimension of the numerical domain, used as a starting point for the
+        refinement process
+
+        :return: None
+        """
         self._width = max([self._vertices[:, i].max() - self._vertices[:, i].min() for i in
                            range(self._n_dimensions)]).item()
 
@@ -109,7 +149,22 @@ class SamplingTree(object):
                             dimensions=self._n_dimensions)]
         self._update_leaf_cells()
 
-    def _find_neighbors(self, cell):
+    def _remove_original_cfd_data(self) -> None:
+        """
+        delete the original coordinates (CFD) and metric since the are not used anymore
+
+        :return: None
+        """
+        del self._vertices
+        del self._target
+
+    def _find_neighbors(self, cell) -> list:
+        """
+        find all the neighbors of the current cell
+
+        :param cell: the current cell
+        :return: list with all neighbors of the cell, if geometry or domain bound is neighbor, the entry is set to'None'
+        """
         n_neighbors = self._knn.n_neighbors
         if cell.level < 2:
             return n_neighbors * [None]
@@ -122,8 +177,14 @@ class SamplingTree(object):
 
             return nb_tmp
 
-    def _refine_uniform(self):
-        for i in range(self._min_level):
+    def _refine_uniform(self) -> None:
+        """
+        create uniform background mesh to save runtime, since the min. level of the generated grid is likely to be > 1
+        (uniform refinement is significantly faster than adaptive refinement)
+
+        :return: None
+        """
+        for _ in range(self._min_level):
             new_cells = []
             new_index = len(self._cells)
             for i in self._leaf_cells:
@@ -151,7 +212,12 @@ class SamplingTree(object):
             # delete cells which are outside the domain or inside a geometry (here we update all cells every iteration)
             self.remove_invalid_cells([c.index for c in new_cells])
 
-    def _update_gain(self):
+    def _update_gain(self) -> None:
+        """
+        update the gain of all (new) leaf cells
+
+        :return: None
+        """
         indices, centers = ([], [])
         for i in self._leaf_cells:
             if self._cells[i].gain is None or self._cells[i].metric is None:
@@ -180,24 +246,27 @@ class SamplingTree(object):
                 cell.gain = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, cell.level), self._n_dimensions) \
                             * sum_delta_metric
 
-    def _update_leaf_cells(self):
+    def _update_leaf_cells(self) -> None:
         self._leaf_cells = [cell.index for cell in self._cells if cell.leaf_cell()]
 
-    def _update_min_ref_level(self):
+    def _update_min_ref_level(self) -> None:
         min_level = min([self._cells[index].level for index in self._leaf_cells])
         self._current_min_level = max(self._current_min_level, min_level)
 
-    def _freeze(self):
-        pass
-
-    def leaf_cells(self):
+    def leaf_cells(self) -> list:
         return [self._cells[i] for i in self._leaf_cells]
 
-    def refine(self):
+    def refine(self) -> None:
+        """
+        implements the generation of the grid based on the original grid and a metric
+
+        :return: None
+        """
         print("Starting refinement:")
         start_time = time()
         if self._min_level > 0:
             self._refine_uniform()
+            print("Finished uniform refinement.")
         else:
             self._update_leaf_cells()
         end_time_uniform = time()
@@ -205,13 +274,13 @@ class SamplingTree(object):
         iteration_count = 0
 
         while abs(self._global_gain[-2] - self._global_gain[-1]) >= self._stop_thr or self._n_cells >= self._n_cells_max:
-            if iteration_count % 10 == 0:
-                print(f"\tStarting iteration no. {iteration_count}")
+            print(f"\r\tStarting iteration no. {iteration_count}", end="", flush=True)
 
             # update _n_cells_per_iter based on the gain difference and threshold for stopping
             if len(self._global_gain) > 3:
                 # predict the iterations left until stopping criteria is met (linearly), '_stop_thr' may be neglectable
-                # due to its small value
+                # due to its small value. This is just an eq. for a linear function, with an intersection at _stop_thr
+                # and y-intercept at _global_gain[-3]
                 pred = (self._stop_thr - self._global_gain[-3]) / (self._global_gain[-1] - self._global_gain[-2])
 
                 # set the new n_cells_per_iter based on the distance to this iteration and its boundaries
@@ -263,6 +332,7 @@ class SamplingTree(object):
                 # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
                 new_index += pow(2, self._n_dimensions)
 
+            # add the newly generated cell to the list of all existing cells and update everything
             self._cells.extend(new_cells)
             self._update_leaf_cells()
             self._update_gain()
@@ -286,6 +356,14 @@ class SamplingTree(object):
         print(self)
 
     def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False) -> None or list:
+        """
+        check if any of the generated cells are located inside a geometry or outside a domain. If so, they are removed.
+
+        :param _refined_cells: indices of the cells which are newly added
+        :param _refine_geometry: flag if we want to refine the grid near geometry objects
+        :return: None if we removed all invalid cells, if '_refine_geometry = True' returns list with indices of the
+                 cells which are neighbors of geometries / domain boundaries
+        """
         # check for each cell if it is located outside the domain or inside a geometry
         cells_invalid, idx = set(), set()
         for cell in _refined_cells:
@@ -318,21 +396,30 @@ class SamplingTree(object):
             # remove all invalid cells as leaf cells if we have any
             self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
 
-    def compute_nodes_final_mesh(self):
+    def compute_nodes_final_mesh(self) -> None:
+        """
+        compute the cell centers and vertices of the cells of the final grid
+
+        :return: None
+        """
         # loop over all leaf cells
         for cell in self._leaf_cells:
             # compute cell centers and store the nodes and faces for writing HDF5 file later
             self._cells[cell].nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
-    def _compute_cell_centers(self, idx_: int, factor_: float = 0.25, keep_parent_center_: bool = True):
+    def _compute_cell_centers(self, idx_: int, factor_: float = 0.25, keep_parent_center_: bool = True) -> pt.Tensor:
         """
+        computes either the cell centers of the child cells for a given parent cell ('factor_ = 0.25) or the nodes of
+        a given cell (factor_ = 0.5)
+
         Note:   although this method is called 'compute_nodes_final_mesh()', it computes the (corner) nodes of a cell if
                 'factor_=0.5', not the cell center. If 'factor_=0.25', it computes the cell centers of all child cells,
                  hence the name for this method.
 
-        :param idx_:
-        :param factor_:
-        :param keep_parent_center_:
+        :param idx_: index of the cell
+        :param factor_: the factor (0.5 = half distance between two adjacent cell centers = node; 0.25 = cell center of
+                        child cells relative to the parent cell center)
+        :param keep_parent_center_: if the cell center of the parent cell should be deleted from the tensor prior return
         :return: either cell centers of child cells (factor_=0.25) or nodes of current cell (factor_=0.5)
         """
         # empty tensor with size of (parent_cell + n_children, n_dims)
@@ -350,7 +437,17 @@ class SamplingTree(object):
         # each cell, but we need the parent cell center e.g. for computing the gain)
         return coord_[1:, :] if not keep_parent_center_ else coord_
 
-    def _check_constraint(self, cell_no_, counter_, start_=0, stop_=4):
+    def _check_constraint(self, cell_no_, counter_, start_=0, stop_=4) -> list:
+        """
+        check if the level difference between a cell and its neighbors is max. one, if not then we need to refine all
+        cells for which the constraint is violated
+
+        :param cell_no_: current cell index for which we want to check the constraint
+        :param counter_: current position of the nb we already checked based on the lasst cell
+        :param start_: min. idx which a nb can have based on the location of the current cell
+        :param stop_: max. idx which a nb can have based on the location of the current cell
+        :return: list with indices of nb cell we need to refine, because delta level is > 1
+        """
         # check if the level difference of current cell is larger than one wrt nb cells -> if so, then refine the nb
         # cell in order to avoid too large level differences between adjacent cells
         idx_list = []
@@ -376,13 +473,13 @@ class SamplingTree(object):
 
         return idx_list
 
-    def _refine_geometry(self):
+    def _refine_geometry(self) -> None:
         """
-            stripped down version of the refine() method, this may be changed in the future. The documentation of this
-            method is equivalent to the refine() method
+        stripped down version of the refine() method for refinement of the final grid near geometry objects or domain
+        boundaries. The documentation of this method is equivalent to the refine() method
         """
-        for i in range(self._geometry_refinement_cycles):
-            print("Starting geometry refinement:")
+        for _ in range(self._geometry_refinement_cycles):
+            print("\nStarting geometry refinement:")
             self._update_leaf_cells()
             self._update_gain()
             to_refine = set()
@@ -408,8 +505,6 @@ class SamplingTree(object):
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
-
-                # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
                 new_index += pow(2, self._n_dimensions)
 
             self._cells.extend(new_cells)
@@ -418,12 +513,19 @@ class SamplingTree(object):
             self._update_min_ref_level()
             self.remove_invalid_cells([c.index for c in new_cells])
 
-    def _compute_global_gain(self):
-        tmp = []
+    def _compute_global_gain(self) -> None:
+        """
+        compute a normalized gain of all cells in order to determine if we can stop the refinement. The gain is summed
+        up over all leaf cells and then scaled by the area (2D) or volume (3D) of each cell and the number of leaf cells
+        in total.
+
+        :return: None
+        """
+        normalized_gain = []
         for c in self._leaf_cells:
             area = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, self._cells[c].level), self._n_dimensions)
-            tmp.append(self._cells[c].gain / area)
-        self._global_gain.append(sum(tmp).item() / len(self._leaf_cells))
+            normalized_gain.append(self._cells[c].gain / area)
+        self._global_gain.append(sum(normalized_gain).item() / len(self._leaf_cells))
 
     def __len__(self):
         return self._n_cells
