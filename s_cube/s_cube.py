@@ -273,7 +273,7 @@ class SamplingTree(object):
         self._compute_global_gain()
         iteration_count = 0
 
-        while abs(self._global_gain[-2] - self._global_gain[-1]) >= self._stop_thr or self._n_cells >= self._n_cells_max:
+        while abs(self._global_gain[-2] - self._global_gain[-1]) >= self._stop_thr and self._n_cells <= self._n_cells_max:
             print(f"\r\tStarting iteration no. {iteration_count}", end="", flush=True)
 
             # update _n_cells_per_iter based on the gain difference and threshold for stopping
@@ -395,6 +395,9 @@ class SamplingTree(object):
 
             # remove all invalid cells as leaf cells if we have any
             self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
+
+            # update n_cells
+            self._n_cells = len(self._leaf_cells)
 
     def compute_nodes_final_mesh(self) -> None:
         """

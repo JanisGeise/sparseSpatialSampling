@@ -79,7 +79,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
         exit()
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=(2, 50))
+    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds)
 
     # add the cube and the domain
     for g in _geometry_objects:
