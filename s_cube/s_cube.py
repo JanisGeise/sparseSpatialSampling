@@ -104,8 +104,8 @@ class SamplingTree(object):
             self._directions = pt.tensor([[-1, -1], [-1, 1], [1, 1], [1, -1]])
         else:
             # same order as for 2D
-            self._directions = pt.tensor([[-1, -1, 1], [-1, 1, 1], [1, 1, 1], [1, -1, 1]],
-                                          [-1, -1, -1], [-1, 1, -1], [1, 1, -1], [1, -1, -1])
+            self._directions = pt.tensor([[-1, -1, 1], [-1, 1, 1], [1, 1, 1], [1, -1, 1],
+                                          [-1, -1, -1], [-1, 1, -1], [1, 1, -1], [1, -1, -1]])
 
         # create initial cell and compute its gain
         self._create_first_cell()
@@ -168,6 +168,7 @@ class SamplingTree(object):
         :return: list with all neighbors of the cell, if geometry or domain bound is neighbor, the entry is set to'None'
         """
         n_neighbors = self._knn.n_neighbors
+        # level = 0: only initial cell present (no parent cell available), level = 1: parent cell (= 1st cell)
         if cell.level < 2:
             return n_neighbors * [None]
         else:
@@ -561,6 +562,8 @@ class SamplingTree(object):
 
     def _assign_neighbors(self, loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int) -> list:
         """
+        TODO: exploitation of patterns (if any) to make this more readable & efficient
+
         create a child cell from a given parent cell, assign its neighbors correctly to each child cell
 
         :param loc_center: center coordinates of the cell and its sub-cells
@@ -574,232 +577,515 @@ class SamplingTree(object):
                          dimensions=self._n_dimensions) for idx, loc in enumerate(loc_center)]
 
         # add the neighbors for each of the child cells
-        # neighbors for new lower left cell
-        cell_tmp[0].nb[0] = neighbors[0]
-        cell_tmp[0].nb[1] = neighbors[0]
+        # neighbors for new lower left cell, we need to check for children, because we only assigned the parent cell,
+        # which is ambiguous for the non-cornering neighbors. Further, we need to make sure that we have exactly N
+        # children (if cells is removed due to geometry issues, then the children are empty list)
+        check = [n is not None and n.children is not None and len(n.children) == pow(2, self._n_dimensions) for n in
+                 neighbors]
+        if check[0]:
+            cell_tmp[0].nb[0] = neighbors[0].children[3]
+            cell_tmp[0].nb[1] = neighbors[0].children[2]
+        else:
+            cell_tmp[0].nb[0] = neighbors[0]
+            cell_tmp[0].nb[1] = neighbors[0]
         cell_tmp[0].nb[2] = cell_tmp[0]
         cell_tmp[0].nb[3] = cell_tmp[1]
         cell_tmp[0].nb[4] = cell_tmp[2]
-        cell_tmp[0].nb[5] = neighbors[6]
-        cell_tmp[0].nb[6] = neighbors[6]
-        cell_tmp[0].nb[7] = neighbors[7]
+        if check[6]:
+            cell_tmp[0].nb[5] = neighbors[6].children[2]
+            cell_tmp[0].nb[6] = neighbors[6].children[1]
+        else:
+            cell_tmp[0].nb[5] = neighbors[6]
+            cell_tmp[0].nb[6] = neighbors[6]
+        if check[7]:
+            cell_tmp[0].nb[7] = neighbors[7].children[2]
+        else:
+            cell_tmp[0].nb[7] = neighbors[7]
 
         # neighbors for new upper left cell
-        cell_tmp[1].nb[0] = neighbors[0]
-        cell_tmp[1].nb[1] = neighbors[1]
-        cell_tmp[1].nb[2] = neighbors[2]
-        cell_tmp[1].nb[3] = neighbors[2]
-        cell_tmp[1].nb[4] = cell_tmp[1]
-        cell_tmp[1].nb[5] = cell_tmp[2]
-        cell_tmp[1].nb[6] = cell_tmp[3]
-        cell_tmp[1].nb[7] = neighbors[0]
+        if check[0]:
+            cell_tmp[1].nb[0] = neighbors[0].children[2]
+        else:
+            cell_tmp[1].nb[0] = neighbors[0]
+        if check[1]:
+            cell_tmp[1].nb[1] = neighbors[1].children[3]
+        else:
+            cell_tmp[1].nb[1] = neighbors[1]
+        if check[2]:
+            cell_tmp[1].nb[2] = neighbors[2].children[0]
+            cell_tmp[1].nb[3] = neighbors[2].children[3]
+        else:
+            cell_tmp[1].nb[2] = neighbors[2]
+            cell_tmp[1].nb[3] = neighbors[2]
+        cell_tmp[1].nb[4] = cell_tmp[2]
+        cell_tmp[1].nb[5] = cell_tmp[3]
+        cell_tmp[1].nb[6] = cell_tmp[0]
+        if check[0]:
+            cell_tmp[1].nb[7] = neighbors[0].children[3]
+        else:
+            cell_tmp[1].nb[7] = neighbors[0]
 
         # neighbors for new upper right cell
         cell_tmp[2].nb[0] = cell_tmp[0]
-        cell_tmp[2].nb[1] = neighbors[2]
-        cell_tmp[2].nb[2] = neighbors[2]
-        cell_tmp[2].nb[3] = neighbors[3]
-        cell_tmp[2].nb[4] = neighbors[4]
-        cell_tmp[2].nb[5] = neighbors[4]
-        cell_tmp[2].nb[6] = cell_tmp[2]
-        cell_tmp[2].nb[7] = cell_tmp[3]
+        if check[2]:
+            cell_tmp[1].nb[1] = neighbors[2].children[0]
+            cell_tmp[1].nb[2] = neighbors[2].children[3]
+        else:
+            cell_tmp[2].nb[1] = neighbors[2]
+            cell_tmp[2].nb[2] = neighbors[2]
+        if check[3]:
+            cell_tmp[2].nb[3] = neighbors[3].children[0]
+        else:
+            cell_tmp[2].nb[3] = neighbors[3]
+        if check[4]:
+            cell_tmp[2].nb[4] = neighbors[4].children[1]
+            cell_tmp[2].nb[5] = neighbors[4].children[0]
+        else:
+            cell_tmp[2].nb[4] = neighbors[4]
+            cell_tmp[2].nb[5] = neighbors[4]
+        cell_tmp[2].nb[6] = cell_tmp[3]
+        cell_tmp[2].nb[7] = cell_tmp[0]
 
         # neighbors for new lower right cell
-        cell_tmp[3].nb[0] = cell_tmp[3]
-        cell_tmp[3].nb[1] = cell_tmp[0]
-        cell_tmp[3].nb[2] = cell_tmp[1]
-        cell_tmp[3].nb[3] = neighbors[4]
-        cell_tmp[3].nb[4] = neighbors[4]
-        cell_tmp[3].nb[5] = neighbors[5]
-        cell_tmp[3].nb[6] = neighbors[6]
-        cell_tmp[3].nb[7] = neighbors[6]
+        cell_tmp[3].nb[0] = cell_tmp[0]
+        cell_tmp[3].nb[1] = cell_tmp[1]
+        cell_tmp[3].nb[2] = cell_tmp[2]
+        if check[4]:
+            cell_tmp[3].nb[3] = neighbors[4].children[1]
+            cell_tmp[3].nb[4] = neighbors[4].children[0]
+        else:
+            cell_tmp[3].nb[3] = neighbors[4]
+            cell_tmp[3].nb[4] = neighbors[4]
+        if check[5]:
+            cell_tmp[3].nb[5] = neighbors[5].children[1]
+        else:
+            cell_tmp[3].nb[5] = neighbors[5]
+        if check[6]:
+            cell_tmp[3].nb[6] = neighbors[6].children[2]
+            cell_tmp[3].nb[7] = neighbors[6].children[1]
+        else:
+            cell_tmp[3].nb[6] = neighbors[6]
+            cell_tmp[3].nb[7] = neighbors[6]
 
         # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
         # same plane as current cell is always the same as for 2D
         if self._n_dimensions == 3:
             # ----------------  lower left cell center, upper plane  ----------------
             # plane under the current cell
-            cell_tmp[0].nb[8] = neighbors[0]
-            cell_tmp[0].nb[9] = neighbors[0]
-            cell_tmp[0].nb[10] = cell_tmp[4]
-            cell_tmp[0].nb[11] = cell_tmp[5]
+            if check[0]:
+                cell_tmp[0].nb[8] = neighbors[0].children[7]
+                cell_tmp[0].nb[9] = neighbors[0].children[6]
+            else:
+                cell_tmp[0].nb[8] = neighbors[0]
+                cell_tmp[0].nb[9] = neighbors[0]
+            cell_tmp[0].nb[10] = cell_tmp[5]
+            cell_tmp[0].nb[11] = cell_tmp[6]
             cell_tmp[0].nb[12] = cell_tmp[7]
-            cell_tmp[0].nb[13] = neighbors[6]
-            cell_tmp[0].nb[14] = neighbors[6]
-            cell_tmp[0].nb[15] = neighbors[7]
+            if check[6]:
+                cell_tmp[0].nb[13] = neighbors[6].children[6]
+                cell_tmp[0].nb[14] = neighbors[6].children[5]
+            else:
+                cell_tmp[0].nb[13] = neighbors[6]
+                cell_tmp[0].nb[14] = neighbors[6]
+            if check[7]:
+                cell_tmp[0].nb[15] = neighbors[7].children[6]
+            else:
+                cell_tmp[0].nb[15] = neighbors[7]
             cell_tmp[0].nb[16] = cell_tmp[7]
 
             # plane above the current cell
-            cell_tmp[0].nb[17] = neighbors[17]
-            cell_tmp[0].nb[18] = neighbors[17]
-            cell_tmp[0].nb[19] = neighbors[25]
-            cell_tmp[0].nb[20] = neighbors[25]
-            cell_tmp[0].nb[21] = neighbors[25]
-            cell_tmp[0].nb[22] = neighbors[23]
-            cell_tmp[0].nb[23] = neighbors[23]
-            cell_tmp[0].nb[24] = neighbors[24]
-            cell_tmp[0].nb[25] = neighbors[25]
+            if check[17]:
+                cell_tmp[0].nb[17] = neighbors[17].children[7]
+                cell_tmp[0].nb[18] = neighbors[17].children[6]
+            else:
+                cell_tmp[0].nb[17] = neighbors[17]
+                cell_tmp[0].nb[18] = neighbors[17]
+            if check[25]:
+                cell_tmp[0].nb[19] = neighbors[25].children[5]
+                cell_tmp[0].nb[20] = neighbors[25].children[6]
+                cell_tmp[0].nb[21] = neighbors[25].children[7]
+                cell_tmp[0].nb[25] = neighbors[25].children[4]
+            else:
+                cell_tmp[0].nb[19] = neighbors[25]
+                cell_tmp[0].nb[20] = neighbors[25]
+                cell_tmp[0].nb[21] = neighbors[25]
+                cell_tmp[0].nb[25] = neighbors[25]
+            if check[23]:
+                cell_tmp[0].nb[22] = neighbors[23].children[6]
+                cell_tmp[0].nb[23] = neighbors[23].children[5]
+            else:
+                cell_tmp[0].nb[22] = neighbors[23]
+                cell_tmp[0].nb[23] = neighbors[23]
+            if check[24]:
+                cell_tmp[0].nb[24] = neighbors[24].children[6]
+            else:
+                cell_tmp[0].nb[24] = neighbors[24]
 
             # ----------------  upper left cell center, upper plane  ----------------
             # plane under the current cell
-            cell_tmp[1].nb[8] = neighbors[0]
-            cell_tmp[1].nb[9] = neighbors[1]
-            cell_tmp[1].nb[10] = neighbors[2]
-            cell_tmp[1].nb[11] = neighbors[2]
-            cell_tmp[1].nb[12] = cell_tmp[5]
-            cell_tmp[1].nb[13] = cell_tmp[6]
-            cell_tmp[1].nb[14] = cell_tmp[7]
-            cell_tmp[1].nb[15] = neighbors[0]
-            cell_tmp[1].nb[16] = neighbors[4]
+            if check[0]:
+                cell_tmp[1].nb[8] = neighbors[0].children[6]
+            else:
+                cell_tmp[1].nb[8] = neighbors[0]
+            if check[1]:
+                cell_tmp[1].nb[9] = neighbors[1].children[7]
+            else:
+                cell_tmp[1].nb[9] = neighbors[1]
+            if check[2]:
+                cell_tmp[1].nb[10] = neighbors[2].children[4]
+                cell_tmp[1].nb[11] = neighbors[2].children[7]
+            else:
+                cell_tmp[1].nb[10] = neighbors[2]
+                cell_tmp[1].nb[11] = neighbors[2]
+            cell_tmp[1].nb[12] = cell_tmp[6]
+            cell_tmp[1].nb[13] = cell_tmp[7]
+            cell_tmp[1].nb[14] = cell_tmp[0]
+            if check[0]:
+                cell_tmp[1].nb[15] = neighbors[0].children[7]
+            else:
+                cell_tmp[1].nb[15] = neighbors[0]
+            cell_tmp[1].nb[16] = cell_tmp[5]
 
             # plane above the current cell
-            cell_tmp[1].nb[17] = neighbors[17]
-            cell_tmp[1].nb[18] = neighbors[18]
-            cell_tmp[1].nb[19] = neighbors[19]
-            cell_tmp[1].nb[20] = neighbors[19]
-            cell_tmp[1].nb[21] = neighbors[25]
-            cell_tmp[1].nb[22] = neighbors[25]
-            cell_tmp[1].nb[23] = neighbors[25]
-            cell_tmp[1].nb[24] = neighbors[17]
-            cell_tmp[1].nb[25] = neighbors[25]
+            if check[17]:
+                cell_tmp[1].nb[17] = neighbors[17].children[6]
+            else:
+                cell_tmp[1].nb[17] = neighbors[17]
+            if check[18]:
+                cell_tmp[1].nb[18] = neighbors[18].children[7]
+            else:
+                cell_tmp[1].nb[18] = neighbors[18]
+            if check[19]:
+                cell_tmp[1].nb[19] = neighbors[19].children[4]
+                cell_tmp[1].nb[20] = neighbors[19].children[5]
+            else:
+                cell_tmp[1].nb[19] = neighbors[19]
+                cell_tmp[1].nb[20] = neighbors[19]
+            if check[25]:
+                cell_tmp[1].nb[21] = neighbors[25].children[6]
+                cell_tmp[1].nb[22] = neighbors[25].children[7]
+                cell_tmp[1].nb[23] = neighbors[25].children[4]
+                cell_tmp[1].nb[25] = neighbors[25].children[5]
+            else:
+                cell_tmp[1].nb[21] = neighbors[25]
+                cell_tmp[1].nb[22] = neighbors[25]
+                cell_tmp[1].nb[23] = neighbors[25]
+                cell_tmp[1].nb[25] = neighbors[25]
+            if check[17]:
+                cell_tmp[1].nb[24] = neighbors[17].children[7]
+            else:
+                cell_tmp[1].nb[24] = neighbors[17]
 
             # ----------------  upper right cell center, upper plane  ----------------
             # plane under the current cell
-            cell_tmp[2].nb[8] = cell_tmp[4]
-            cell_tmp[2].nb[9] = neighbors[2]
-            cell_tmp[2].nb[10] = neighbors[2]
-            cell_tmp[2].nb[11] = neighbors[3]
-            cell_tmp[2].nb[12] = neighbors[4]
-            cell_tmp[2].nb[13] = neighbors[4]
-            cell_tmp[2].nb[14] = cell_tmp[6]
-            cell_tmp[2].nb[15] = cell_tmp[7]
-            cell_tmp[2].nb[16] = cell_tmp[5]
+            cell_tmp[2].nb[8] = cell_tmp[5]
+            if check[2]:
+                cell_tmp[2].nb[9] = neighbors[2].children[4]
+                cell_tmp[2].nb[10] = neighbors[2].children[7]
+            else:
+                cell_tmp[2].nb[9] = neighbors[2]
+                cell_tmp[2].nb[10] = neighbors[2]
+            if check[3]:
+                cell_tmp[2].nb[11] = neighbors[3].children[4]
+            else:
+                cell_tmp[2].nb[11] = neighbors[3]
+            if check[4]:
+                cell_tmp[2].nb[12] = neighbors[4].children[5]
+                cell_tmp[2].nb[13] = neighbors[4].children[4]
+            else:
+                cell_tmp[2].nb[12] = neighbors[4]
+                cell_tmp[2].nb[13] = neighbors[4]
+            cell_tmp[2].nb[14] = cell_tmp[7]
+            cell_tmp[2].nb[15] = cell_tmp[4]
+            cell_tmp[2].nb[16] = cell_tmp[6]
 
             # plane above the current cell
-            cell_tmp[2].nb[17] = neighbors[25]
-            cell_tmp[2].nb[18] = neighbors[19]
-            cell_tmp[2].nb[19] = neighbors[19]
-            cell_tmp[2].nb[20] = neighbors[20]
-            cell_tmp[2].nb[21] = neighbors[21]
-            cell_tmp[2].nb[22] = neighbors[21]
-            cell_tmp[2].nb[23] = neighbors[25]
-            cell_tmp[2].nb[24] = neighbors[25]
-            cell_tmp[2].nb[25] = neighbors[25]
+            if check[25]:
+                cell_tmp[2].nb[17] = neighbors[25].children[5]
+            else:
+                cell_tmp[2].nb[17] = neighbors[25]
+            if check[19]:
+                cell_tmp[2].nb[18] = neighbors[19].children[4]
+                cell_tmp[2].nb[19] = neighbors[19].children[7]
+            else:
+                cell_tmp[2].nb[18] = neighbors[19]
+                cell_tmp[2].nb[19] = neighbors[19]
+            if check[20]:
+                cell_tmp[2].nb[20] = neighbors[20].children[4]
+            else:
+                cell_tmp[2].nb[20] = neighbors[20]
+            if check[21]:
+                cell_tmp[2].nb[21] = neighbors[21].children[5]
+                cell_tmp[2].nb[22] = neighbors[21].children[4]
+            else:
+                cell_tmp[2].nb[21] = neighbors[21]
+                cell_tmp[2].nb[22] = neighbors[21]
+            if check[25]:
+                cell_tmp[2].nb[23] = neighbors[25].children[7]
+                cell_tmp[2].nb[24] = neighbors[25].children[4]
+                cell_tmp[2].nb[25] = neighbors[25].children[6]
+            else:
+                cell_tmp[2].nb[23] = neighbors[25]
+                cell_tmp[2].nb[24] = neighbors[25]
+                cell_tmp[2].nb[25] = neighbors[25]
 
             # ----------------  lower right cell center, upper plane  ----------------
             # plane under the current cell
-            cell_tmp[3].nb[8] = cell_tmp[7]
-            cell_tmp[3].nb[9] = cell_tmp[4]
-            cell_tmp[3].nb[10] = cell_tmp[5]
-            cell_tmp[3].nb[11] = neighbors[4]
-            cell_tmp[3].nb[12] = neighbors[4]
-            cell_tmp[3].nb[13] = neighbors[5]
-            cell_tmp[3].nb[14] = neighbors[6]
-            cell_tmp[3].nb[15] = neighbors[6]
-            cell_tmp[3].nb[16] = cell_tmp[6]
+            cell_tmp[3].nb[8] = cell_tmp[4]
+            cell_tmp[3].nb[9] = cell_tmp[5]
+            cell_tmp[3].nb[10] = cell_tmp[6]
+            if check[4]:
+                cell_tmp[3].nb[11] = neighbors[4].children[5]
+                cell_tmp[3].nb[12] = neighbors[4].children[4]
+            else:
+                cell_tmp[3].nb[11] = neighbors[4]
+                cell_tmp[3].nb[12] = neighbors[4]
+            if check[5]:
+                cell_tmp[3].nb[13] = neighbors[5].children[5]
+            else:
+                cell_tmp[3].nb[13] = neighbors[5]
+            if check[6]:
+                cell_tmp[3].nb[14] = neighbors[6].children[6]
+                cell_tmp[3].nb[15] = neighbors[6].children[5]
+            else:
+                cell_tmp[3].nb[14] = neighbors[6]
+                cell_tmp[3].nb[15] = neighbors[6]
+            cell_tmp[3].nb[16] = cell_tmp[7]
 
             # plane above the current cell
-            cell_tmp[3].nb[17] = neighbors[25]
-            cell_tmp[3].nb[18] = neighbors[25]
-            cell_tmp[3].nb[19] = neighbors[25]
-            cell_tmp[3].nb[20] = neighbors[21]
-            cell_tmp[3].nb[21] = neighbors[21]
-            cell_tmp[3].nb[22] = neighbors[22]
-            cell_tmp[3].nb[23] = neighbors[23]
-            cell_tmp[3].nb[24] = neighbors[23]
-            cell_tmp[3].nb[25] = neighbors[25]
+            if check[25]:
+                cell_tmp[3].nb[17] = neighbors[25].children[4]
+                cell_tmp[3].nb[18] = neighbors[25].children[5]
+                cell_tmp[3].nb[19] = neighbors[25].children[6]
+            else:
+                cell_tmp[3].nb[17] = neighbors[25]
+                cell_tmp[3].nb[18] = neighbors[25]
+                cell_tmp[3].nb[19] = neighbors[25]
+            if check[21]:
+                cell_tmp[3].nb[20] = neighbors[21].children[5]
+                cell_tmp[3].nb[21] = neighbors[21].children[4]
+            else:
+                cell_tmp[3].nb[20] = neighbors[21]
+                cell_tmp[3].nb[21] = neighbors[21]
+            if check[22]:
+                cell_tmp[3].nb[22] = neighbors[22].children[5]
+            else:
+                cell_tmp[3].nb[22] = neighbors[22]
+            if check[23]:
+                cell_tmp[3].nb[23] = neighbors[23].children[5]
+                cell_tmp[3].nb[24] = neighbors[23].children[4]
+            else:
+                cell_tmp[3].nb[23] = neighbors[23]
+                cell_tmp[3].nb[24] = neighbors[23]
+            if check[25]:
+                cell_tmp[3].nb[25] = neighbors[25].children[7]
+            else:
+                cell_tmp[3].nb[25] = neighbors[25]
 
             # ----------------  lower left cell center, lower plane  ----------------
             # plane under the current cell
-            cell_tmp[4].nb[8] = neighbors[8]
-            cell_tmp[4].nb[9] = neighbors[8]
-            cell_tmp[4].nb[10] = neighbors[16]
-            cell_tmp[4].nb[11] = neighbors[16]
-            cell_tmp[4].nb[12] = neighbors[16]
-            cell_tmp[4].nb[13] = neighbors[14]
-            cell_tmp[4].nb[14] = neighbors[14]
-            cell_tmp[4].nb[15] = neighbors[15]
-            cell_tmp[4].nb[16] = neighbors[16]
+            if check[8]:
+                cell_tmp[4].nb[8] = neighbors[8].children[3]
+                cell_tmp[4].nb[9] = neighbors[8].children[2]
+            else:
+                cell_tmp[4].nb[8] = neighbors[8]
+                cell_tmp[4].nb[9] = neighbors[8]
+            if check[16]:
+                cell_tmp[4].nb[10] = neighbors[16].children[1]
+                cell_tmp[4].nb[11] = neighbors[16].children[2]
+                cell_tmp[4].nb[12] = neighbors[16].children[3]
+                cell_tmp[4].nb[16] = neighbors[16].children[0]
+            else:
+                cell_tmp[4].nb[10] = neighbors[16]
+                cell_tmp[4].nb[11] = neighbors[16]
+                cell_tmp[4].nb[12] = neighbors[16]
+                cell_tmp[4].nb[16] = neighbors[16]
+            if check[14]:
+                cell_tmp[4].nb[13] = neighbors[14].children[2]
+                cell_tmp[4].nb[14] = neighbors[14].children[1]
+            else:
+                cell_tmp[4].nb[13] = neighbors[14]
+                cell_tmp[4].nb[14] = neighbors[14]
+            if check[15]:
+                cell_tmp[4].nb[15] = neighbors[15].children[2]
+            else:
+                cell_tmp[4].nb[15] = neighbors[15]
 
             # plane above the current cell
-            cell_tmp[4].nb[17] = neighbors[0]
-            cell_tmp[4].nb[18] = neighbors[0]
-            cell_tmp[4].nb[19] = cell_tmp[0]
-            cell_tmp[4].nb[20] = cell_tmp[1]
-            cell_tmp[4].nb[21] = cell_tmp[2]
-            cell_tmp[4].nb[22] = neighbors[6]
-            cell_tmp[4].nb[23] = neighbors[6]
-            cell_tmp[4].nb[24] = neighbors[7]
-            cell_tmp[4].nb[25] = cell_tmp[3]
+            if check[0]:
+                cell_tmp[4].nb[17] = neighbors[0].children[3]
+                cell_tmp[4].nb[18] = neighbors[0].children[2]
+            else:
+                cell_tmp[4].nb[17] = neighbors[0]
+                cell_tmp[4].nb[18] = neighbors[0]
+            cell_tmp[4].nb[19] = cell_tmp[1]
+            cell_tmp[4].nb[20] = cell_tmp[2]
+            cell_tmp[4].nb[21] = cell_tmp[3]
+            if check[6]:
+                cell_tmp[4].nb[22] = neighbors[6].children[2]
+                cell_tmp[4].nb[23] = neighbors[6].children[1]
+            else:
+                cell_tmp[4].nb[22] = neighbors[6]
+                cell_tmp[4].nb[23] = neighbors[6]
+            if check[7]:
+                cell_tmp[4].nb[24] = neighbors[7].children[2]
+            else:
+                cell_tmp[4].nb[24] = neighbors[7]
+            cell_tmp[4].nb[25] = cell_tmp[0]
 
             # ----------------  upper left cell center, lower plane  ----------------
             # plane under the current cell
-            cell_tmp[5].nb[8] = neighbors[8]
-            cell_tmp[5].nb[9] = neighbors[9]
-            cell_tmp[5].nb[10] = neighbors[10]
-            cell_tmp[5].nb[11] = neighbors[10]
-            cell_tmp[5].nb[12] = neighbors[16]
-            cell_tmp[5].nb[13] = neighbors[16]
-            cell_tmp[5].nb[14] = neighbors[16]
-            cell_tmp[5].nb[15] = neighbors[8]
-            cell_tmp[5].nb[16] = neighbors[16]
+            if check[8]:
+                cell_tmp[5].nb[8] = neighbors[8].children[2]
+                cell_tmp[5].nb[15] = neighbors[8].children[3]
+            else:
+                cell_tmp[5].nb[8] = neighbors[8]
+                cell_tmp[5].nb[15] = neighbors[8]
+            if check[9]:
+                cell_tmp[5].nb[9] = neighbors[9].children[3]
+            else:
+                cell_tmp[5].nb[9] = neighbors[9]
+            if check[10]:
+                cell_tmp[5].nb[10] = neighbors[10].children[0]
+                cell_tmp[5].nb[11] = neighbors[10].children[1]
+            else:
+                cell_tmp[5].nb[10] = neighbors[10]
+                cell_tmp[5].nb[11] = neighbors[10]
+            if check[16]:
+                cell_tmp[5].nb[12] = neighbors[16].children[2]
+                cell_tmp[5].nb[13] = neighbors[16].children[3]
+                cell_tmp[5].nb[14] = neighbors[16].children[0]
+                cell_tmp[5].nb[16] = neighbors[16].children[1]
+            else:
+                cell_tmp[5].nb[12] = neighbors[16]
+                cell_tmp[5].nb[13] = neighbors[16]
+                cell_tmp[5].nb[14] = neighbors[16]
+                cell_tmp[5].nb[16] = neighbors[16]
 
             # plane above the current cell
-            cell_tmp[5].nb[17] = neighbors[0]
-            cell_tmp[5].nb[18] = neighbors[1]
-            cell_tmp[5].nb[19] = neighbors[2]
-            cell_tmp[5].nb[20] = neighbors[2]
-            cell_tmp[5].nb[21] = cell_tmp[1]
-            cell_tmp[5].nb[22] = cell_tmp[2]
-            cell_tmp[5].nb[23] = cell_tmp[3]
-            cell_tmp[5].nb[24] = neighbors[0]
-            cell_tmp[5].nb[25] = cell_tmp[0]
+            if check[0]:
+                cell_tmp[5].nb[17] = neighbors[0].children[2]
+                cell_tmp[5].nb[24] = neighbors[0].children[3]
+            else:
+                cell_tmp[5].nb[17] = neighbors[0]
+                cell_tmp[5].nb[24] = neighbors[0]
+            if check[1]:
+                cell_tmp[5].nb[18] = neighbors[1].children[3]
+            else:
+                cell_tmp[5].nb[18] = neighbors[1]
+            if check[2]:
+                cell_tmp[5].nb[19] = neighbors[2].children[0]
+                cell_tmp[5].nb[20] = neighbors[2].children[1]
+            else:
+                cell_tmp[5].nb[19] = neighbors[2]
+                cell_tmp[5].nb[20] = neighbors[2]
+            cell_tmp[5].nb[21] = cell_tmp[2]
+            cell_tmp[5].nb[22] = cell_tmp[3]
+            cell_tmp[5].nb[23] = cell_tmp[0]
+            cell_tmp[5].nb[25] = cell_tmp[1]
 
             # ----------------  upper right cell center, lower plane  ----------------
             # plane under the current cell
-            cell_tmp[6].nb[8] = neighbors[16]
-            cell_tmp[6].nb[9] = neighbors[10]
-            cell_tmp[6].nb[10] = neighbors[10]
-            cell_tmp[6].nb[11] = neighbors[11]
-            cell_tmp[6].nb[12] = neighbors[12]
-            cell_tmp[6].nb[13] = neighbors[12]
-            cell_tmp[6].nb[14] = neighbors[16]
-            cell_tmp[6].nb[15] = neighbors[16]
-            cell_tmp[6].nb[16] = neighbors[16]
+            if check[10]:
+                cell_tmp[6].nb[9] = neighbors[10].children[0]
+                cell_tmp[6].nb[10] = neighbors[10].children[3]
+            else:
+                cell_tmp[6].nb[9] = neighbors[10]
+                cell_tmp[6].nb[10] = neighbors[10]
+            if check[11]:
+                cell_tmp[6].nb[11] = neighbors[11].children[0]
+            else:
+                cell_tmp[6].nb[11] = neighbors[11]
+            if check[12]:
+                cell_tmp[6].nb[12] = neighbors[12].children[1]
+                cell_tmp[6].nb[13] = neighbors[12].children[0]
+            else:
+                cell_tmp[6].nb[12] = neighbors[12]
+                cell_tmp[6].nb[13] = neighbors[12]
+            if check[16]:
+                cell_tmp[6].nb[8] = neighbors[16].children[1]
+                cell_tmp[6].nb[14] = neighbors[16].children[3]
+                cell_tmp[6].nb[15] = neighbors[16].children[0]
+                cell_tmp[6].nb[16] = neighbors[16].children[2]
+            else:
+                cell_tmp[6].nb[8] = neighbors[16]
+                cell_tmp[6].nb[14] = neighbors[16]
+                cell_tmp[6].nb[15] = neighbors[16]
+                cell_tmp[6].nb[16] = neighbors[16]
 
             # plane above the current cell
-            cell_tmp[6].nb[17] = cell_tmp[0]
-            cell_tmp[6].nb[18] = neighbors[2]
-            cell_tmp[6].nb[19] = neighbors[2]
-            cell_tmp[6].nb[20] = neighbors[3]
-            cell_tmp[6].nb[21] = neighbors[4]
-            cell_tmp[6].nb[22] = neighbors[4]
-            cell_tmp[6].nb[23] = cell_tmp[2]
-            cell_tmp[6].nb[24] = cell_tmp[3]
-            cell_tmp[6].nb[25] = cell_tmp[1]
+            cell_tmp[6].nb[17] = cell_tmp[1]
+            if check[2]:
+                pass
+            else:
+                cell_tmp[6].nb[18] = neighbors[2]
+                cell_tmp[6].nb[19] = neighbors[2]
+            if check[3]:
+                cell_tmp[6].nb[20] = neighbors[3].children[0]
+            else:
+                cell_tmp[6].nb[20] = neighbors[3]
+            if check[4]:
+                cell_tmp[6].nb[21] = neighbors[4].children[1]
+                cell_tmp[6].nb[22] = neighbors[4].children[0]
+            else:
+                cell_tmp[6].nb[21] = neighbors[4]
+                cell_tmp[6].nb[22] = neighbors[4]
+            cell_tmp[6].nb[23] = cell_tmp[3]
+            cell_tmp[6].nb[24] = cell_tmp[0]
+            cell_tmp[6].nb[25] = cell_tmp[2]
 
             # ----------------  lower right cell center, lower plane  ----------------
             # plane under the current cell
-            cell_tmp[7].nb[8] = neighbors[16]
-            cell_tmp[7].nb[9] = neighbors[16]
-            cell_tmp[7].nb[10] = neighbors[16]
-            cell_tmp[7].nb[11] = neighbors[12]
-            cell_tmp[7].nb[12] = neighbors[12]
-            cell_tmp[7].nb[13] = neighbors[13]
-            cell_tmp[7].nb[14] = neighbors[14]
-            cell_tmp[7].nb[15] = neighbors[14]
-            cell_tmp[7].nb[16] = neighbors[16]
+            if check[16]:
+                cell_tmp[7].nb[8] = neighbors[16].children[0]
+                cell_tmp[7].nb[9] = neighbors[16].children[1]
+                cell_tmp[7].nb[10] = neighbors[16].children[2]
+            else:
+                cell_tmp[7].nb[8] = neighbors[16]
+                cell_tmp[7].nb[9] = neighbors[16]
+                cell_tmp[7].nb[10] = neighbors[16]
+            if check[12]:
+                cell_tmp[7].nb[11] = neighbors[12].children[1]
+                cell_tmp[7].nb[12] = neighbors[12].children[0]
+            else:
+                cell_tmp[7].nb[11] = neighbors[12]
+                cell_tmp[7].nb[12] = neighbors[12]
+            if check[13]:
+                cell_tmp[7].nb[13] = neighbors[13].children[1]
+            else:
+                cell_tmp[7].nb[13] = neighbors[13]
+            if check[14]:
+                cell_tmp[7].nb[14] = neighbors[14].children[2]
+                cell_tmp[7].nb[15] = neighbors[14].children[1]
+            else:
+                cell_tmp[7].nb[14] = neighbors[14]
+                cell_tmp[7].nb[15] = neighbors[14]
+            if check[16]:
+                cell_tmp[7].nb[16] = neighbors[16].children[3]
+            else:
+                cell_tmp[7].nb[16] = neighbors[16]
 
             # plane above the current cell
-            cell_tmp[7].nb[17] = cell_tmp[3]
-            cell_tmp[7].nb[18] = cell_tmp[0]
-            cell_tmp[7].nb[19] = cell_tmp[1]
-            cell_tmp[7].nb[20] = neighbors[4]
-            cell_tmp[7].nb[21] = neighbors[4]
-            cell_tmp[7].nb[22] = neighbors[5]
-            cell_tmp[7].nb[23] = neighbors[6]
-            cell_tmp[7].nb[24] = neighbors[6]
-            cell_tmp[7].nb[25] = cell_tmp[2]
+            cell_tmp[7].nb[17] = cell_tmp[0]
+            cell_tmp[7].nb[18] = cell_tmp[1]
+            cell_tmp[7].nb[19] = cell_tmp[2]
+            if check[4]:
+                cell_tmp[7].nb[20] = neighbors[4].children[1]
+                cell_tmp[7].nb[21] = neighbors[4].children[0]
+            else:
+                cell_tmp[7].nb[20] = neighbors[4]
+                cell_tmp[7].nb[21] = neighbors[4]
+            if check[5]:
+                cell_tmp[7].nb[22] = neighbors[5].children[1]
+            else:
+                cell_tmp[7].nb[22] = neighbors[5]
+            if check[6]:
+                cell_tmp[7].nb[23] = neighbors[6].children[2]
+                cell_tmp[7].nb[24] = neighbors[6].children[1]
+            else:
+                cell_tmp[7].nb[23] = neighbors[6]
+                cell_tmp[7].nb[24] = neighbors[6]
+            cell_tmp[7].nb[25] = cell_tmp[3]
 
         return cell_tmp
 
