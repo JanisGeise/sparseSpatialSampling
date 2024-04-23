@@ -5,14 +5,16 @@ import torch as pt
 
 from time import time
 from sklearn.neighbors import KNeighborsRegressor
+pt.set_default_dtype(pt.float64)
 
 
 class Cell(object):
     """
     implements a cell for the KNN regressor
     """
-    def __init__(self, index: int, parent, nb: list, center: pt.Tensor, level: int, children=None,
-                 metric=None, gain=None, dimensions: int = 2):
+
+    def __init__(self, index: int, parent, nb: list, center: pt.Tensor, level: int, children=None, metric=None,
+                 gain=None, dimensions: int = 2, idx: list = None):
         """
         each cell has the following attributes:
 
@@ -56,6 +58,7 @@ class Cell(object):
         self.gain = gain
         self._n_dims = dimensions
         self.nb = nb
+        self.node_idx = idx
 
     def leaf_cell(self):
         return self.children is None
@@ -84,8 +87,8 @@ class SamplingTree(object):
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter_start = int(0.01 * vertices.size()[0])       # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)        # end value = 1% of start value
+        self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
+        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)  # end value = 1% of start value
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -98,6 +101,9 @@ class SamplingTree(object):
         self._geometry_refinement_cycles = 1
         self._global_gain = []
         self._stop_thr = 1e-3
+        self.all_nodes = []
+        self.all_centers = []
+        self.face_ids = None
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -133,6 +139,7 @@ class SamplingTree(object):
                 centers_[node, d] = (pt.max(self._vertices[:, d]).item() + pt.min(self._vertices[:, d]).item()) / 2.0
 
         # correct cell centers of children with offset -> in each direction +- 0.25 of cell width
+        nodes = centers_[1:, :] + self._directions * 0.5 * self._width
         centers_[1:, :] += self._directions * 0.25 * self._width
 
         # make prediction
@@ -145,10 +152,15 @@ class SamplingTree(object):
         # add the first cell
         self._n_cells += 1
 
+        # add the node coordinates
+        for n in range(nodes.size()[0]):
+            self.all_nodes.append(nodes[n, :])
+        self.all_centers.append(centers_[0, :])
+
         # we have max. 8 neighbors for each cell in 2D case (4 at sides + 4 at corners), for 3D we get 9 more per level
         # -> 26 neighbors in total
         self._cells = [Cell(0, None, self._knn.n_neighbors * [None], centers_[0, :], 0, None, metric[0], gain,
-                            dimensions=self._n_dimensions)]
+                            dimensions=self._n_dimensions, idx=list(range(nodes.size()[0])))]
         self._update_leaf_cells()
 
     def _remove_original_cfd_data(self) -> None:
@@ -201,6 +213,9 @@ class SamplingTree(object):
 
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
+
+                # assign idx for the newly created nodes
+                self._assign_indices(cell.children)
 
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
@@ -328,6 +343,9 @@ class SamplingTree(object):
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
 
+                # assign idx for the newly created nodes
+                self._assign_indices(cell.children)
+
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
@@ -351,6 +369,9 @@ class SamplingTree(object):
         # refine the grid near geometry objects is specified
         if self._smooth_geometry:
             self._refine_geometry()
+
+        # assemble the final grid
+        self._resort_nodes_and_indices_of_grid()
 
         end_time = time()
         print("Finished refinement in {:2.4f} s ({:d} iterations).".format(end_time - start_time, iteration_count))
@@ -402,16 +423,20 @@ class SamplingTree(object):
             # update n_cells
             self._n_cells = len(self._leaf_cells)
 
-    def compute_nodes_final_mesh(self) -> None:
+    def _resort_nodes_and_indices_of_grid(self) -> None:
         """
-        compute the cell centers and vertices of the cells of the final grid
+        sort the cell centers and vertices of the cells of the final grid with respect to their corresponding index
 
         :return: None
         """
-        # loop over all leaf cells
-        for cell in self._leaf_cells:
-            # compute cell centers and store the nodes and faces for writing HDF5 file later
-            self._cells[cell].nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
+        #  TODO: remove nodes from 'all_nodes' and 'all_faces' tensors which are not used and re-assign node ids
+        #   -> less data to interpolate, write & store, no redundancies etc. -> otherwise the interpolation of the
+        #   original CFD data onto the generated grid is quite slow for larger datasets
+        idx = []
+        for i, cell in enumerate(self._cells):
+            if cell.leaf_cell():
+                idx.append(cell.node_idx)
+        self.face_ids = pt.tensor(idx)
 
     def _compute_cell_centers(self, idx_: int = None, factor_: float = 0.25, keep_parent_center_: bool = True,
                               cell_: Cell = None) -> pt.Tensor:
@@ -485,8 +510,8 @@ class SamplingTree(object):
 
     def _refine_geometry(self) -> None:
         """
-        stripped down version of the refine() method for refinement of the final grid near geometry objects or domain
-        boundaries. The documentation of this method is equivalent to the refine() method
+        stripped down version of the 'refine()' method for refinement of the final grid near geometry objects or domain
+        boundaries. The documentation of this method is equivalent to the 'refine()' method
         """
         for _ in range(self._geometry_refinement_cycles):
             print("\nStarting geometry refinement:")
@@ -512,6 +537,7 @@ class SamplingTree(object):
                 neighbors = self._find_neighbors(cell)
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
                 cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
+                self._assign_indices(cell.children)
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
@@ -1088,6 +1114,162 @@ class SamplingTree(object):
             cell_tmp[7].nb[25] = cell_tmp[3]
 
         return cell_tmp
+
+    def _assign_indices(self, cells):
+        """
+        due to round-off errors, accumulation of errors etc. even with double precision and is_close(), we are
+        interpreting the same node shared by adjacent cells as different node, so we need to generate the node indices
+        without any coordinate information
+
+        :param cells: Tuple containing the child cells
+        :return: None
+        """
+        # TODO: documentation of this method & make more efficient. further we need to consider nb cells which are
+        #  already refined, so the nodes already exist. we need to search all relevant nb and check if the have nodes at
+        #  the same positions. so far this did not work, so it  is currently not implemented
+        #  -> if not implemented: data size ~ 15GB for 400 000 cells in final gid...
+
+        for i in range(len(cells)):
+            # add the cell center to the set containing all centers -> ensuring that order of nodes and centers is
+            # consistent
+            self.all_centers.append(cells[i].center)
+
+            # initialize empty list
+            cells[i].node_idx = [0] * pow(2, self._n_dimensions)
+
+            # compute the node locations of current cell
+            nodes = self._compute_cell_centers(factor_=0.5, keep_parent_center_=False, cell_=cells[i])
+
+            # the node of the parent cell, for child cell 0: node 0 == node 0 of parent cell and so on
+            cells[i].node_idx[i] = cells[i].parent.node_idx[i]
+
+            # at the moment we treat 2D & 3D separately, if it works then we may make this more efficient by combining
+            if self._n_dimensions == 2:
+                if i == 0:
+                    self.all_nodes.append(nodes[1, :])
+                    cells[i].node_idx[1] = len(self.all_nodes) - 1
+
+                    # lower nb
+                    self.all_nodes.append(nodes[3, :])
+                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+
+                    # the remaining node in the center off all children
+                    self.all_nodes.append(nodes[2, :])
+                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+
+                elif i == 1:
+                    # upper nb
+                    self.all_nodes.append(nodes[2, :])
+                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[1]
+                    cells[i].node_idx[3] = cells[0].node_idx[2]
+
+                elif i == 2:
+                    # right nb
+                    self.all_nodes.append(nodes[3, :])
+                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[2]
+                    cells[i].node_idx[1] = cells[1].node_idx[2]
+
+                elif i == 3:
+                    # all new nodes are already introduced
+                    cells[i].node_idx[0] = cells[0].node_idx[3]
+                    cells[i].node_idx[1] = cells[0].node_idx[2]
+                    cells[i].node_idx[2] = cells[2].node_idx[3]
+
+            else:
+                # child no. 0: new nodes 1, 2, 3, 4, 5, 6, 7 remain to add
+                if i == 0:
+                    self.all_nodes.append(nodes[1, :])
+                    cells[i].node_idx[1] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[2, :])
+                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[3, :])
+                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[4, :])
+                    cells[i].node_idx[4] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[5, :])
+                    cells[i].node_idx[5] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[6, :])
+                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[7, :])
+                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+
+                elif i == 1:
+                    # child no. 1: new nodes 2, 5, 6 remain to add
+                    self.all_nodes.append(nodes[2, :])
+                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[5, :])
+                    cells[i].node_idx[5] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[6, :])
+                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[1]
+                    cells[i].node_idx[3] = cells[0].node_idx[2]
+                    cells[i].node_idx[4] = cells[0].node_idx[5]
+                    cells[i].node_idx[7] = cells[0].node_idx[6]
+                elif i == 2:
+                    # child no. 2: new nodes 3, 6, 7 remain to add
+                    self.all_nodes.append(nodes[3, :])
+                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[6, :])
+                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[7, :])
+                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[2]
+                    cells[i].node_idx[1] = cells[1].node_idx[2]
+                    cells[i].node_idx[4] = cells[0].node_idx[6]
+                    cells[i].node_idx[5] = cells[1].node_idx[6]
+                elif i == 3:
+                    # child no. 3: new nodes 7 remain to add
+                    self.all_nodes.append(nodes[7, :])
+                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[3]
+                    cells[i].node_idx[1] = cells[0].node_idx[2]
+                    cells[i].node_idx[2] = cells[2].node_idx[3]
+                    cells[i].node_idx[4] = cells[0].node_idx[7]
+                    cells[i].node_idx[5] = cells[0].node_idx[6]
+                    cells[i].node_idx[6] = cells[2].node_idx[7]
+                elif i == 4:
+                    # child no. 4: new nodes 5, 6, 7 remain to add
+                    self.all_nodes.append(nodes[5, :])
+                    cells[i].node_idx[5] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[6, :])
+                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    self.all_nodes.append(nodes[7, :])
+                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[0].node_idx[4]
+                    cells[i].node_idx[1] = cells[0].node_idx[5]
+                    cells[i].node_idx[2] = cells[0].node_idx[6]
+                    cells[i].node_idx[3] = cells[0].node_idx[7]
+                elif i == 5:
+                    # child no. 5: new nodes 6 remain to add
+                    self.all_nodes.append(nodes[6, :])
+                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[1].node_idx[4]
+                    cells[i].node_idx[1] = cells[1].node_idx[5]
+                    cells[i].node_idx[2] = cells[1].node_idx[6]
+                    cells[i].node_idx[3] = cells[1].node_idx[7]
+                    cells[i].node_idx[4] = cells[4].node_idx[5]
+                    cells[i].node_idx[7] = cells[4].node_idx[6]
+                elif i == 6:
+                    # child no. 6: new nodes 7 to add
+                    self.all_nodes.append(nodes[7, :])
+                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    cells[i].node_idx[0] = cells[2].node_idx[4]
+                    cells[i].node_idx[1] = cells[2].node_idx[5]
+                    cells[i].node_idx[2] = cells[2].node_idx[6]
+                    cells[i].node_idx[3] = cells[2].node_idx[7]
+                    cells[i].node_idx[4] = cells[5].node_idx[7]
+                    cells[i].node_idx[5] = cells[5].node_idx[6]
+                elif i == 7:
+                    # child no. 7 no new nodes anymore, only assign the existing nodes
+                    cells[i].node_idx[0] = cells[3].node_idx[4]
+                    cells[i].node_idx[1] = cells[3].node_idx[5]
+                    cells[i].node_idx[2] = cells[3].node_idx[6]
+                    cells[i].node_idx[3] = cells[3].node_idx[7]
+                    cells[i].node_idx[4] = cells[4].node_idx[7]
+                    cells[i].node_idx[5] = cells[4].node_idx[6]
+                    cells[i].node_idx[6] = cells[6].node_idx[7]
 
 
 if __name__ == "__main__":

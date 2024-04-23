@@ -3,7 +3,6 @@
 """
 import torch as pt
 
-from time import time
 from os import path, makedirs
 from typing import List
 from typing import Union
@@ -78,6 +77,11 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     if not check_geometry_objects(_geometry_objects):
         exit()
 
+    if _level_bounds[0] == 0:
+        # we need lower level >= 1, because otherwise the stopping criteria is not working
+        print(f"lower bound of {_level_bounds[0]} is invalid. Changed lower bound to 1.")
+        _level_bounds = (1, _level_bounds[1])
+
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds)
 
@@ -89,19 +93,14 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     # create the grid
     sampling.refine()
 
-    # compute the cell centers and vertices of each leaf cell
-    sampling.compute_nodes_final_mesh()
-
     # create directory for plots
     if not path.exists(_save_path):
         makedirs(_save_path)
 
     # fit the pressure field onto the new mesh and export the data
-    t_start = time()
-    export_data = DataWriter(sampling.leaf_cells(), save_dir=_save_path,
+    export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, save_dir=_save_path,
                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
                              save_name=_save_name, grid_name=_save_name)
-    print(f"Computation of cell faces and nodes required {round((time() - t_start), 3)} s.\n")
 
     return export_data
 
