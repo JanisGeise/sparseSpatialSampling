@@ -371,12 +371,15 @@ class SamplingTree(object):
             self._refine_geometry()
 
         # assemble the final grid
+        print("Renumbering final mesh...")
+        t_start_renumber = time()
         self._resort_nodes_and_indices_of_grid()
 
         end_time = time()
         print("Finished refinement in {:2.4f} s ({:d} iterations).".format(end_time - start_time, iteration_count))
         print("Time for uniform refinement: {:2.4f} s".format(end_time_uniform - start_time))
-        print("Time for adaptive refinement: {:2.4f} s".format(end_time - end_time_uniform))
+        print("Time for adaptive refinement: {:2.4f} s".format(t_start_renumber - end_time_uniform))
+        print("Time for renumbering the final mesh: {:2.4f} s".format(end_time - t_start_renumber))
         print(self)
 
     def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False) -> None or list:
@@ -426,17 +429,29 @@ class SamplingTree(object):
     def _resort_nodes_and_indices_of_grid(self) -> None:
         """
         sort the cell centers and vertices of the cells of the final grid with respect to their corresponding index
+        TODO: run with numba if possible -> although much faster than previous implementation, still a lot potential
 
         :return: None
         """
-        #  TODO: remove nodes from 'all_nodes' and 'all_faces' tensors which are not used and re-assign node ids
-        #   -> less data to interpolate, write & store, no redundancies etc. -> otherwise the interpolation of the
-        #   original CFD data onto the generated grid is quite slow for larger datasets
-        idx = []
-        for i, cell in enumerate(self._cells):
-            if cell.leaf_cell():
-                idx.append(cell.node_idx)
-        self.face_ids = pt.tensor(idx)
+        _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
+        _unused_idx = [i for i in list(range(_all_idx.max().item()+1)) if i not in set(_all_idx.flatten().tolist())]
+
+        _unique_node_coord = pt.zeros((len(self.all_nodes) - len(_unused_idx), self._n_dimensions))
+        _counter, _visited = 0, 0
+        for i in range(len(self.all_nodes)):
+            if i in _unused_idx:
+                # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
+                # overwriting the all_idx tensor, we need to account for the entries we already deleted
+                _visited += 1
+                _all_idx[_all_idx > i - _visited] -= 1
+            else:
+                _unique_node_coord[_counter, :] = self.all_nodes[i]
+                _counter += 1
+
+        # update node ID's and their coordinates
+        self.face_ids = _all_idx
+        self.all_nodes = _unique_node_coord
+        self.all_centers = pt.stack([cell.center for cell in self._cells if cell.leaf_cell()])
 
     def _compute_cell_centers(self, idx_: int = None, factor_: float = 0.25, keep_parent_center_: bool = True,
                               cell_: Cell = None) -> pt.Tensor:
@@ -514,7 +529,7 @@ class SamplingTree(object):
         boundaries. The documentation of this method is equivalent to the 'refine()' method
         """
         for _ in range(self._geometry_refinement_cycles):
-            print("\nStarting geometry refinement:")
+            print("\nStarting geometry refinement.")
             self._update_leaf_cells()
             self._update_gain()
             to_refine = set()
@@ -1127,7 +1142,6 @@ class SamplingTree(object):
         # TODO: documentation of this method & make more efficient. further we need to consider nb cells which are
         #  already refined, so the nodes already exist. we need to search all relevant nb and check if the have nodes at
         #  the same positions. so far this did not work, so it  is currently not implemented
-        #  -> if not implemented: data size ~ 15GB for 400 000 cells in final gid...
 
         for i in range(len(cells)):
             # add the cell center to the set containing all centers -> ensuring that order of nodes and centers is

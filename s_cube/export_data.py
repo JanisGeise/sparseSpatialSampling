@@ -36,8 +36,8 @@ class DataWriter:
         self._save_dir = save_dir
         self._save_name = save_name
         self._grid_name = grid_name
-        self._centers = pt.stack(centers)
-        self._vertices = pt.stack(nodes)
+        self._centers = centers
+        self._vertices = nodes
 
         # face_id = node idx making up a face, e.g. [0, 1, 2, 3] make up a face of node no. 0-3
         self._face_id = face_ids
