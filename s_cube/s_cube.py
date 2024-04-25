@@ -180,7 +180,6 @@ class SamplingTree(object):
         :return: list with all neighbors of the cell, if geometry or domain bound is neighbor, the entry is set to'None'
         """
         n_neighbors = self._knn.n_neighbors
-        # level = 0: only initial cell present (no parent cell available), level = 1: parent cell (= 1st cell)
         if cell.level < 2:
             return n_neighbors * [None]
         else:
@@ -369,17 +368,24 @@ class SamplingTree(object):
         # refine the grid near geometry objects is specified
         print("\nFinished adaptive refinement.")
         if self._smooth_geometry:
+            t_start_geometry = time()
             self._refine_geometry()
+            t_end_geometry = time()
 
         # assemble the final grid
         print("Starting renumbering final mesh.")
         t_start_renumber = time()
         self._resort_nodes_and_indices_of_grid()
-
         end_time = time()
+
+        # print timings and size of final mesh
         print("Finished refinement in {:2.4f} s ({:d} iterations).".format(end_time - start_time, iteration_count))
         print("Time for uniform refinement: {:2.4f} s".format(end_time_uniform - start_time))
-        print("Time for adaptive refinement: {:2.4f} s".format(t_start_renumber - end_time_uniform))
+        if self._smooth_geometry:
+            print("Time for adaptive refinement: {:2.4f} s".format(t_start_geometry - end_time_uniform))
+            print("Time for geometry refinement: {:2.4f} s".format(t_end_geometry - t_start_geometry))
+        else:
+            print("Time for adaptive refinement: {:2.4f} s".format(t_start_renumber - end_time_uniform))
         print("Time for renumbering the final mesh: {:2.4f} s".format(end_time - t_start_renumber))
         print(self)
 
@@ -435,9 +441,18 @@ class SamplingTree(object):
 
         :return: None
         """
+        # ~ 0.01 - 0.02 % of total runtime for resorting method
+        t1 = time()
         _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
-        _unused_idx = [i for i in list(range(_all_idx.max().item()+1)) if i not in set(_all_idx.flatten().tolist())]
+        print("[DEBUG] dt1 = ", round(time() - t1, 6), "s")
 
+        # ~ 92 - 98 % of total runtime for resorting method (!!!)
+        t2 = time()
+        _unused_idx = [i for i in list(range(_all_idx.max().item()+1)) if i not in set(_all_idx.flatten().tolist())]
+        print("[DEBUG] dt2 = ", round(time() - t2, 6), "s")
+
+        # ~ 3 - 6 % of total runtime for resorting method
+        t3 = time()
         _unique_node_coord = pt.zeros((len(self.all_nodes) - len(_unused_idx), self._n_dimensions))
         _counter, _visited = 0, 0
         for i in range(len(self.all_nodes)):
@@ -450,10 +465,16 @@ class SamplingTree(object):
                 _unique_node_coord[_counter, :] = self.all_nodes[i]
                 _counter += 1
 
+        print("[DEBUG] dt3 = ", round(time() - t3, 6), "s")
+        t4 = time()
+
+        # ~ 0.04 - 0.9 % of total runtime for resorting method
         # update node ID's and their coordinates
         self.face_ids = _all_idx
         self.all_nodes = _unique_node_coord
         self.all_centers = pt.stack([cell.center for cell in self._cells if cell.leaf_cell()])
+        print("[DEBUG] dt4 =", round(time() - t4, 6), "s")
+        print("[DEBUG] dt total =", round(time() - t1, 6), "s")
 
     def _compute_cell_centers(self, idx_: int = None, factor_: float = 0.25, keep_parent_center_: bool = True,
                               cell_: Cell = None) -> pt.Tensor:
@@ -626,6 +647,7 @@ class SamplingTree(object):
         # children (if cells is removed due to geometry issues, then the children are empty list)
         check = [n is not None and n.children is not None and len(n.children) == pow(2, self._n_dimensions) for n in
                  neighbors]
+
         if check[0]:
             cell_tmp[0].nb[0] = neighbors[0].children[3]
             cell_tmp[0].nb[1] = neighbors[0].children[2]
@@ -665,7 +687,7 @@ class SamplingTree(object):
             cell_tmp[3].nb[4] = neighbors[4].children[0]
         else:
             cell_tmp[2].nb[4] = neighbors[4]
-            cell_tmp[2].nb[5] = neighbors[4]
+            cell_tmp[2].nb[5] = neighbors[5]
             cell_tmp[3].nb[3] = neighbors[4]
             cell_tmp[3].nb[4] = neighbors[4]
 
@@ -691,13 +713,13 @@ class SamplingTree(object):
             cell_tmp[0].nb[7] = neighbors[7]
 
         # remaining nb
-        cell_tmp[0].nb[2] = cell_tmp[0]
-        cell_tmp[0].nb[3] = cell_tmp[1]
-        cell_tmp[0].nb[4] = cell_tmp[2]
+        cell_tmp[0].nb[2] = cell_tmp[1]
+        cell_tmp[0].nb[3] = cell_tmp[2]
+        cell_tmp[0].nb[4] = cell_tmp[3]
         cell_tmp[1].nb[4] = cell_tmp[2]
         cell_tmp[1].nb[5] = cell_tmp[3]
         cell_tmp[1].nb[6] = cell_tmp[0]
-        cell_tmp[2].nb[0] = cell_tmp[0]
+        cell_tmp[2].nb[0] = cell_tmp[1]
         cell_tmp[2].nb[6] = cell_tmp[3]
         cell_tmp[2].nb[7] = cell_tmp[0]
         cell_tmp[3].nb[0] = cell_tmp[0]
@@ -741,7 +763,7 @@ class SamplingTree(object):
                 cell_tmp[2].nb[9] = neighbors[2].children[4]
                 cell_tmp[2].nb[10] = neighbors[2].children[7]
                 cell_tmp[5].nb[19] = neighbors[2].children[0]
-                cell_tmp[5].nb[20] = neighbors[2].children[1]
+                cell_tmp[5].nb[20] = neighbors[2].children[3]
                 cell_tmp[6].nb[18] = neighbors[2].children[0]
                 cell_tmp[6].nb[19] = neighbors[2].children[3]
             else:
@@ -831,7 +853,7 @@ class SamplingTree(object):
 
             if check[10]:
                 cell_tmp[5].nb[10] = neighbors[10].children[0]
-                cell_tmp[5].nb[11] = neighbors[10].children[1]
+                cell_tmp[5].nb[11] = neighbors[10].children[3]
                 cell_tmp[6].nb[9] = neighbors[10].children[0]
                 cell_tmp[6].nb[10] = neighbors[10].children[3]
             else:
@@ -963,8 +985,8 @@ class SamplingTree(object):
             if check[23]:
                 cell_tmp[0].nb[22] = neighbors[23].children[6]
                 cell_tmp[0].nb[23] = neighbors[23].children[5]
-                cell_tmp[3].nb[23] = neighbors[23].children[5]
-                cell_tmp[3].nb[24] = neighbors[23].children[4]
+                cell_tmp[3].nb[23] = neighbors[23].children[6]
+                cell_tmp[3].nb[24] = neighbors[23].children[5]
             else:
                 cell_tmp[0].nb[22] = neighbors[23]
                 cell_tmp[0].nb[23] = neighbors[23]
@@ -1015,7 +1037,7 @@ class SamplingTree(object):
             cell_tmp[0].nb[10] = cell_tmp[5]
             cell_tmp[0].nb[11] = cell_tmp[6]
             cell_tmp[0].nb[12] = cell_tmp[7]
-            cell_tmp[0].nb[16] = cell_tmp[7]
+            cell_tmp[0].nb[16] = cell_tmp[4]
             cell_tmp[1].nb[12] = cell_tmp[6]
             cell_tmp[1].nb[13] = cell_tmp[7]
             cell_tmp[1].nb[14] = cell_tmp[0]
@@ -1056,9 +1078,7 @@ class SamplingTree(object):
         :param cells: Tuple containing the child cells
         :return: None
         """
-        # TODO: documentation of this method & make more efficient. further we need to consider nb cells which are
-        #  already refined, so the nodes already exist. we need to search all relevant nb and check if the have nodes at
-        #  the same positions. so far this did not work, so it  is currently not implemented
+        # TODO: documentation of this method & make more efficient
 
         for i in range(len(cells)):
             # add the cell center to the set containing all centers -> ensuring that order of nodes and centers is
@@ -1075,14 +1095,22 @@ class SamplingTree(object):
             cells[i].node_idx[i] = cells[i].parent.node_idx[i]
 
             # at the moment we treat 2D & 3D separately, if it works then we may make this more efficient by combining
+            # in find_nb, we are assigning the parent nb, so we need to go to parent, and then to children
             if self._n_dimensions == 2:
                 if i == 0:
-                    self.all_nodes.append(nodes[1, :])
-                    cells[i].node_idx[1] = len(self.all_nodes) - 1
+                    # left nb
+                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
+                        cells[i].node_idx[1] = cells[i].parent.nb[0].children[3].node_idx[2]
+                    else:
+                        self.all_nodes.append(nodes[1, :])
+                        cells[i].node_idx[1] = len(self.all_nodes) - 1
 
                     # lower nb
-                    self.all_nodes.append(nodes[3, :])
-                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
+                        cells[i].node_idx[3] = cells[i].parent.nb[6].children[1].node_idx[2]
+                    else:
+                        self.all_nodes.append(nodes[3, :])
+                        cells[i].node_idx[3] = len(self.all_nodes) - 1
 
                     # the remaining node in the center off all children
                     self.all_nodes.append(nodes[2, :])
@@ -1090,15 +1118,21 @@ class SamplingTree(object):
 
                 elif i == 1:
                     # upper nb
-                    self.all_nodes.append(nodes[2, :])
-                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
+                        cells[i].node_idx[2] = cells[i].parent.nb[2].children[0].node_idx[3]
+                    else:
+                        self.all_nodes.append(nodes[2, :])
+                        cells[i].node_idx[2] = len(self.all_nodes) - 1
                     cells[i].node_idx[0] = cells[0].node_idx[1]
                     cells[i].node_idx[3] = cells[0].node_idx[2]
 
                 elif i == 2:
                     # right nb
-                    self.all_nodes.append(nodes[3, :])
-                    cells[i].node_idx[3] = len(self.all_nodes) - 1
+                    if self.check_nb_node(cells[i], child_no=1, nb_no=4):
+                        cells[i].node_idx[3] = cells[i].parent.nb[4].children[1].node_idx[0]
+                    else:
+                        self.all_nodes.append(nodes[3, :])
+                        cells[i].node_idx[3] = len(self.all_nodes) - 1
                     cells[i].node_idx[0] = cells[0].node_idx[2]
                     cells[i].node_idx[1] = cells[1].node_idx[2]
 
@@ -1109,51 +1143,178 @@ class SamplingTree(object):
                     cells[i].node_idx[2] = cells[2].node_idx[3]
 
             else:
+                # TODO check again everything
                 # child no. 0: new nodes 1, 2, 3, 4, 5, 6, 7 remain to add
                 if i == 0:
-                    self.all_nodes.append(nodes[1, :])
-                    cells[i].node_idx[1] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[2, :])
-                    cells[i].node_idx[2] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[3, :])
-                    cells[i].node_idx[3] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[4, :])
-                    cells[i].node_idx[4] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[5, :])
-                    cells[i].node_idx[5] = len(self.all_nodes) - 1
+                    # check left nb (same plane) if node 1 is present
+                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
+                        cells[i].node_idx[1] = cells[i].parent.nb[0].children[3].node_idx[2]
+                    # check left nb (upper plane) if node 1 is present
+                    elif self.check_nb_node(cells[i], child_no=7, nb_no=17):
+                        cells[i].node_idx[1] = cells[i].parent.nb[17].children[7].node_idx[6]
+                    # check nb above current cell (upper plane) if node 1 is present
+                    elif self.check_nb_node(cells[i], child_no=4, nb_no=25):
+                        cells[i].node_idx[1] = cells[i].parent.nb[25].children[4].node_idx[5]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[1, :])
+                        cells[i].node_idx[1] = len(self.all_nodes) - 1
+
+                    # check nb above current cell (upper plane) if node 2 is present
+                    if self.check_nb_node(cells[i], child_no=4, nb_no=25):
+                        cells[i].node_idx[2] = cells[i].parent.nb[25].children[4].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[2, :])
+                        cells[i].node_idx[2] = len(self.all_nodes) - 1
+
+                    # check lower nb (same plane) if node 3 is present
+                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
+                        cells[i].node_idx[3] = cells[i].parent.nb[6].children[1].node_idx[2]
+                    # check lower nb (upper plane) if node 3 is present
+                    elif self.check_nb_node(cells[i], child_no=5, nb_no=23):
+                        cells[i].node_idx[3] = cells[i].parent.nb[23].children[5].node_idx[6]
+                    # check nb above current cell (upper plane) if node 2 is present
+                    elif self.check_nb_node(cells[i], child_no=4, nb_no=25):
+                        cells[i].node_idx[3] = cells[i].parent.nb[25].children[4].node_idx[7]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[3, :])
+                        cells[i].node_idx[3] = len(self.all_nodes) - 1
+
+                    # check left nb (same plane) if node 4 is present
+                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
+                        cells[i].node_idx[4] = cells[i].parent.nb[0].children[3].node_idx[7]
+                    # check lower left corner nb (same plane) if node 4 is present
+                    elif self.check_nb_node(cells[i], child_no=2, nb_no=7):
+                        cells[i].node_idx[4] = cells[i].parent.nb[7].children[2].node_idx[6]
+                    # check lower nb (same plane) if node 4 is present
+                    elif self.check_nb_node(cells[i], child_no=1, nb_no=6):
+                        cells[i].node_idx[4] = cells[i].parent.nb[6].children[1].node_idx[5]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[4, :])
+                        cells[i].node_idx[4] = len(self.all_nodes) - 1
+
+                    # check lower nb (same plane) if node 5 is present
+                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
+                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[3].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[5, :])
+                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+
+                    # node no. 6 is in center of all child cells, this node can't exist in other nb
                     self.all_nodes.append(nodes[6, :])
                     cells[i].node_idx[6] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[7, :])
-                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+
+                    # check lower nb (same plane) if node 7 is present
+                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
+                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[1].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[7, :])
+                        cells[i].node_idx[7] = len(self.all_nodes) - 1
 
                 elif i == 1:
                     # child no. 1: new nodes 2, 5, 6 remain to add
-                    self.all_nodes.append(nodes[2, :])
-                    cells[i].node_idx[2] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[5, :])
-                    cells[i].node_idx[5] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[6, :])
-                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    # check upper nb (same plane) if node 2 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
+                        cells[i].node_idx[2] = cells[i].parent.nb[2].children[0].node_idx[3]
+                    # check upper nb (upper plane) if node 2 is present
+                    elif self.check_nb_node(cells[i], child_no=4, nb_no=19):
+                        cells[i].node_idx[2] = cells[i].parent.nb[19].children[4].node_idx[7]
+                    # check nb above current cell (upper plane) if node 2 is present
+                    elif self.check_nb_node(cells[i], child_no=5, nb_no=25):
+                        cells[i].node_idx[2] = cells[i].parent.nb[25].children[5].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[2, :])
+                        cells[i].node_idx[2] = len(self.all_nodes) - 1
+
+                    # check left nb (same plane) if node 5 is present
+                    if self.check_nb_node(cells[i], child_no=2, nb_no=0):
+                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[2].node_idx[6]
+                    # check upper left corner nb (same plane) if node 5 is present
+                    elif self.check_nb_node(cells[i], child_no=3, nb_no=1):
+                        cells[i].node_idx[5] = cells[i].parent.nb[1].children[3].node_idx[7]
+                    # check upper nb (same plane) if node 5 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=2):
+                        cells[i].node_idx[5] = cells[i].parent.nb[2].children[0].node_idx[4]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[5, :])
+                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+
+                    # check upper nb (same plane) if node 6 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
+                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[0].node_idx[7]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[6, :])
+                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[0].node_idx[1]
                     cells[i].node_idx[3] = cells[0].node_idx[2]
                     cells[i].node_idx[4] = cells[0].node_idx[5]
                     cells[i].node_idx[7] = cells[0].node_idx[6]
                 elif i == 2:
                     # child no. 2: new nodes 3, 6, 7 remain to add
-                    self.all_nodes.append(nodes[3, :])
-                    cells[i].node_idx[3] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[6, :])
-                    cells[i].node_idx[6] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[7, :])
-                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    # check right nb (same plane) if node 3 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
+                        cells[i].node_idx[3] = cells[i].parent.nb[4].children[0].node_idx[1]
+                    # check right nb (upper plane) if node 3 is present
+                    elif self.check_nb_node(cells[i], child_no=4, nb_no=21):
+                        cells[i].node_idx[3] = cells[i].parent.nb[21].children[4].node_idx[5]
+                    # check nb above current cell (upper plane) if node 3 is present
+                    elif self.check_nb_node(cells[i], child_no=7, nb_no=25):
+                        cells[i].node_idx[3] = cells[i].parent.nb[25].children[7].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[3, :])
+                        cells[i].node_idx[3] = len(self.all_nodes) - 1
+
+                    # check right nb (same plane) if node 6 is present
+                    if self.check_nb_node(cells[i], child_no=1, nb_no=4):
+                        cells[i].node_idx[6] = cells[i].parent.nb[4].children[1].node_idx[5]
+                    # check upper right corner nb (same plane) if node 6 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=3):
+                        cells[i].node_idx[6] = cells[i].parent.nb[3].children[0].node_idx[4]
+                    # check upper nb (same plane) if node 6 is present
+                    elif self.check_nb_node(cells[i], child_no=3, nb_no=2):
+                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[3].node_idx[7]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[6, :])
+                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+
+                    # check right nb (same plane) if node 7 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
+                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[0].node_idx[5]
+                    else:
+                        self.all_nodes.append(nodes[7, :])
+                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[0].node_idx[2]
                     cells[i].node_idx[1] = cells[1].node_idx[2]
                     cells[i].node_idx[4] = cells[0].node_idx[6]
                     cells[i].node_idx[5] = cells[1].node_idx[6]
                 elif i == 3:
                     # child no. 3: new nodes 7 remain to add
-                    self.all_nodes.append(nodes[7, :])
-                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    # check right nb (same plane) if node 7 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
+                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[0].node_idx[4]
+                    # check lower right corner nb (same plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=1, nb_no=5):
+                        cells[i].node_idx[7] = cells[i].parent.nb[5].children[1].node_idx[5]
+                    # check lower nb (same plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=2, nb_no=6):
+                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[2].node_idx[6]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[7, :])
+                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[0].node_idx[3]
                     cells[i].node_idx[1] = cells[0].node_idx[2]
                     cells[i].node_idx[2] = cells[2].node_idx[3]
@@ -1162,20 +1323,61 @@ class SamplingTree(object):
                     cells[i].node_idx[6] = cells[2].node_idx[7]
                 elif i == 4:
                     # child no. 4: new nodes 5, 6, 7 remain to add
-                    self.all_nodes.append(nodes[5, :])
-                    cells[i].node_idx[5] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[6, :])
-                    cells[i].node_idx[6] = len(self.all_nodes) - 1
-                    self.all_nodes.append(nodes[7, :])
-                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    # check left nb (same plane) if node 5 is present
+                    if self.check_nb_node(cells[i], child_no=7, nb_no=0):
+                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[7].node_idx[6]
+                    # check left nb (lower plane) if node 5 is present
+                    elif self.check_nb_node(cells[i], child_no=3, nb_no=8):
+                        cells[i].node_idx[5] = cells[i].parent.nb[8].children[3].node_idx[2]
+                    # check nb below current cell (lower plane) if node 5 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=16):
+                        cells[i].node_idx[5] = cells[i].parent.nb[16].children[0].node_idx[1]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[5, :])
+                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+
+                    # check nb below current cell (lower plane) if node 6 is present
+                    if self.check_nb_node(cells[i], child_no=0, nb_no=16):
+                        cells[i].node_idx[6] = cells[i].parent.nb[16].children[0].node_idx[2]
+                    else:
+                        self.all_nodes.append(nodes[6, :])
+                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+
+                    # check lower nb (same plane) if node 7 is present
+                    if self.check_nb_node(cells[i], child_no=5, nb_no=6):
+                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[5].node_idx[6]
+                    # check lower corner nb (lower plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=1, nb_no=14):
+                        cells[i].node_idx[7] = cells[i].parent.nb[14].children[1].node_idx[2]
+                    # check nb below current cell (lower plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=16):
+                        cells[i].node_idx[7] = cells[i].parent.nb[16].children[0].node_idx[3]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[7, :])
+                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[0].node_idx[4]
                     cells[i].node_idx[1] = cells[0].node_idx[5]
                     cells[i].node_idx[2] = cells[0].node_idx[6]
                     cells[i].node_idx[3] = cells[0].node_idx[7]
                 elif i == 5:
-                    # child no. 5: new nodes 6 remain to add
-                    self.all_nodes.append(nodes[6, :])
-                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    # child no. 5: new nodes 6 remain to add TODO: check again
+                    # check upper nb (same plane) if node 6 is present
+                    if self.check_nb_node(cells[i], child_no=4, nb_no=2):
+                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[4].node_idx[7]
+                    # check upper corner nb (lower plane) if node 6 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=10):
+                        cells[i].node_idx[6] = cells[i].parent.nb[10].children[0].node_idx[3]
+                    # check nb below current cell (lower plane) if node 6 is present
+                    elif self.check_nb_node(cells[i], child_no=1, nb_no=16):
+                        cells[i].node_idx[6] = cells[i].parent.nb[16].children[1].node_idx[2]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[6, :])
+                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[1].node_idx[4]
                     cells[i].node_idx[1] = cells[1].node_idx[5]
                     cells[i].node_idx[2] = cells[1].node_idx[6]
@@ -1184,8 +1386,20 @@ class SamplingTree(object):
                     cells[i].node_idx[7] = cells[4].node_idx[6]
                 elif i == 6:
                     # child no. 6: new nodes 7 to add
-                    self.all_nodes.append(nodes[7, :])
-                    cells[i].node_idx[7] = len(self.all_nodes) - 1
+                    # check right nb (same plane) if node 7 is present
+                    if self.check_nb_node(cells[i], child_no=4, nb_no=4):
+                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[4].node_idx[5]
+                    # check right corner nb (lower plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=0, nb_no=12):
+                        cells[i].node_idx[7] = cells[i].parent.nb[12].children[0].node_idx[1]
+                    # check nb below current cell (lower plane) if node 7 is present
+                    elif self.check_nb_node(cells[i], child_no=2, nb_no=16):
+                        cells[i].node_idx[7] = cells[i].parent.nb[16].children[2].node_idx[3]
+                    # otherwise this node does not exist yet
+                    else:
+                        self.all_nodes.append(nodes[7, :])
+                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+
                     cells[i].node_idx[0] = cells[2].node_idx[4]
                     cells[i].node_idx[1] = cells[2].node_idx[5]
                     cells[i].node_idx[2] = cells[2].node_idx[6]
@@ -1201,6 +1415,13 @@ class SamplingTree(object):
                     cells[i].node_idx[4] = cells[4].node_idx[7]
                     cells[i].node_idx[5] = cells[4].node_idx[6]
                     cells[i].node_idx[6] = cells[6].node_idx[7]
+
+    def check_nb_node(self, _cell, child_no, nb_no):
+        return _cell.parent is not None and _cell.parent.nb[nb_no] is not None and \
+               _cell.parent.nb[nb_no].children is not None and \
+               len(_cell.parent.nb[nb_no].children) == pow(2, self._n_dimensions) and \
+               _cell.parent.nb[nb_no].children[child_no] is not None and \
+               _cell.parent.nb[nb_no].children[child_no].level == _cell.level
 
 
 if __name__ == "__main__":
