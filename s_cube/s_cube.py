@@ -1,11 +1,13 @@
 """
     implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
 """
+import numpy as np
 import torch as pt
 
 from time import time
+
+from numba import njit, prange, typed
 from sklearn.neighbors import KNeighborsRegressor
-pt.set_default_dtype(pt.float64)
 
 
 class Cell(object):
@@ -437,22 +439,28 @@ class SamplingTree(object):
         """
         remove all invalid and parent cells from the mesh. Sort the cell centers and vertices of the cells of the final
         grid with respect to their corresponding index and re-number all nodes.
-        TODO: run with numba if possible -> although much faster than previous implementation, still a lot potential
 
         :return: None
         """
-        # ~ 0.01 - 0.02 % of total runtime for resorting method
         t1 = time()
         _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
         print("[DEBUG] dt1 = ", round(time() - t1, 6), "s")
 
-        # ~ 92 - 98 % of total runtime for resorting method (!!!)
         t2 = time()
-        _unused_idx = [i for i in list(range(_all_idx.max().item()+1)) if i not in set(_all_idx.flatten().tolist())]
+        _unique_idx = _all_idx.flatten().unique()
+        _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item()+1)
+
+        # get all node indices which are not used anymore, convert to set(), because search in set is faster
+        _unused_idx = set(_all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].int().tolist())
+        del _unique_idx, _all_available_idx
         print("[DEBUG] dt2 = ", round(time() - t2, 6), "s")
 
-        # ~ 3 - 6 % of total runtime for resorting method
+        # test
         t3 = time()
+        # _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
+        #                                                      typed.List(_unused_idx), self._n_dimensions)
+
+        # """
         _unique_node_coord = pt.zeros((len(self.all_nodes) - len(_unused_idx), self._n_dimensions))
         _counter, _visited = 0, 0
         for i in range(len(self.all_nodes)):
@@ -464,15 +472,16 @@ class SamplingTree(object):
             else:
                 _unique_node_coord[_counter, :] = self.all_nodes[i]
                 _counter += 1
-
+        # """
         print("[DEBUG] dt3 = ", round(time() - t3, 6), "s")
         t4 = time()
 
-        # ~ 0.04 - 0.9 % of total runtime for resorting method
         # update node ID's and their coordinates
+        # self.face_ids = pt.from_numpy(_all_idx)
+        # self.all_nodes = pt.from_numpy(_unique_node_coord)
         self.face_ids = _all_idx
         self.all_nodes = _unique_node_coord
-        self.all_centers = pt.stack([cell.center for cell in self._cells if cell.leaf_cell()])
+        self.all_centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
         print("[DEBUG] dt4 =", round(time() - t4, 6), "s")
         print("[DEBUG] dt total =", round(time() - t1, 6), "s")
 
@@ -1143,7 +1152,6 @@ class SamplingTree(object):
                     cells[i].node_idx[2] = cells[2].node_idx[3]
 
             else:
-                # TODO check again everything
                 # child no. 0: new nodes 1, 2, 3, 4, 5, 6, 7 remain to add
                 if i == 0:
                     # check left nb (same plane) if node 1 is present
@@ -1363,7 +1371,7 @@ class SamplingTree(object):
                     cells[i].node_idx[2] = cells[0].node_idx[6]
                     cells[i].node_idx[3] = cells[0].node_idx[7]
                 elif i == 5:
-                    # child no. 5: new nodes 6 remain to add TODO: check again
+                    # child no. 5: new nodes 6 remain to add
                     # check upper nb (same plane) if node 6 is present
                     if self.check_nb_node(cells[i], child_no=4, nb_no=2):
                         cells[i].node_idx[6] = cells[i].parent.nb[2].children[4].node_idx[7]
@@ -1422,6 +1430,26 @@ class SamplingTree(object):
                len(_cell.parent.nb[nb_no].children) == pow(2, self._n_dimensions) and \
                _cell.parent.nb[nb_no].children[child_no] is not None and \
                _cell.parent.nb[nb_no].children[child_no].level == _cell.level
+
+
+# @njit(fastmath=True, parallel=True)
+def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: list, dims: int):
+    _unique_node_coord = np.zeros((all_nodes.shape[0] - len(_unused_idx), dims))
+    _counter, _visited = 0, 0
+    for i in prange(all_nodes.shape[0]):
+        if i in _unused_idx:
+            # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
+            # overwriting the all_idx tensor, we need to account for the entries we already deleted
+            _visited += 1
+            # TODO: these 2 lines not the same as 'all_idx[all_idx > i - _visited] -= 1' -> issue!,
+            #  l. 1450 not woking with numba
+            # indices_to_decrement = np.where(all_idx > i - _visited)[0]
+            # all_idx[indices_to_decrement] -= 1
+            all_idx[all_idx > i - _visited] -= 1
+        else:
+            _unique_node_coord[_counter, :] = all_nodes[i, :]
+            _counter += 1
+    return _unique_node_coord, all_idx
 
 
 if __name__ == "__main__":
