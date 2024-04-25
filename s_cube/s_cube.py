@@ -6,7 +6,7 @@ import torch as pt
 
 from time import time
 
-from numba import njit, prange, typed
+from numba import njit, typed
 from sklearn.neighbors import KNeighborsRegressor
 
 
@@ -455,12 +455,13 @@ class SamplingTree(object):
         del _unique_idx, _all_available_idx
         print("[DEBUG] dt2 = ", round(time() - t2, 6), "s")
 
-        # test
         t3 = time()
+        # re-index using numba
         # _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
         #                                                      typed.List(_unused_idx), self._n_dimensions)
 
         # """
+        # re-index using python only
         _unique_node_coord = pt.zeros((len(self.all_nodes) - len(_unused_idx), self._n_dimensions))
         _counter, _visited = 0, 0
         for i in range(len(self.all_nodes)):
@@ -1432,24 +1433,28 @@ class SamplingTree(object):
                _cell.parent.nb[nb_no].children[child_no].level == _cell.level
 
 
-# @njit(fastmath=True, parallel=True)
-def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: list, dims: int):
+@njit(fastmath=True)
+def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: typed.List, dims: int):
+    # TODO: parallel not possible, because it messes up the idx numbers, further numba is slower than python only,
+    #  encounters depreciation warning for _unused_idx, because type is casted from unit64 to int64 -> why?
     _unique_node_coord = np.zeros((all_nodes.shape[0] - len(_unused_idx), dims))
     _counter, _visited = 0, 0
-    for i in prange(all_nodes.shape[0]):
+
+    # numba does not allow advanced indexing on more than 1 dimension, so we need to flatten it first and reshape at
+    # the end
+    orig_shape = all_idx.shape
+    all_idx = all_idx.flatten()
+    for i in range(all_nodes.shape[0]):
         if i in _unused_idx:
             # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
             # overwriting the all_idx tensor, we need to account for the entries we already deleted
             _visited += 1
-            # TODO: these 2 lines not the same as 'all_idx[all_idx > i - _visited] -= 1' -> issue!,
-            #  l. 1450 not woking with numba
-            # indices_to_decrement = np.where(all_idx > i - _visited)[0]
-            # all_idx[indices_to_decrement] -= 1
             all_idx[all_idx > i - _visited] -= 1
         else:
             _unique_node_coord[_counter, :] = all_nodes[i, :]
             _counter += 1
-    return _unique_node_coord, all_idx
+
+    return _unique_node_coord, all_idx.reshape(orig_shape)
 
 
 if __name__ == "__main__":
