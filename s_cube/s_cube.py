@@ -5,8 +5,7 @@ import numpy as np
 import torch as pt
 
 from time import time
-
-from numba import njit, typed
+from numba import njit
 from sklearn.neighbors import KNeighborsRegressor
 
 
@@ -450,38 +449,21 @@ class SamplingTree(object):
         _unique_idx = _all_idx.flatten().unique()
         _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item()+1)
 
-        # get all node indices which are not used anymore, convert to set(), because search in set is faster
-        _unused_idx = set(_all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].int().tolist())
+        # get all node indices which are not used by all cells any more
+        _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()
         del _unique_idx, _all_available_idx
         print("[DEBUG] dt2 = ", round(time() - t2, 6), "s")
 
+        # re-index using numba -> faster than python, and this step is computationally quite expensive
         t3 = time()
-        # re-index using numba
-        # _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
-        #                                                      typed.List(_unused_idx), self._n_dimensions)
-
-        # """
-        # re-index using python only
-        _unique_node_coord = pt.zeros((len(self.all_nodes) - len(_unused_idx), self._n_dimensions))
-        _counter, _visited = 0, 0
-        for i in range(len(self.all_nodes)):
-            if i in _unused_idx:
-                # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
-                # overwriting the all_idx tensor, we need to account for the entries we already deleted
-                _visited += 1
-                _all_idx[_all_idx > i - _visited] -= 1
-            else:
-                _unique_node_coord[_counter, :] = self.all_nodes[i]
-                _counter += 1
-        # """
+        _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
+                                                             _unused_idx, self._n_dimensions)
         print("[DEBUG] dt3 = ", round(time() - t3, 6), "s")
         t4 = time()
 
         # update node ID's and their coordinates
-        # self.face_ids = pt.from_numpy(_all_idx)
-        # self.all_nodes = pt.from_numpy(_unique_node_coord)
-        self.face_ids = _all_idx
-        self.all_nodes = _unique_node_coord
+        self.face_ids = pt.from_numpy(_all_idx)
+        self.all_nodes = pt.from_numpy(_unique_node_coord)
         self.all_centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
         print("[DEBUG] dt4 =", round(time() - t4, 6), "s")
         print("[DEBUG] dt total =", round(time() - t1, 6), "s")
@@ -1434,22 +1416,40 @@ class SamplingTree(object):
 
 
 @njit(fastmath=True)
-def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: typed.List, dims: int):
-    # TODO: parallel not possible, because it messes up the idx numbers, further numba is slower than python only,
-    #  encounters depreciation warning for _unused_idx, because type is casted from unit64 to int64 -> why?
-    _unique_node_coord = np.zeros((all_nodes.shape[0] - len(_unused_idx), dims))
+def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: np.ndarray, dims: int):
+    """
+    some things regarding numba:
+        - 'i in _unused_idx' or (i == _unused_idx).any() takes longer than the loop for assigning 'check'
+        - set() is not supported by numba, so we need to convert '_unused_idx' into a numpy array
+        - np.isin() is not supported by numba
+        - using an explizit loop (in 'if check') significantly speeds up the execution compared to advanced indexing
+        'all_idx[all_idx > i - _visited] -= 1'
+    """
+    _unique_node_coord = np.zeros((all_nodes.shape[0] - _unused_idx.shape[0], dims))
     _counter, _visited = 0, 0
 
     # numba does not allow advanced indexing on more than 1 dimension, so we need to flatten it first and reshape at
-    # the end
+    # the end, we can't run this loop in parallel, because it messes up the idx numbers
     orig_shape = all_idx.shape
     all_idx = all_idx.flatten()
     for i in range(all_nodes.shape[0]):
-        if i in _unused_idx:
+        # TODO:
+        #  - _unused_idx is sorted and unique -> can we use this somehow?
+        #  - we can't sort all_idx ... otherwise cells are not correct
+        #  - number unused idx << number all_idx -> can we exploit that?
+        check = False
+        for j in range(_unused_idx.shape[0]):
+            if i == _unused_idx[j]:
+                # _unused_idx is unique, so if we found one we can stop searching
+                check = True
+                break
+        if check:
             # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
             # overwriting the all_idx tensor, we need to account for the entries we already deleted
             _visited += 1
-            all_idx[all_idx > i - _visited] -= 1
+            for j in range(all_idx.shape[0]):
+                if all_idx [j] > i - _visited:
+                    all_idx[j] -= 1
         else:
             _unique_node_coord[_counter, :] = all_nodes[i, :]
             _counter += 1
