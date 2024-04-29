@@ -642,69 +642,41 @@ class SamplingTree(object):
         check = [n is not None and n.children is not None and len(n.children) == pow(2, self._n_dimensions) for n in
                  neighbors]
 
-        if check[NB["w"]]:
-            cell_tmp[CH["swu"]].nb[NB["w"]] = neighbors[NB["w"]].children[CH["seu"]]
-            cell_tmp[CH["swu"]].nb[NB["nw"]] = neighbors[NB["w"]].children[CH["neu"]]
-            cell_tmp[CH["nwu"]].nb[NB["w"]] = neighbors[NB["w"]].children[CH["neu"]]
-            cell_tmp[CH["nwu"]].nb[NB["sw"]] = neighbors[NB["w"]].children[CH["seu"]]
-        else:
-            cell_tmp[CH["swu"]].nb[NB["w"]] = neighbors[NB["w"]]
-            cell_tmp[CH["swu"]].nb[NB["nw"]] = neighbors[NB["w"]]
-            cell_tmp[CH["nwu"]].nb[NB["w"]] = neighbors[NB["w"]]
-            cell_tmp[CH["nwu"]].nb[NB["sw"]] = neighbors[NB["w"]]
+        # left nb (= west))
+        cell_tmp[CH["swu"]].nb[NB["w"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
+        cell_tmp[CH["swu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+        cell_tmp[CH["nwu"]].nb[NB["w"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+        cell_tmp[CH["nwu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
 
-        if check[NB["nw"]]:
-            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["nw"]].children[CH["seu"]]
-        else:
-            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["nw"]]
+        # upper left nb (= north west))
+        cell_tmp[CH["nwu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["seu"])
 
-        if check[NB["n"]]:
-            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]].children[CH["swu"]]
-            cell_tmp[CH["nwu"]].nb[NB["ne"]] = neighbors[NB["n"]].children[CH["seu"]]
-            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["n"]].children[CH["swu"]]
-            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]].children[CH["seu"]]
-        else:
-            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]]
-            cell_tmp[CH["nwu"]].nb[NB["ne"]] = neighbors[NB["n"]]
-            cell_tmp[CH["neu"]].nb[NB["nw"]] = neighbors[NB["n"]]
-            cell_tmp[CH["neu"]].nb[NB["n"]] = neighbors[NB["n"]]
+        # upper nb (= north))
+        cell_tmp[CH["nwu"]].nb[NB["n"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
+        cell_tmp[CH["nwu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
+        cell_tmp[CH["nwu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
+        cell_tmp[CH["nwu"]].nb[NB["n"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
 
-        if check[NB["ne"]]:
-            cell_tmp[CH["neu"]].nb[NB["ne"]] = neighbors[NB["ne"]].children[CH["swu"]]
-        else:
-            cell_tmp[CH["neu"]].nb[NB["ne"]] = neighbors[NB["ne"]]
+        # upper right nb (= north east))
+        cell_tmp[CH["neu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swu"])
 
-        if check[NB["e"]]:
-            cell_tmp[CH["neu"]].nb[NB["e"]] = neighbors[NB["e"]].children[CH["nwu"]]
-            cell_tmp[CH["neu"]].nb[NB["se"]] = neighbors[NB["e"]].children[CH["swu"]]
-            cell_tmp[CH["seu"]].nb[NB["ne"]] = neighbors[NB["e"]].children[CH["nwu"]]
-            cell_tmp[CH["seu"]].nb[NB["e"]] = neighbors[NB["e"]].children[CH["swu"]]
-        else:
-            cell_tmp[CH["neu"]].nb[NB["e"]] = neighbors[NB["e"]]
-            cell_tmp[CH["neu"]].nb[NB["se"]] = neighbors[NB["se"]]
-            cell_tmp[CH["seu"]].nb[NB["ne"]] = neighbors[NB["e"]]
-            cell_tmp[CH["seu"]].nb[NB["e"]] = neighbors[NB["e"]]
+        # right nb (= east))
+        cell_tmp[CH["neu"]].nb[NB["e"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
+        cell_tmp[CH["neu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
+        cell_tmp[CH["seu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
+        cell_tmp[CH["seu"]].nb[NB["e"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
 
-        if check[NB["se"]]:
-            cell_tmp[CH["seu"]].nb[NB["se"]] = neighbors[NB["se"]].children[CH["nwu"]]
-        else:
-            cell_tmp[CH["seu"]].nb[NB["se"]] = neighbors[NB["se"]]
+        # lower right nb (= south east))
+        cell_tmp[CH["seu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwu"])
 
-        if check[NB["s"]]:
-            cell_tmp[CH["swu"]].nb[NB["se"]] = neighbors[NB["s"]].children[CH["neu"]]
-            cell_tmp[CH["swu"]].nb[NB["s"]] = neighbors[NB["s"]].children[CH["nwu"]]
-            cell_tmp[CH["seu"]].nb[NB["s"]] = neighbors[NB["s"]].children[CH["neu"]]
-            cell_tmp[CH["seu"]].nb[NB["sw"]] = neighbors[NB["s"]].children[CH["nwu"]]
-        else:
-            cell_tmp[CH["swu"]].nb[NB["se"]] = neighbors[NB["s"]]
-            cell_tmp[CH["swu"]].nb[NB["s"]] = neighbors[NB["s"]]
-            cell_tmp[CH["seu"]].nb[NB["s"]] = neighbors[NB["s"]]
-            cell_tmp[CH["seu"]].nb[NB["sw"]] = neighbors[NB["s"]]
+        # lower nb (= south))
+        cell_tmp[CH["swu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
+        cell_tmp[CH["swu"]].nb[NB["s"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
+        cell_tmp[CH["seu"]].nb[NB["s"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
+        cell_tmp[CH["seu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
 
-        if check[NB["sw"]]:
-            cell_tmp[CH["swu"]].nb[NB["sw"]] = neighbors[NB["sw"]].children[CH["neu"]]
-        else:
-            cell_tmp[CH["swu"]].nb[NB["sw"]] = neighbors[NB["sw"]]
+        # lower left nb (= south west))
+        cell_tmp[CH["swu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["neu"])
 
         # remaining nb
         cell_tmp[CH["swu"]].nb[NB["n"]] = cell_tmp[CH["nwu"]]
@@ -723,307 +695,169 @@ class SamplingTree(object):
         # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
         # same plane as current cell is always the same as for 2D
         if self._n_dimensions == 3:
-            if check[NB["w"]]:
-                cell_tmp[CH["swu"]].nb[NB["wl"]] = neighbors[NB["w"]].children[CH["sel"]]
-                cell_tmp[CH["swu"]].nb[NB["nwl"]] = neighbors[NB["w"]].children[CH["nel"]]
-                cell_tmp[CH["nwu"]].nb[NB["wl"]] = neighbors[NB["w"]].children[CH["nel"]]
-                cell_tmp[CH["nwu"]].nb[NB["swl"]] = neighbors[NB["w"]].children[CH["sel"]]
-                cell_tmp[CH["swl"]].nb[NB["wu"]] = neighbors[NB["w"]].children[CH["seu"]]
-                cell_tmp[CH["swl"]].nb[NB["nwu"]] = neighbors[NB["w"]].children[CH["neu"]]
-                cell_tmp[CH["nwl"]].nb[NB["wu"]] = neighbors[NB["w"]].children[CH["neu"]]
-                cell_tmp[CH["nwl"]].nb[NB["swu"]] = neighbors[NB["w"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["wl"]] = neighbors[NB["w"]]
-                cell_tmp[CH["swu"]].nb[NB["nwl"]] = neighbors[NB["w"]]
-                cell_tmp[CH["nwu"]].nb[NB["wl"]] = neighbors[NB["w"]]
-                cell_tmp[CH["nwu"]].nb[NB["swl"]] = neighbors[NB["w"]]
-                cell_tmp[CH["swl"]].nb[NB["wu"]] = neighbors[NB["w"]]
-                cell_tmp[CH["swl"]].nb[NB["nwu"]] = neighbors[NB["w"]]
-                cell_tmp[CH["nwl"]].nb[NB["wu"]] = neighbors[NB["w"]]
-                cell_tmp[CH["nwl"]].nb[NB["swu"]] = neighbors[NB["w"]]
+            # remaining nb for left nb (= west)
+            cell_tmp[CH["swu"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["sel"])
+            cell_tmp[CH["swu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["nel"])
+            cell_tmp[CH["nwu"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["nel"])
+            cell_tmp[CH["nwu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["sel"])
+            cell_tmp[CH["swl"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
+            cell_tmp[CH["swl"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+            cell_tmp[CH["nwl"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+            cell_tmp[CH["nwl"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
 
-            if check[NB["nw"]]:
-                cell_tmp[CH["nwu"]].nb[NB["nwl"]] = neighbors[NB["nw"]].children[CH["sel"]]
-                cell_tmp[CH["nwl"]].nb[NB["nwu"]] = neighbors[NB["nw"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["nwu"]].nb[NB["nwl"]] = neighbors[NB["nw"]]
-                cell_tmp[CH["nwl"]].nb[NB["nwu"]] = neighbors[NB["nw"]]
+            # upper left nb (= north-west)
+            cell_tmp[CH["nwu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["sel"])
+            cell_tmp[CH["nwl"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["seu"])
 
-            if check[NB["n"]]:
-                cell_tmp[CH["nwu"]].nb[NB["nl"]] = neighbors[NB["n"]].children[CH["swl"]]
-                cell_tmp[CH["nwu"]].nb[NB["nel"]] = neighbors[NB["n"]].children[CH["sel"]]
-                cell_tmp[CH["neu"]].nb[NB["nwl"]] = neighbors[NB["n"]].children[CH["swl"]]
-                cell_tmp[CH["neu"]].nb[NB["nl"]] = neighbors[NB["n"]].children[CH["sel"]]
-                cell_tmp[CH["nwl"]].nb[NB["nu"]] = neighbors[NB["n"]].children[CH["swu"]]
-                cell_tmp[CH["nwl"]].nb[NB["neu"]] = neighbors[NB["n"]].children[CH["seu"]]
-                cell_tmp[CH["nel"]].nb[NB["nwu"]] = neighbors[NB["n"]].children[CH["swu"]]
-                cell_tmp[CH["nel"]].nb[NB["nu"]] = neighbors[NB["n"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["nwu"]].nb[NB["nl"]] = neighbors[NB["n"]]
-                cell_tmp[CH["nwu"]].nb[NB["nel"]] = neighbors[NB["n"]]
-                cell_tmp[CH["neu"]].nb[NB["nwl"]] = neighbors[NB["n"]]
-                cell_tmp[CH["neu"]].nb[NB["nl"]] = neighbors[NB["n"]]
-                cell_tmp[CH["nwl"]].nb[NB["nu"]] = neighbors[NB["n"]]
-                cell_tmp[CH["nwl"]].nb[NB["neu"]] = neighbors[NB["n"]]
-                cell_tmp[CH["nel"]].nb[NB["nwu"]] = neighbors[NB["n"]]
-                cell_tmp[CH["nel"]].nb[NB["nu"]] = neighbors[NB["n"]]
+            # upper nb (= north)
+            cell_tmp[CH["nwu"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swl"])
+            cell_tmp[CH["nwu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["sel"])
+            cell_tmp[CH["neu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swl"])
+            cell_tmp[CH["neu"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["sel"])
+            cell_tmp[CH["nwl"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
+            cell_tmp[CH["nwl"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
+            cell_tmp[CH["nel"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
+            cell_tmp[CH["nel"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
 
-            if check[NB["ne"]]:
-                cell_tmp[CH["neu"]].nb[NB["nel"]] = neighbors[NB["ne"]].children[CH["swl"]]
-                cell_tmp[CH["nel"]].nb[NB["neu"]] = neighbors[NB["ne"]].children[CH["swu"]]
-            else:
-                cell_tmp[CH["neu"]].nb[NB["nel"]] = neighbors[NB["ne"]]
-                cell_tmp[CH["nel"]].nb[NB["neu"]] = neighbors[NB["ne"]]
+            # upper right nb (nort-east)
+            cell_tmp[CH["neu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swl"])
+            cell_tmp[CH["nel"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swu"])
 
-            if check[NB["e"]]:
-                cell_tmp[CH["neu"]].nb[NB["el"]] = neighbors[NB["e"]].children[CH["nwl"]]
-                cell_tmp[CH["neu"]].nb[NB["sel"]] = neighbors[NB["e"]].children[CH["swl"]]
-                cell_tmp[CH["seu"]].nb[NB["nel"]] = neighbors[NB["e"]].children[CH["nwl"]]
-                cell_tmp[CH["seu"]].nb[NB["el"]] = neighbors[NB["e"]].children[CH["swl"]]
-                cell_tmp[CH["nel"]].nb[NB["eu"]] = neighbors[NB["e"]].children[CH["nwu"]]
-                cell_tmp[CH["nel"]].nb[NB["seu"]] = neighbors[NB["e"]].children[CH["swu"]]
-                cell_tmp[CH["sel"]].nb[NB["neu"]] = neighbors[NB["e"]].children[CH["nwu"]]
-                cell_tmp[CH["sel"]].nb[NB["eu"]] = neighbors[NB["e"]].children[CH["swu"]]
-            else:
-                cell_tmp[CH["neu"]].nb[NB["el"]] = neighbors[NB["e"]]
-                cell_tmp[CH["neu"]].nb[NB["sel"]] = neighbors[NB["e"]]
-                cell_tmp[CH["seu"]].nb[NB["nel"]] = neighbors[NB["e"]]
-                cell_tmp[CH["seu"]].nb[NB["el"]] = neighbors[NB["e"]]
-                cell_tmp[CH["nel"]].nb[NB["eu"]] = neighbors[NB["e"]]
-                cell_tmp[CH["nel"]].nb[NB["seu"]] = neighbors[NB["e"]]
-                cell_tmp[CH["sel"]].nb[NB["neu"]] = neighbors[NB["e"]]
-                cell_tmp[CH["sel"]].nb[NB["eu"]] = neighbors[NB["e"]]
+            # right nb (east)
+            cell_tmp[CH["neu"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwl"])
+            cell_tmp[CH["neu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swl"])
+            cell_tmp[CH["seu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwl"])
+            cell_tmp[CH["seu"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swl"])
+            cell_tmp[CH["nel"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
+            cell_tmp[CH["nel"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
+            cell_tmp[CH["sel"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
+            cell_tmp[CH["sel"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
 
-            if check[NB["se"]]:
-                cell_tmp[CH["seu"]].nb[NB["sel"]] = neighbors[NB["se"]].children[CH["nwl"]]
-                cell_tmp[CH["sel"]].nb[NB["seu"]] = neighbors[NB["se"]].children[CH["nwu"]]
-            else:
-                cell_tmp[CH["seu"]].nb[NB["sel"]] = neighbors[NB["se"]]
-                cell_tmp[CH["sel"]].nb[NB["seu"]] = neighbors[NB["se"]]
+            # lower right nb (south-east)
+            cell_tmp[CH["seu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwl"])
+            cell_tmp[CH["sel"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwu"])
 
-            if check[NB["s"]]:
-                cell_tmp[CH["swu"]].nb[NB["sel"]] = neighbors[NB["s"]].children[CH["nel"]]
-                cell_tmp[CH["swu"]].nb[NB["sl"]] = neighbors[NB["s"]].children[CH["nwl"]]
-                cell_tmp[CH["seu"]].nb[NB["sl"]] = neighbors[NB["s"]].children[CH["nel"]]
-                cell_tmp[CH["seu"]].nb[NB["swl"]] = neighbors[NB["s"]].children[CH["nwl"]]
-                cell_tmp[CH["swl"]].nb[NB["seu"]] = neighbors[NB["s"]].children[CH["neu"]]
-                cell_tmp[CH["swl"]].nb[NB["su"]] = neighbors[NB["s"]].children[CH["nwu"]]
-                cell_tmp[CH["sel"]].nb[NB["su"]] = neighbors[NB["s"]].children[CH["neu"]]
-                cell_tmp[CH["sel"]].nb[NB["swu"]] = neighbors[NB["s"]].children[CH["nwu"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["sel"]] = neighbors[NB["s"]]
-                cell_tmp[CH["swu"]].nb[NB["sl"]] = neighbors[NB["s"]]
-                cell_tmp[CH["seu"]].nb[NB["sl"]] = neighbors[NB["s"]]
-                cell_tmp[CH["seu"]].nb[NB["swl"]] = neighbors[NB["s"]]
-                cell_tmp[CH["swl"]].nb[NB["seu"]] = neighbors[NB["s"]]
-                cell_tmp[CH["swl"]].nb[NB["su"]] = neighbors[NB["s"]]
-                cell_tmp[CH["sel"]].nb[NB["su"]] = neighbors[NB["s"]]
-                cell_tmp[CH["sel"]].nb[NB["swu"]] = neighbors[NB["s"]]
+            # lower nb (south)
+            cell_tmp[CH["swu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nel"])
+            cell_tmp[CH["swu"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwl"])
+            cell_tmp[CH["seu"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nel"])
+            cell_tmp[CH["seu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwl"])
+            cell_tmp[CH["swl"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
+            cell_tmp[CH["swl"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
+            cell_tmp[CH["sel"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
+            cell_tmp[CH["sel"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
 
-            if check[NB["sw"]]:
-                cell_tmp[CH["swu"]].nb[NB["swl"]] = neighbors[NB["sw"]].children[CH["nel"]]
-                cell_tmp[CH["swl"]].nb[NB["swu"]] = neighbors[NB["sw"]].children[CH["neu"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["swl"]] = neighbors[NB["sw"]]
-                cell_tmp[CH["swl"]].nb[NB["swu"]] = neighbors[NB["sw"]]
+            # lower left nb (south-west)
+            cell_tmp[CH["swu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["nel"])
+            cell_tmp[CH["swl"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["neu"])
 
-            if check[NB["wl"]]:
-                cell_tmp[CH["swl"]].nb[NB["wl"]] = neighbors[NB["wl"]].children[CH["seu"]]
-                cell_tmp[CH["swl"]].nb[NB["nwl"]] = neighbors[NB["wl"]].children[CH["neu"]]
-                cell_tmp[CH["nwl"]].nb[NB["wl"]] = neighbors[NB["wl"]].children[CH["neu"]]
-                cell_tmp[CH["nwl"]].nb[NB["swl"]] = neighbors[NB["wl"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["swl"]].nb[NB["wl"]] = neighbors[NB["wl"]]
-                cell_tmp[CH["swl"]].nb[NB["nwl"]] = neighbors[NB["wl"]]
-                cell_tmp[CH["nwl"]].nb[NB["wl"]] = neighbors[NB["wl"]]
-                cell_tmp[CH["nwl"]].nb[NB["swl"]] = neighbors[NB["wl"]]
+            # left nb, lower plane (west lower)
+            cell_tmp[CH["swl"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["seu"])
+            cell_tmp[CH["swl"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["neu"])
+            cell_tmp[CH["nwl"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["neu"])
+            cell_tmp[CH["nwl"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["seu"])
 
-            if check[NB["nwl"]]:
-                cell_tmp[CH["nwl"]].nb[NB["nwl"]] = neighbors[NB["nwl"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["nwl"]].nb[NB["nwl"]] = neighbors[NB["nwl"]]
+            # upper left nb, lower plane (north-west lower)
+            cell_tmp[CH["nwl"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nwl"]], NB["nwl"], CH["seu"])
 
-            if check[NB["nl"]]:
-                cell_tmp[CH["nwl"]].nb[NB["nl"]] = neighbors[NB["nl"]].children[CH["swu"]]
-                cell_tmp[CH["nwl"]].nb[NB["nel"]] = neighbors[NB["nl"]].children[CH["seu"]]
-                cell_tmp[CH["nel"]].nb[NB["nwl"]] = neighbors[NB["nl"]].children[CH["swu"]]
-                cell_tmp[CH["nel"]].nb[NB["nl"]] = neighbors[NB["nl"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["nwl"]].nb[NB["nl"]] = neighbors[NB["nl"]]
-                cell_tmp[CH["nwl"]].nb[NB["nel"]] = neighbors[NB["nl"]]
-                cell_tmp[CH["nel"]].nb[NB["nwl"]] = neighbors[NB["nl"]]
-                cell_tmp[CH["nel"]].nb[NB["nl"]] = neighbors[NB["nl"]]
+            # upper nb, lower plane (north lower)
+            cell_tmp[CH["nwl"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["swu"])
+            cell_tmp[CH["nwl"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["seu"])
+            cell_tmp[CH["nel"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["swu"])
+            cell_tmp[CH["nel"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["seu"])
 
-            if check[NB["nel"]]:
-                cell_tmp[CH["nel"]].nb[NB["nel"]] = neighbors[NB["nel"]].children[CH["swu"]]
-            else:
-                cell_tmp[CH["nel"]].nb[NB["nel"]] = neighbors[NB["nel"]]
+            # upper right nb, lower plane (north-east lower)
+            cell_tmp[CH["nel"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["nel"]], NB["nel"], CH["swu"])
 
-            if check[NB["el"]]:
-                cell_tmp[CH["nel"]].nb[NB["el"]] = neighbors[NB["el"]].children[CH["nwu"]]
-                cell_tmp[CH["nel"]].nb[NB["sel"]] = neighbors[NB["el"]].children[CH["swu"]]
-                cell_tmp[CH["sel"]].nb[NB["nel"]] = neighbors[NB["el"]].children[CH["nwu"]]
-                cell_tmp[CH["sel"]].nb[NB["el"]] = neighbors[NB["el"]].children[CH["swu"]]
-            else:
-                cell_tmp[CH["nel"]].nb[NB["el"]] = neighbors[NB["el"]]
-                cell_tmp[CH["nel"]].nb[NB["sel"]] = neighbors[NB["el"]]
-                cell_tmp[CH["sel"]].nb[NB["nel"]] = neighbors[NB["el"]]
-                cell_tmp[CH["sel"]].nb[NB["el"]] = neighbors[NB["el"]]
+            # right nb, lower plane (east lower)
+            cell_tmp[CH["nel"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["nwu"])
+            cell_tmp[CH["nel"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["swu"])
+            cell_tmp[CH["sel"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["nwu"])
+            cell_tmp[CH["sel"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["swu"])
 
-            if check[NB["sel"]]:
-                cell_tmp[CH["sel"]].nb[NB["sel"]] = neighbors[NB["sel"]].children[CH["nwu"]]
-            else:
-                cell_tmp[CH["sel"]].nb[NB["sel"]] = neighbors[NB["sel"]]
+            # lower right nb, lower plane (south-east lower)
+            cell_tmp[CH["sel"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["sel"]], NB["sel"], CH["nwu"])
 
-            if check[NB["sl"]]:
-                cell_tmp[CH["swl"]].nb[NB["sel"]] = neighbors[NB["sl"]].children[CH["neu"]]
-                cell_tmp[CH["swl"]].nb[NB["sl"]] = neighbors[NB["sl"]].children[CH["nwu"]]
-                cell_tmp[CH["sel"]].nb[NB["sl"]] = neighbors[NB["sl"]].children[CH["neu"]]
-                cell_tmp[CH["sel"]].nb[NB["swl"]] = neighbors[NB["sl"]].children[CH["nwu"]]
-            else:
-                cell_tmp[CH["swl"]].nb[NB["sel"]] = neighbors[NB["sl"]]
-                cell_tmp[CH["swl"]].nb[NB["sl"]] = neighbors[NB["sl"]]
-                cell_tmp[CH["sel"]].nb[NB["sl"]] = neighbors[NB["sl"]]
-                cell_tmp[CH["sel"]].nb[NB["swl"]] = neighbors[NB["sl"]]
+            # lower nb, lower plane (south lower)
+            cell_tmp[CH["swl"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["neu"])
+            cell_tmp[CH["swl"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["nwu"])
+            cell_tmp[CH["sel"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["neu"])
+            cell_tmp[CH["sel"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["nwu"])
 
-            if check[NB["swl"]]:
-                cell_tmp[CH["swl"]].nb[NB["swl"]] = neighbors[NB["swl"]].children[CH["neu"]]
-            else:
-                cell_tmp[CH["swl"]].nb[NB["swl"]] = neighbors[NB["swl"]]
+            # lower left nb, lower plane (south-west lower)
+            cell_tmp[CH["swl"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["swl"]], NB["swl"], CH["neu"])
 
-            if check[NB["cl"]]:
-                cell_tmp[CH["swl"]].nb[NB["nl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
-                cell_tmp[CH["swl"]].nb[NB["nel"]] = neighbors[NB["cl"]].children[CH["neu"]]
-                cell_tmp[CH["swl"]].nb[NB["el"]] = neighbors[NB["cl"]].children[CH["seu"]]
-                cell_tmp[CH["swl"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["swu"]]
-                cell_tmp[CH["nwl"]].nb[NB["el"]] = neighbors[NB["cl"]].children[CH["neu"]]
-                cell_tmp[CH["nwl"]].nb[NB["sel"]] = neighbors[NB["cl"]].children[CH["seu"]]
-                cell_tmp[CH["nwl"]].nb[NB["sl"]] = neighbors[NB["cl"]].children[CH["swu"]]
-                cell_tmp[CH["nwl"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
-                cell_tmp[CH["nel"]].nb[NB["wl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
-                cell_tmp[CH["nel"]].nb[NB["sl"]] = neighbors[NB["cl"]].children[CH["seu"]]
-                cell_tmp[CH["nel"]].nb[NB["swl"]] = neighbors[NB["cl"]].children[CH["swu"]]
-                cell_tmp[CH["nel"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["neu"]]
-                cell_tmp[CH["sel"]].nb[NB["wl"]] = neighbors[NB["cl"]].children[CH["swu"]]
-                cell_tmp[CH["sel"]].nb[NB["nwl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
-                cell_tmp[CH["sel"]].nb[NB["nl"]] = neighbors[NB["cl"]].children[CH["neu"]]
-                cell_tmp[CH["sel"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["seu"]]
-            else:
-                cell_tmp[CH["swl"]].nb[NB["nl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["swl"]].nb[NB["nel"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["swl"]].nb[NB["el"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["swl"]].nb[NB["cl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nwl"]].nb[NB["el"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nwl"]].nb[NB["sel"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nwl"]].nb[NB["sl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nwl"]].nb[NB["cl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nel"]].nb[NB["wl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nel"]].nb[NB["sl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nel"]].nb[NB["swl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["nel"]].nb[NB["cl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["sel"]].nb[NB["wl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["sel"]].nb[NB["nwl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["sel"]].nb[NB["nl"]] = neighbors[NB["cl"]]
-                cell_tmp[CH["sel"]].nb[NB["cl"]] = neighbors[NB["cl"]]
+            # center nb, lower plane (center lower)
+            cell_tmp[CH["swl"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
+            cell_tmp[CH["swl"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
+            cell_tmp[CH["swl"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
+            cell_tmp[CH["swl"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
+            cell_tmp[CH["nwl"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
+            cell_tmp[CH["nwl"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
+            cell_tmp[CH["nwl"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
+            cell_tmp[CH["nwl"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
+            cell_tmp[CH["nel"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
+            cell_tmp[CH["nel"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
+            cell_tmp[CH["nel"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
+            cell_tmp[CH["nel"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
+            cell_tmp[CH["sel"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
+            cell_tmp[CH["sel"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
+            cell_tmp[CH["sel"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
+            cell_tmp[CH["sel"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
 
-            if check[NB["wu"]]:
-                cell_tmp[CH["swu"]].nb[NB["wu"]] = neighbors[NB["wu"]].children[CH["sel"]]
-                cell_tmp[CH["swu"]].nb[NB["nwu"]] = neighbors[NB["wu"]].children[CH["nel"]]
-                cell_tmp[CH["nwu"]].nb[NB["wu"]] = neighbors[NB["wu"]].children[CH["nel"]]
-                cell_tmp[CH["nwu"]].nb[NB["swu"]] = neighbors[NB["wu"]].children[CH["sel"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["wu"]] = neighbors[NB["wu"]]
-                cell_tmp[CH["swu"]].nb[NB["nwu"]] = neighbors[NB["wu"]]
-                cell_tmp[CH["nwu"]].nb[NB["wu"]] = neighbors[NB["wu"]]
-                cell_tmp[CH["nwu"]].nb[NB["swu"]] = neighbors[NB["wu"]]
+            # left nb, upper plane (west upper)
+            cell_tmp[CH["swu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["sel"])
+            cell_tmp[CH["swu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["nel"])
+            cell_tmp[CH["nwu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["nel"])
+            cell_tmp[CH["nwu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["sel"])
 
-            if check[NB["nwu"]]:
-                cell_tmp[CH["nwu"]].nb[NB["nwu"]] = neighbors[NB["nwu"]].children[CH["sel"]]
-            else:
-                cell_tmp[CH["nwu"]].nb[NB["nwu"]] = neighbors[NB["nwu"]]
+            # upper left nb, upper plane (north-west upper)
+            cell_tmp[CH["nwu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nwu"]], NB["nwu"], CH["sel"])
 
-            if check[NB["nu"]]:
-                cell_tmp[CH["nwu"]].nb[NB["nu"]] = neighbors[NB["nu"]].children[CH["swl"]]
-                cell_tmp[CH["nwu"]].nb[NB["neu"]] = neighbors[NB["nu"]].children[CH["nwl"]]
-                cell_tmp[CH["neu"]].nb[NB["nwu"]] = neighbors[NB["nu"]].children[CH["swl"]]
-                cell_tmp[CH["neu"]].nb[NB["nu"]] = neighbors[NB["nu"]].children[CH["sel"]]
-            else:
-                cell_tmp[CH["nwu"]].nb[NB["nu"]] = neighbors[NB["nu"]]
-                cell_tmp[CH["nwu"]].nb[NB["neu"]] = neighbors[NB["nu"]]
-                cell_tmp[CH["neu"]].nb[NB["nwu"]] = neighbors[NB["nu"]]
-                cell_tmp[CH["neu"]].nb[NB["nu"]] = neighbors[NB["nu"]]
+            # upper nb, upper plane (north upper)
+            cell_tmp[CH["nwu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["swl"])
+            cell_tmp[CH["nwu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["nwl"])
+            cell_tmp[CH["neu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["swl"])
+            cell_tmp[CH["neu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["sel"])
 
-            if check[NB["neu"]]:
-                cell_tmp[CH["neu"]].nb[NB["neu"]] = neighbors[NB["neu"]].children[CH["swl"]]
-            else:
-                cell_tmp[CH["neu"]].nb[NB["neu"]] = neighbors[NB["neu"]]
+            # upper right nb, upper plane (north-east upper)
+            cell_tmp[CH["neu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["neu"]], NB["neu"], CH["swl"])
 
-            if check[NB["eu"]]:
-                cell_tmp[CH["neu"]].nb[NB["eu"]] = neighbors[NB["eu"]].children[CH["nwl"]]
-                cell_tmp[CH["neu"]].nb[NB["seu"]] = neighbors[NB["eu"]].children[CH["swl"]]
-                cell_tmp[CH["seu"]].nb[NB["neu"]] = neighbors[NB["eu"]].children[CH["nwl"]]
-                cell_tmp[CH["seu"]].nb[NB["eu"]] = neighbors[NB["eu"]].children[CH["swl"]]
-            else:
-                cell_tmp[CH["neu"]].nb[NB["eu"]] = neighbors[NB["eu"]]
-                cell_tmp[CH["neu"]].nb[NB["seu"]] = neighbors[NB["eu"]]
-                cell_tmp[CH["seu"]].nb[NB["neu"]] = neighbors[NB["eu"]]
-                cell_tmp[CH["seu"]].nb[NB["eu"]] = neighbors[NB["eu"]]
+            # right nb, upper plane (east upper)
+            cell_tmp[CH["neu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["nwl"])
+            cell_tmp[CH["neu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["swl"])
+            cell_tmp[CH["seu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["nwl"])
+            cell_tmp[CH["seu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["swl"])
 
-            if check[NB["seu"]]:
-                cell_tmp[CH["seu"]].nb[NB["seu"]] = neighbors[NB["seu"]].children[CH["nwl"]]
-            else:
-                cell_tmp[CH["seu"]].nb[NB["seu"]] = neighbors[NB["seu"]]
+            # lower right nb, upper plane (south-east upper)
+            cell_tmp[CH["seu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["seu"]], NB["seu"], CH["nwl"])
 
-            if check[NB["su"]]:
-                cell_tmp[CH["swu"]].nb[NB["seu"]] = neighbors[NB["su"]].children[CH["nel"]]
-                cell_tmp[CH["swu"]].nb[NB["su"]] = neighbors[NB["su"]].children[CH["nwl"]]
-                cell_tmp[CH["seu"]].nb[NB["su"]] = neighbors[NB["su"]].children[CH["nel"]]
-                cell_tmp[CH["seu"]].nb[NB["swu"]] = neighbors[NB["su"]].children[CH["nwl"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["seu"]] = neighbors[NB["su"]]
-                cell_tmp[CH["swu"]].nb[NB["su"]] = neighbors[NB["su"]]
-                cell_tmp[CH["seu"]].nb[NB["su"]] = neighbors[NB["su"]]
-                cell_tmp[CH["seu"]].nb[NB["swu"]] = neighbors[NB["su"]]
+            # lower nb, upper plane (south upper)
+            cell_tmp[CH["swu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nel"])
+            cell_tmp[CH["swu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nwl"])
+            cell_tmp[CH["seu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nel"])
+            cell_tmp[CH["seu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nwl"])
 
-            if check[NB["swu"]]:
-                cell_tmp[CH["swu"]].nb[NB["swu"]] = neighbors[NB["swu"]].children[CH["nel"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["swu"]] = neighbors[NB["swu"]]
+            # lower left nb, upper plane (south-west upper)
+            cell_tmp[CH["swu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["swu"]], NB["swu"], CH["nel"])
 
-            if check[NB["cu"]]:
-                cell_tmp[CH["swu"]].nb[NB["nu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
-                cell_tmp[CH["swu"]].nb[NB["neu"]] = neighbors[NB["cu"]].children[CH["nel"]]
-                cell_tmp[CH["swu"]].nb[NB["eu"]] = neighbors[NB["cu"]].children[CH["sel"]]
-                cell_tmp[CH["swu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["swl"]]
-                cell_tmp[CH["nwu"]].nb[NB["eu"]] = neighbors[NB["cu"]].children[CH["nel"]]
-                cell_tmp[CH["nwu"]].nb[NB["seu"]] = neighbors[NB["cu"]].children[CH["sel"]]
-                cell_tmp[CH["nwu"]].nb[NB["su"]] = neighbors[NB["cu"]].children[CH["swl"]]
-                cell_tmp[CH["nwu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
-                cell_tmp[CH["neu"]].nb[NB["wu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
-                cell_tmp[CH["neu"]].nb[NB["su"]] = neighbors[NB["cu"]].children[CH["sel"]]
-                cell_tmp[CH["neu"]].nb[NB["swu"]] = neighbors[NB["cu"]].children[CH["swl"]]
-                cell_tmp[CH["neu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["nel"]]
-                cell_tmp[CH["seu"]].nb[NB["wu"]] = neighbors[NB["cu"]].children[CH["swl"]]
-                cell_tmp[CH["seu"]].nb[NB["nwu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
-                cell_tmp[CH["seu"]].nb[NB["nu"]] = neighbors[NB["cu"]].children[CH["nel"]]
-                cell_tmp[CH["seu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["sel"]]
-            else:
-                cell_tmp[CH["swu"]].nb[NB["nu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["swu"]].nb[NB["neu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["swu"]].nb[NB["eu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["swu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["nwu"]].nb[NB["eu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["nwu"]].nb[NB["seu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["nwu"]].nb[NB["su"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["nwu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["neu"]].nb[NB["wu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["neu"]].nb[NB["su"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["neu"]].nb[NB["swu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["neu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["seu"]].nb[NB["wu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["seu"]].nb[NB["nwu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["seu"]].nb[NB["nu"]] = neighbors[NB["cu"]]
-                cell_tmp[CH["seu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
+            # center nb, upper plane (center upper)
+            cell_tmp[CH["swu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
+            cell_tmp[CH["swu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
+            cell_tmp[CH["swu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
+            cell_tmp[CH["swu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
+            cell_tmp[CH["nwu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
+            cell_tmp[CH["nwu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
+            cell_tmp[CH["nwu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
+            cell_tmp[CH["nwu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
+            cell_tmp[CH["neu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
+            cell_tmp[CH["neu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
+            cell_tmp[CH["neu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
+            cell_tmp[CH["neu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
+            cell_tmp[CH["seu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
+            cell_tmp[CH["seu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
+            cell_tmp[CH["seu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
+            cell_tmp[CH["seu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
 
             # add the remaining nb
             cell_tmp[CH["swu"]].nb[NB["nl"]] = cell_tmp[CH["nwl"]]
@@ -1456,6 +1290,10 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
             _counter += 1
 
     return _unique_node_coord, all_idx.reshape(orig_shape)
+
+
+def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int):
+    return nb[nb_idx].children[child_idx] if check else nb[nb_idx]
 
 
 if __name__ == "__main__":
