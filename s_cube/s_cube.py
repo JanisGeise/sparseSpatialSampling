@@ -8,6 +8,43 @@ from time import time
 from numba import njit
 from sklearn.neighbors import KNeighborsRegressor
 
+"""
+Note:
+        each cell has 8 neighbors (nb) in 2D case: 1 at each side, 1 at each corner of the cell. In 3D, there
+        are additionally 9 neighbors of the plane above and below (in z-direction) present. The neighbors are
+        assigned in clockwise direction starting at the left neighbor. For 3D 1st neighbors in same plane are
+        assigned, then neighbors in lower plane and finally neighbors in upper plane. The indices of the
+        neighbors list refer to the corresponding neighbors as:
+
+        2D:
+            0 = left nb, 1 = upper left nb, 2 = upper nb, 3 = upper right nb, 4 = right nb, 5 = lower right nb,
+            6 = lower nb, 7 = lower left nb
+
+        additionally for 3D:
+
+            8 = left nb lower plane, 9 = upper left nb lower plane,  10 = upper nb lower plane,
+            11 = upper right nb lower plane, 12 = right nb lower plane, 13 = lower right nb lower plane,
+            14 = lower nb lower plane, 15 = lower left nb lower plane, 16 = center nb lower plane
+
+            17 = left nb upper plane, 18 = upper left nb upper plane, 19 = upper nb upper plane,
+            20 = upper right nb upper plane, 21 = right nb upper plane, 22 = lower right nb upper plane,
+            23 = lower nb upper plane, 24 = lower left nb upper plane, 25 = center nb upper plane
+           
+        for readability, actual positions (indices) are replaced with cardinal direction as:
+            n = north, e = east, s = south, w = west, l = lower plane, u = upper plane, c = center
+
+        e.g. 'swu' = south-west neighbor cell in the plane above the current cell
+"""
+# possible positions of neighbors relative to the current cell
+NB = {
+    "w": 0, "nw": 1, "n": 2, "ne": 3, "e": 4, "se": 5, "s": 6, "sw": 7,
+    "wl": 8, "nwl": 9, "nl": 10, "nel": 11, "el": 12, "sel": 13, "sl": 14, "swl": 15, "cl": 16,
+    "wu": 17, "nwu": 18, "nu": 19, "neu": 20, "eu": 21, "seu": 22, "su": 23, "swu": 24, "cu": 25
+}
+
+# positions of the children or nodes of a cell (nodes are numbered in the same way as children of a parent cell)
+CH = {"swu": 0, "nwu": 1, "neu": 2, "seu": 3, "swl": 4, "nwl": 5, "nel": 6, "sel": 7}
+
 
 class Cell(object):
     """
@@ -28,27 +65,6 @@ class Cell(object):
         :param metric: the prediction made by the KNN based on the cell centers
         :param gain: value indicating the benefit arising from refining this cell
         :param dimensions: number of physical dimensions (2D / 3D)
-
-        Note:
-                each cell has 8 neighbors (nb) in 2D case: 1 at each side, 1 at each corner of the cell. In 3D, there
-                are additionally 9 neighbors of the plane above and below (in z-direction) present. The neighbors are
-                assigned in clockwise direction starting at the left neighbor. For 3D 1st neighbors in same plane are
-                assigned, then neighbors in lower plane and finally neighbors in upper plane. The indices of the
-                neighbors list refer to the corresponding neighbors as:
-
-                2D:
-                    0 = left nb, 1 = upper left nb, 2 = upper nb, 3 = upper right nb, 4 = right nb, 5 = lower right nb,
-                    6 = lower nb, 7 = lower left nb
-
-                additionally for 3D:
-
-                    8 = left nb lower plane, 9 = upper left nb lower plane,  10 = upper nb lower plane,
-                    11 = upper right nb lower plane, 12 = right nb lower plane, 13 = lower right nb lower plane,
-                    14 = lower nb lower plane, 15 = lower left nb lower plane, 16 = center nb lower plane
-
-                    17 = left nb upper plane, 18 = upper left nb upper plane, 19 = upper nb upper plane,
-                    20 = upper right nb upper plane, 21 = right nb upper plane, 22 = lower right nb upper plane,
-                    23 = lower nb upper plane, 24 = lower left nb upper plane, 25 = center nb upper plane,
         """
         self.index = index
         self.parent = parent
@@ -424,9 +440,7 @@ class SamplingTree(object):
         else:
             # loop over all cells and check all neighbors for each cell, if invalid replace with None
             for cell in self._leaf_cells:
-                for n in range(len(self._cells[cell].nb)):
-                    if self._cells[cell].nb[n] in cells_invalid:
-                        self._cells[cell].nb[n] = None
+                self._cells[cell].nb = [None if n in cells_invalid else n for n in self._cells[cell].nb]
 
             # remove all invalid cells as leaf cells if we have any
             self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
@@ -441,32 +455,22 @@ class SamplingTree(object):
 
         :return: None
         """
-        t1 = time()
         _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
-        print("[DEBUG] dt1 = ", round(time() - t1, 6), "s")
-
-        t2 = time()
         _unique_idx = _all_idx.flatten().unique()
         _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item()+1)
 
         # get all node indices which are not used by all cells any more
         _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()
         del _unique_idx, _all_available_idx
-        print("[DEBUG] dt2 = ", round(time() - t2, 6), "s")
 
         # re-index using numba -> faster than python, and this step is computationally quite expensive
-        t3 = time()
         _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
                                                              _unused_idx, self._n_dimensions)
-        print("[DEBUG] dt3 = ", round(time() - t3, 6), "s")
-        t4 = time()
 
         # update node ID's and their coordinates
         self.face_ids = pt.from_numpy(_all_idx)
         self.all_nodes = pt.from_numpy(_unique_node_coord)
         self.all_centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
-        print("[DEBUG] dt4 =", round(time() - t4, 6), "s")
-        print("[DEBUG] dt total =", round(time() - t1, 6), "s")
 
     def _compute_cell_centers(self, idx_: int = None, factor_: float = 0.25, keep_parent_center_: bool = True,
                               cell_: Cell = None) -> pt.Tensor:
@@ -619,8 +623,6 @@ class SamplingTree(object):
 
     def _assign_neighbors(self, loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int) -> list:
         """
-        TODO: exploitation of patterns (if any) to make this more readable & efficient
-
         create a child cell from a given parent cell, assign its neighbors correctly to each child cell
 
         :param loc_center: center coordinates of the cell and its sub-cells
@@ -640,424 +642,422 @@ class SamplingTree(object):
         check = [n is not None and n.children is not None and len(n.children) == pow(2, self._n_dimensions) for n in
                  neighbors]
 
-        if check[0]:
-            cell_tmp[0].nb[0] = neighbors[0].children[3]
-            cell_tmp[0].nb[1] = neighbors[0].children[2]
-            cell_tmp[1].nb[0] = neighbors[0].children[2]
-            cell_tmp[1].nb[7] = neighbors[0].children[3]
+        if check[NB["w"]]:
+            cell_tmp[CH["swu"]].nb[NB["w"]] = neighbors[NB["w"]].children[CH["seu"]]
+            cell_tmp[CH["swu"]].nb[NB["nw"]] = neighbors[NB["w"]].children[CH["neu"]]
+            cell_tmp[CH["nwu"]].nb[NB["w"]] = neighbors[NB["w"]].children[CH["neu"]]
+            cell_tmp[CH["nwu"]].nb[NB["sw"]] = neighbors[NB["w"]].children[CH["seu"]]
         else:
-            cell_tmp[0].nb[0] = neighbors[0]
-            cell_tmp[0].nb[1] = neighbors[0]
-            cell_tmp[1].nb[0] = neighbors[0]
-            cell_tmp[1].nb[7] = neighbors[0]
+            cell_tmp[CH["swu"]].nb[NB["w"]] = neighbors[NB["w"]]
+            cell_tmp[CH["swu"]].nb[NB["nw"]] = neighbors[NB["w"]]
+            cell_tmp[CH["nwu"]].nb[NB["w"]] = neighbors[NB["w"]]
+            cell_tmp[CH["nwu"]].nb[NB["sw"]] = neighbors[NB["w"]]
 
-        if check[1]:
-            cell_tmp[1].nb[1] = neighbors[1].children[3]
+        if check[NB["nw"]]:
+            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["nw"]].children[CH["seu"]]
         else:
-            cell_tmp[1].nb[1] = neighbors[1]
+            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["nw"]]
 
-        if check[2]:
-            cell_tmp[1].nb[2] = neighbors[2].children[0]
-            cell_tmp[1].nb[3] = neighbors[2].children[3]
-            cell_tmp[1].nb[1] = neighbors[2].children[0]
-            cell_tmp[1].nb[2] = neighbors[2].children[3]
+        if check[NB["n"]]:
+            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]].children[CH["swu"]]
+            cell_tmp[CH["nwu"]].nb[NB["ne"]] = neighbors[NB["n"]].children[CH["seu"]]
+            cell_tmp[CH["nwu"]].nb[NB["nw"]] = neighbors[NB["n"]].children[CH["swu"]]
+            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]].children[CH["seu"]]
         else:
-            cell_tmp[1].nb[2] = neighbors[2]
-            cell_tmp[1].nb[3] = neighbors[2]
-            cell_tmp[2].nb[1] = neighbors[2]
-            cell_tmp[2].nb[2] = neighbors[2]
+            cell_tmp[CH["nwu"]].nb[NB["n"]] = neighbors[NB["n"]]
+            cell_tmp[CH["nwu"]].nb[NB["ne"]] = neighbors[NB["n"]]
+            cell_tmp[CH["neu"]].nb[NB["nw"]] = neighbors[NB["n"]]
+            cell_tmp[CH["neu"]].nb[NB["n"]] = neighbors[NB["n"]]
 
-        if check[3]:
-            cell_tmp[2].nb[3] = neighbors[3].children[0]
+        if check[NB["ne"]]:
+            cell_tmp[CH["neu"]].nb[NB["ne"]] = neighbors[NB["ne"]].children[CH["swu"]]
         else:
-            cell_tmp[2].nb[3] = neighbors[3]
+            cell_tmp[CH["neu"]].nb[NB["ne"]] = neighbors[NB["ne"]]
 
-        if check[4]:
-            cell_tmp[2].nb[4] = neighbors[4].children[1]
-            cell_tmp[2].nb[5] = neighbors[4].children[0]
-            cell_tmp[3].nb[3] = neighbors[4].children[1]
-            cell_tmp[3].nb[4] = neighbors[4].children[0]
+        if check[NB["e"]]:
+            cell_tmp[CH["neu"]].nb[NB["e"]] = neighbors[NB["e"]].children[CH["nwu"]]
+            cell_tmp[CH["neu"]].nb[NB["se"]] = neighbors[NB["e"]].children[CH["swu"]]
+            cell_tmp[CH["seu"]].nb[NB["ne"]] = neighbors[NB["e"]].children[CH["nwu"]]
+            cell_tmp[CH["seu"]].nb[NB["e"]] = neighbors[NB["e"]].children[CH["swu"]]
         else:
-            cell_tmp[2].nb[4] = neighbors[4]
-            cell_tmp[2].nb[5] = neighbors[5]
-            cell_tmp[3].nb[3] = neighbors[4]
-            cell_tmp[3].nb[4] = neighbors[4]
+            cell_tmp[CH["neu"]].nb[NB["e"]] = neighbors[NB["e"]]
+            cell_tmp[CH["neu"]].nb[NB["se"]] = neighbors[NB["se"]]
+            cell_tmp[CH["seu"]].nb[NB["ne"]] = neighbors[NB["e"]]
+            cell_tmp[CH["seu"]].nb[NB["e"]] = neighbors[NB["e"]]
 
-        if check[5]:
-            cell_tmp[3].nb[5] = neighbors[5].children[1]
+        if check[NB["se"]]:
+            cell_tmp[CH["seu"]].nb[NB["se"]] = neighbors[NB["se"]].children[CH["nwu"]]
         else:
-            cell_tmp[3].nb[5] = neighbors[5]
+            cell_tmp[CH["seu"]].nb[NB["se"]] = neighbors[NB["se"]]
 
-        if check[6]:
-            cell_tmp[0].nb[5] = neighbors[6].children[2]
-            cell_tmp[0].nb[6] = neighbors[6].children[1]
-            cell_tmp[3].nb[6] = neighbors[6].children[2]
-            cell_tmp[3].nb[7] = neighbors[6].children[1]
+        if check[NB["s"]]:
+            cell_tmp[CH["swu"]].nb[NB["se"]] = neighbors[NB["s"]].children[CH["neu"]]
+            cell_tmp[CH["swu"]].nb[NB["s"]] = neighbors[NB["s"]].children[CH["nwu"]]
+            cell_tmp[CH["seu"]].nb[NB["s"]] = neighbors[NB["s"]].children[CH["neu"]]
+            cell_tmp[CH["seu"]].nb[NB["sw"]] = neighbors[NB["s"]].children[CH["nwu"]]
         else:
-            cell_tmp[0].nb[5] = neighbors[6]
-            cell_tmp[0].nb[6] = neighbors[6]
-            cell_tmp[3].nb[6] = neighbors[6]
-            cell_tmp[3].nb[7] = neighbors[6]
+            cell_tmp[CH["swu"]].nb[NB["se"]] = neighbors[NB["s"]]
+            cell_tmp[CH["swu"]].nb[NB["s"]] = neighbors[NB["s"]]
+            cell_tmp[CH["seu"]].nb[NB["s"]] = neighbors[NB["s"]]
+            cell_tmp[CH["seu"]].nb[NB["sw"]] = neighbors[NB["s"]]
 
-        if check[7]:
-            cell_tmp[0].nb[7] = neighbors[7].children[2]
+        if check[NB["sw"]]:
+            cell_tmp[CH["swu"]].nb[NB["sw"]] = neighbors[NB["sw"]].children[CH["neu"]]
         else:
-            cell_tmp[0].nb[7] = neighbors[7]
+            cell_tmp[CH["swu"]].nb[NB["sw"]] = neighbors[NB["sw"]]
 
         # remaining nb
-        cell_tmp[0].nb[2] = cell_tmp[1]
-        cell_tmp[0].nb[3] = cell_tmp[2]
-        cell_tmp[0].nb[4] = cell_tmp[3]
-        cell_tmp[1].nb[4] = cell_tmp[2]
-        cell_tmp[1].nb[5] = cell_tmp[3]
-        cell_tmp[1].nb[6] = cell_tmp[0]
-        cell_tmp[2].nb[0] = cell_tmp[1]
-        cell_tmp[2].nb[6] = cell_tmp[3]
-        cell_tmp[2].nb[7] = cell_tmp[0]
-        cell_tmp[3].nb[0] = cell_tmp[0]
-        cell_tmp[3].nb[1] = cell_tmp[1]
-        cell_tmp[3].nb[2] = cell_tmp[2]
+        cell_tmp[CH["swu"]].nb[NB["n"]] = cell_tmp[CH["nwu"]]
+        cell_tmp[CH["swu"]].nb[NB["ne"]] = cell_tmp[CH["neu"]]
+        cell_tmp[CH["swu"]].nb[NB["e"]] = cell_tmp[CH["seu"]]
+        cell_tmp[CH["nwu"]].nb[NB["e"]] = cell_tmp[CH["neu"]]
+        cell_tmp[CH["nwu"]].nb[NB["se"]] = cell_tmp[CH["seu"]]
+        cell_tmp[CH["nwu"]].nb[NB["s"]] = cell_tmp[CH["swu"]]
+        cell_tmp[CH["neu"]].nb[NB["w"]] = cell_tmp[CH["nwu"]]
+        cell_tmp[CH["neu"]].nb[NB["s"]] = cell_tmp[CH["seu"]]
+        cell_tmp[CH["neu"]].nb[NB["sw"]] = cell_tmp[CH["swu"]]
+        cell_tmp[CH["seu"]].nb[NB["w"]] = cell_tmp[CH["swu"]]
+        cell_tmp[CH["seu"]].nb[NB["nw"]] = cell_tmp[CH["nwu"]]
+        cell_tmp[CH["seu"]].nb[NB["n"]] = cell_tmp[CH["neu"]]
 
         # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
         # same plane as current cell is always the same as for 2D
         if self._n_dimensions == 3:
-            # ----------------  lower left cell center, upper plane  ----------------
-            # plane under the current cell
-            if check[0]:
-                cell_tmp[0].nb[8] = neighbors[0].children[7]
-                cell_tmp[0].nb[9] = neighbors[0].children[6]
-                cell_tmp[1].nb[8] = neighbors[0].children[6]
-                cell_tmp[1].nb[15] = neighbors[0].children[7]
-                cell_tmp[4].nb[17] = neighbors[0].children[3]
-                cell_tmp[4].nb[18] = neighbors[0].children[2]
-                cell_tmp[5].nb[17] = neighbors[0].children[2]
-                cell_tmp[5].nb[24] = neighbors[0].children[3]
+            if check[NB["w"]]:
+                cell_tmp[CH["swu"]].nb[NB["wl"]] = neighbors[NB["w"]].children[CH["sel"]]
+                cell_tmp[CH["swu"]].nb[NB["nwl"]] = neighbors[NB["w"]].children[CH["nel"]]
+                cell_tmp[CH["nwu"]].nb[NB["wl"]] = neighbors[NB["w"]].children[CH["nel"]]
+                cell_tmp[CH["nwu"]].nb[NB["swl"]] = neighbors[NB["w"]].children[CH["sel"]]
+                cell_tmp[CH["swl"]].nb[NB["wu"]] = neighbors[NB["w"]].children[CH["seu"]]
+                cell_tmp[CH["swl"]].nb[NB["nwu"]] = neighbors[NB["w"]].children[CH["neu"]]
+                cell_tmp[CH["nwl"]].nb[NB["wu"]] = neighbors[NB["w"]].children[CH["neu"]]
+                cell_tmp[CH["nwl"]].nb[NB["swu"]] = neighbors[NB["w"]].children[CH["seu"]]
             else:
-                cell_tmp[0].nb[8] = neighbors[0]
-                cell_tmp[0].nb[9] = neighbors[0]
-                cell_tmp[1].nb[8] = neighbors[0]
-                cell_tmp[1].nb[15] = neighbors[0]
-                cell_tmp[4].nb[17] = neighbors[0]
-                cell_tmp[4].nb[18] = neighbors[0]
-                cell_tmp[5].nb[17] = neighbors[0]
-                cell_tmp[5].nb[24] = neighbors[0]
+                cell_tmp[CH["swu"]].nb[NB["wl"]] = neighbors[NB["w"]]
+                cell_tmp[CH["swu"]].nb[NB["nwl"]] = neighbors[NB["w"]]
+                cell_tmp[CH["nwu"]].nb[NB["wl"]] = neighbors[NB["w"]]
+                cell_tmp[CH["nwu"]].nb[NB["swl"]] = neighbors[NB["w"]]
+                cell_tmp[CH["swl"]].nb[NB["wu"]] = neighbors[NB["w"]]
+                cell_tmp[CH["swl"]].nb[NB["nwu"]] = neighbors[NB["w"]]
+                cell_tmp[CH["nwl"]].nb[NB["wu"]] = neighbors[NB["w"]]
+                cell_tmp[CH["nwl"]].nb[NB["swu"]] = neighbors[NB["w"]]
 
-            if check[1]:
-                cell_tmp[1].nb[9] = neighbors[1].children[7]
-                cell_tmp[5].nb[18] = neighbors[1].children[3]
+            if check[NB["nw"]]:
+                cell_tmp[CH["nwu"]].nb[NB["nwl"]] = neighbors[NB["nw"]].children[CH["sel"]]
+                cell_tmp[CH["nwl"]].nb[NB["nwu"]] = neighbors[NB["nw"]].children[CH["seu"]]
             else:
-                cell_tmp[1].nb[9] = neighbors[1]
-                cell_tmp[5].nb[18] = neighbors[1]
+                cell_tmp[CH["nwu"]].nb[NB["nwl"]] = neighbors[NB["nw"]]
+                cell_tmp[CH["nwl"]].nb[NB["nwu"]] = neighbors[NB["nw"]]
 
-            if check[2]:
-                cell_tmp[1].nb[10] = neighbors[2].children[4]
-                cell_tmp[1].nb[11] = neighbors[2].children[7]
-                cell_tmp[2].nb[9] = neighbors[2].children[4]
-                cell_tmp[2].nb[10] = neighbors[2].children[7]
-                cell_tmp[5].nb[19] = neighbors[2].children[0]
-                cell_tmp[5].nb[20] = neighbors[2].children[3]
-                cell_tmp[6].nb[18] = neighbors[2].children[0]
-                cell_tmp[6].nb[19] = neighbors[2].children[3]
+            if check[NB["n"]]:
+                cell_tmp[CH["nwu"]].nb[NB["nl"]] = neighbors[NB["n"]].children[CH["swl"]]
+                cell_tmp[CH["nwu"]].nb[NB["nel"]] = neighbors[NB["n"]].children[CH["sel"]]
+                cell_tmp[CH["neu"]].nb[NB["nwl"]] = neighbors[NB["n"]].children[CH["swl"]]
+                cell_tmp[CH["neu"]].nb[NB["nl"]] = neighbors[NB["n"]].children[CH["sel"]]
+                cell_tmp[CH["nwl"]].nb[NB["nu"]] = neighbors[NB["n"]].children[CH["swu"]]
+                cell_tmp[CH["nwl"]].nb[NB["neu"]] = neighbors[NB["n"]].children[CH["seu"]]
+                cell_tmp[CH["nel"]].nb[NB["nwu"]] = neighbors[NB["n"]].children[CH["swu"]]
+                cell_tmp[CH["nel"]].nb[NB["nu"]] = neighbors[NB["n"]].children[CH["seu"]]
             else:
-                cell_tmp[1].nb[10] = neighbors[2]
-                cell_tmp[1].nb[11] = neighbors[2]
-                cell_tmp[2].nb[9] = neighbors[2]
-                cell_tmp[2].nb[10] = neighbors[2]
-                cell_tmp[5].nb[19] = neighbors[2]
-                cell_tmp[5].nb[20] = neighbors[2]
-                cell_tmp[6].nb[18] = neighbors[2]
-                cell_tmp[6].nb[19] = neighbors[2]
+                cell_tmp[CH["nwu"]].nb[NB["nl"]] = neighbors[NB["n"]]
+                cell_tmp[CH["nwu"]].nb[NB["nel"]] = neighbors[NB["n"]]
+                cell_tmp[CH["neu"]].nb[NB["nwl"]] = neighbors[NB["n"]]
+                cell_tmp[CH["neu"]].nb[NB["nl"]] = neighbors[NB["n"]]
+                cell_tmp[CH["nwl"]].nb[NB["nu"]] = neighbors[NB["n"]]
+                cell_tmp[CH["nwl"]].nb[NB["neu"]] = neighbors[NB["n"]]
+                cell_tmp[CH["nel"]].nb[NB["nwu"]] = neighbors[NB["n"]]
+                cell_tmp[CH["nel"]].nb[NB["nu"]] = neighbors[NB["n"]]
 
-            if check[3]:
-                cell_tmp[2].nb[11] = neighbors[3].children[4]
-                cell_tmp[6].nb[20] = neighbors[3].children[0]
+            if check[NB["ne"]]:
+                cell_tmp[CH["neu"]].nb[NB["nel"]] = neighbors[NB["ne"]].children[CH["swl"]]
+                cell_tmp[CH["nel"]].nb[NB["neu"]] = neighbors[NB["ne"]].children[CH["swu"]]
             else:
-                cell_tmp[2].nb[11] = neighbors[3]
-                cell_tmp[6].nb[20] = neighbors[3]
+                cell_tmp[CH["neu"]].nb[NB["nel"]] = neighbors[NB["ne"]]
+                cell_tmp[CH["nel"]].nb[NB["neu"]] = neighbors[NB["ne"]]
 
-            if check[4]:
-                cell_tmp[2].nb[12] = neighbors[4].children[5]
-                cell_tmp[2].nb[13] = neighbors[4].children[4]
-                cell_tmp[3].nb[11] = neighbors[4].children[5]
-                cell_tmp[3].nb[12] = neighbors[4].children[4]
-                cell_tmp[6].nb[21] = neighbors[4].children[1]
-                cell_tmp[6].nb[22] = neighbors[4].children[0]
-                cell_tmp[7].nb[20] = neighbors[4].children[1]
-                cell_tmp[7].nb[21] = neighbors[4].children[0]
+            if check[NB["e"]]:
+                cell_tmp[CH["neu"]].nb[NB["el"]] = neighbors[NB["e"]].children[CH["nwl"]]
+                cell_tmp[CH["neu"]].nb[NB["sel"]] = neighbors[NB["e"]].children[CH["swl"]]
+                cell_tmp[CH["seu"]].nb[NB["nel"]] = neighbors[NB["e"]].children[CH["nwl"]]
+                cell_tmp[CH["seu"]].nb[NB["el"]] = neighbors[NB["e"]].children[CH["swl"]]
+                cell_tmp[CH["nel"]].nb[NB["eu"]] = neighbors[NB["e"]].children[CH["nwu"]]
+                cell_tmp[CH["nel"]].nb[NB["seu"]] = neighbors[NB["e"]].children[CH["swu"]]
+                cell_tmp[CH["sel"]].nb[NB["neu"]] = neighbors[NB["e"]].children[CH["nwu"]]
+                cell_tmp[CH["sel"]].nb[NB["eu"]] = neighbors[NB["e"]].children[CH["swu"]]
             else:
-                cell_tmp[2].nb[12] = neighbors[4]
-                cell_tmp[2].nb[13] = neighbors[4]
-                cell_tmp[3].nb[11] = neighbors[4]
-                cell_tmp[3].nb[12] = neighbors[4]
-                cell_tmp[6].nb[21] = neighbors[4]
-                cell_tmp[6].nb[22] = neighbors[4]
-                cell_tmp[7].nb[20] = neighbors[4]
-                cell_tmp[7].nb[21] = neighbors[4]
+                cell_tmp[CH["neu"]].nb[NB["el"]] = neighbors[NB["e"]]
+                cell_tmp[CH["neu"]].nb[NB["sel"]] = neighbors[NB["e"]]
+                cell_tmp[CH["seu"]].nb[NB["nel"]] = neighbors[NB["e"]]
+                cell_tmp[CH["seu"]].nb[NB["el"]] = neighbors[NB["e"]]
+                cell_tmp[CH["nel"]].nb[NB["eu"]] = neighbors[NB["e"]]
+                cell_tmp[CH["nel"]].nb[NB["seu"]] = neighbors[NB["e"]]
+                cell_tmp[CH["sel"]].nb[NB["neu"]] = neighbors[NB["e"]]
+                cell_tmp[CH["sel"]].nb[NB["eu"]] = neighbors[NB["e"]]
 
-            if check[5]:
-                cell_tmp[3].nb[13] = neighbors[5].children[5]
-                cell_tmp[7].nb[22] = neighbors[5].children[1]
+            if check[NB["se"]]:
+                cell_tmp[CH["seu"]].nb[NB["sel"]] = neighbors[NB["se"]].children[CH["nwl"]]
+                cell_tmp[CH["sel"]].nb[NB["seu"]] = neighbors[NB["se"]].children[CH["nwu"]]
             else:
-                cell_tmp[3].nb[13] = neighbors[5]
-                cell_tmp[7].nb[22] = neighbors[5]
+                cell_tmp[CH["seu"]].nb[NB["sel"]] = neighbors[NB["se"]]
+                cell_tmp[CH["sel"]].nb[NB["seu"]] = neighbors[NB["se"]]
 
-            if check[6]:
-                cell_tmp[0].nb[13] = neighbors[6].children[6]
-                cell_tmp[0].nb[14] = neighbors[6].children[5]
-                cell_tmp[3].nb[14] = neighbors[6].children[6]
-                cell_tmp[3].nb[15] = neighbors[6].children[5]
-                cell_tmp[4].nb[22] = neighbors[6].children[2]
-                cell_tmp[4].nb[23] = neighbors[6].children[1]
-                cell_tmp[7].nb[23] = neighbors[6].children[2]
-                cell_tmp[7].nb[24] = neighbors[6].children[1]
+            if check[NB["s"]]:
+                cell_tmp[CH["swu"]].nb[NB["sel"]] = neighbors[NB["s"]].children[CH["nel"]]
+                cell_tmp[CH["swu"]].nb[NB["sl"]] = neighbors[NB["s"]].children[CH["nwl"]]
+                cell_tmp[CH["seu"]].nb[NB["sl"]] = neighbors[NB["s"]].children[CH["nel"]]
+                cell_tmp[CH["seu"]].nb[NB["swl"]] = neighbors[NB["s"]].children[CH["nwl"]]
+                cell_tmp[CH["swl"]].nb[NB["seu"]] = neighbors[NB["s"]].children[CH["neu"]]
+                cell_tmp[CH["swl"]].nb[NB["su"]] = neighbors[NB["s"]].children[CH["nwu"]]
+                cell_tmp[CH["sel"]].nb[NB["su"]] = neighbors[NB["s"]].children[CH["neu"]]
+                cell_tmp[CH["sel"]].nb[NB["swu"]] = neighbors[NB["s"]].children[CH["nwu"]]
             else:
-                cell_tmp[0].nb[13] = neighbors[6]
-                cell_tmp[0].nb[14] = neighbors[6]
-                cell_tmp[3].nb[14] = neighbors[6]
-                cell_tmp[3].nb[15] = neighbors[6]
-                cell_tmp[4].nb[22] = neighbors[6]
-                cell_tmp[4].nb[23] = neighbors[6]
-                cell_tmp[7].nb[23] = neighbors[6]
-                cell_tmp[7].nb[24] = neighbors[6]
+                cell_tmp[CH["swu"]].nb[NB["sel"]] = neighbors[NB["s"]]
+                cell_tmp[CH["swu"]].nb[NB["sl"]] = neighbors[NB["s"]]
+                cell_tmp[CH["seu"]].nb[NB["sl"]] = neighbors[NB["s"]]
+                cell_tmp[CH["seu"]].nb[NB["swl"]] = neighbors[NB["s"]]
+                cell_tmp[CH["swl"]].nb[NB["seu"]] = neighbors[NB["s"]]
+                cell_tmp[CH["swl"]].nb[NB["su"]] = neighbors[NB["s"]]
+                cell_tmp[CH["sel"]].nb[NB["su"]] = neighbors[NB["s"]]
+                cell_tmp[CH["sel"]].nb[NB["swu"]] = neighbors[NB["s"]]
 
-            if check[7]:
-                cell_tmp[0].nb[15] = neighbors[7].children[6]
-                cell_tmp[4].nb[24] = neighbors[7].children[2]
+            if check[NB["sw"]]:
+                cell_tmp[CH["swu"]].nb[NB["swl"]] = neighbors[NB["sw"]].children[CH["nel"]]
+                cell_tmp[CH["swl"]].nb[NB["swu"]] = neighbors[NB["sw"]].children[CH["neu"]]
             else:
-                cell_tmp[0].nb[15] = neighbors[7]
-                cell_tmp[4].nb[24] = neighbors[7]
+                cell_tmp[CH["swu"]].nb[NB["swl"]] = neighbors[NB["sw"]]
+                cell_tmp[CH["swl"]].nb[NB["swu"]] = neighbors[NB["sw"]]
 
-            if check[8]:
-                cell_tmp[4].nb[8] = neighbors[8].children[3]
-                cell_tmp[4].nb[9] = neighbors[8].children[2]
-                cell_tmp[5].nb[8] = neighbors[8].children[2]
-                cell_tmp[5].nb[15] = neighbors[8].children[3]
+            if check[NB["wl"]]:
+                cell_tmp[CH["swl"]].nb[NB["wl"]] = neighbors[NB["wl"]].children[CH["seu"]]
+                cell_tmp[CH["swl"]].nb[NB["nwl"]] = neighbors[NB["wl"]].children[CH["neu"]]
+                cell_tmp[CH["nwl"]].nb[NB["wl"]] = neighbors[NB["wl"]].children[CH["neu"]]
+                cell_tmp[CH["nwl"]].nb[NB["swl"]] = neighbors[NB["wl"]].children[CH["seu"]]
             else:
-                cell_tmp[4].nb[8] = neighbors[8]
-                cell_tmp[4].nb[9] = neighbors[8]
-                cell_tmp[5].nb[8] = neighbors[8]
-                cell_tmp[5].nb[15] = neighbors[8]
+                cell_tmp[CH["swl"]].nb[NB["wl"]] = neighbors[NB["wl"]]
+                cell_tmp[CH["swl"]].nb[NB["nwl"]] = neighbors[NB["wl"]]
+                cell_tmp[CH["nwl"]].nb[NB["wl"]] = neighbors[NB["wl"]]
+                cell_tmp[CH["nwl"]].nb[NB["swl"]] = neighbors[NB["wl"]]
 
-            if check[9]:
-                cell_tmp[5].nb[9] = neighbors[9].children[3]
+            if check[NB["nwl"]]:
+                cell_tmp[CH["nwl"]].nb[NB["nwl"]] = neighbors[NB["nwl"]].children[CH["seu"]]
             else:
-                cell_tmp[5].nb[9] = neighbors[9]
+                cell_tmp[CH["nwl"]].nb[NB["nwl"]] = neighbors[NB["nwl"]]
 
-            if check[10]:
-                cell_tmp[5].nb[10] = neighbors[10].children[0]
-                cell_tmp[5].nb[11] = neighbors[10].children[3]
-                cell_tmp[6].nb[9] = neighbors[10].children[0]
-                cell_tmp[6].nb[10] = neighbors[10].children[3]
+            if check[NB["nl"]]:
+                cell_tmp[CH["nwl"]].nb[NB["nl"]] = neighbors[NB["nl"]].children[CH["swu"]]
+                cell_tmp[CH["nwl"]].nb[NB["nel"]] = neighbors[NB["nl"]].children[CH["seu"]]
+                cell_tmp[CH["nel"]].nb[NB["nwl"]] = neighbors[NB["nl"]].children[CH["swu"]]
+                cell_tmp[CH["nel"]].nb[NB["nl"]] = neighbors[NB["nl"]].children[CH["seu"]]
             else:
-                cell_tmp[5].nb[10] = neighbors[10]
-                cell_tmp[5].nb[11] = neighbors[10]
-                cell_tmp[6].nb[9] = neighbors[10]
-                cell_tmp[6].nb[10] = neighbors[10]
+                cell_tmp[CH["nwl"]].nb[NB["nl"]] = neighbors[NB["nl"]]
+                cell_tmp[CH["nwl"]].nb[NB["nel"]] = neighbors[NB["nl"]]
+                cell_tmp[CH["nel"]].nb[NB["nwl"]] = neighbors[NB["nl"]]
+                cell_tmp[CH["nel"]].nb[NB["nl"]] = neighbors[NB["nl"]]
 
-            if check[11]:
-                cell_tmp[6].nb[11] = neighbors[11].children[0]
+            if check[NB["nel"]]:
+                cell_tmp[CH["nel"]].nb[NB["nel"]] = neighbors[NB["nel"]].children[CH["swu"]]
             else:
-                cell_tmp[6].nb[11] = neighbors[11]
+                cell_tmp[CH["nel"]].nb[NB["nel"]] = neighbors[NB["nel"]]
 
-            if check[12]:
-                cell_tmp[6].nb[12] = neighbors[12].children[1]
-                cell_tmp[6].nb[13] = neighbors[12].children[0]
-                cell_tmp[7].nb[11] = neighbors[12].children[1]
-                cell_tmp[7].nb[12] = neighbors[12].children[0]
+            if check[NB["el"]]:
+                cell_tmp[CH["nel"]].nb[NB["el"]] = neighbors[NB["el"]].children[CH["nwu"]]
+                cell_tmp[CH["nel"]].nb[NB["sel"]] = neighbors[NB["el"]].children[CH["swu"]]
+                cell_tmp[CH["sel"]].nb[NB["nel"]] = neighbors[NB["el"]].children[CH["nwu"]]
+                cell_tmp[CH["sel"]].nb[NB["el"]] = neighbors[NB["el"]].children[CH["swu"]]
             else:
-                cell_tmp[6].nb[12] = neighbors[12]
-                cell_tmp[6].nb[13] = neighbors[12]
-                cell_tmp[7].nb[11] = neighbors[12]
-                cell_tmp[7].nb[12] = neighbors[12]
+                cell_tmp[CH["nel"]].nb[NB["el"]] = neighbors[NB["el"]]
+                cell_tmp[CH["nel"]].nb[NB["sel"]] = neighbors[NB["el"]]
+                cell_tmp[CH["sel"]].nb[NB["nel"]] = neighbors[NB["el"]]
+                cell_tmp[CH["sel"]].nb[NB["el"]] = neighbors[NB["el"]]
 
-            if check[13]:
-                cell_tmp[7].nb[13] = neighbors[13].children[1]
+            if check[NB["sel"]]:
+                cell_tmp[CH["sel"]].nb[NB["sel"]] = neighbors[NB["sel"]].children[CH["nwu"]]
             else:
-                cell_tmp[7].nb[13] = neighbors[13]
+                cell_tmp[CH["sel"]].nb[NB["sel"]] = neighbors[NB["sel"]]
 
-            if check[14]:
-                cell_tmp[4].nb[13] = neighbors[14].children[2]
-                cell_tmp[4].nb[14] = neighbors[14].children[1]
-                cell_tmp[7].nb[14] = neighbors[14].children[2]
-                cell_tmp[7].nb[15] = neighbors[14].children[1]
+            if check[NB["sl"]]:
+                cell_tmp[CH["swl"]].nb[NB["sel"]] = neighbors[NB["sl"]].children[CH["neu"]]
+                cell_tmp[CH["swl"]].nb[NB["sl"]] = neighbors[NB["sl"]].children[CH["nwu"]]
+                cell_tmp[CH["sel"]].nb[NB["sl"]] = neighbors[NB["sl"]].children[CH["neu"]]
+                cell_tmp[CH["sel"]].nb[NB["swl"]] = neighbors[NB["sl"]].children[CH["nwu"]]
             else:
-                cell_tmp[4].nb[13] = neighbors[14]
-                cell_tmp[4].nb[14] = neighbors[14]
-                cell_tmp[7].nb[14] = neighbors[14]
-                cell_tmp[7].nb[15] = neighbors[14]
+                cell_tmp[CH["swl"]].nb[NB["sel"]] = neighbors[NB["sl"]]
+                cell_tmp[CH["swl"]].nb[NB["sl"]] = neighbors[NB["sl"]]
+                cell_tmp[CH["sel"]].nb[NB["sl"]] = neighbors[NB["sl"]]
+                cell_tmp[CH["sel"]].nb[NB["swl"]] = neighbors[NB["sl"]]
 
-            if check[15]:
-                cell_tmp[4].nb[15] = neighbors[15].children[2]
+            if check[NB["swl"]]:
+                cell_tmp[CH["swl"]].nb[NB["swl"]] = neighbors[NB["swl"]].children[CH["neu"]]
             else:
-                cell_tmp[4].nb[15] = neighbors[15]
+                cell_tmp[CH["swl"]].nb[NB["swl"]] = neighbors[NB["swl"]]
 
-            if check[16]:
-                cell_tmp[4].nb[10] = neighbors[16].children[1]
-                cell_tmp[4].nb[11] = neighbors[16].children[2]
-                cell_tmp[4].nb[12] = neighbors[16].children[3]
-                cell_tmp[4].nb[16] = neighbors[16].children[0]
-                cell_tmp[5].nb[12] = neighbors[16].children[2]
-                cell_tmp[5].nb[13] = neighbors[16].children[3]
-                cell_tmp[5].nb[14] = neighbors[16].children[0]
-                cell_tmp[5].nb[16] = neighbors[16].children[1]
-                cell_tmp[6].nb[8] = neighbors[16].children[1]
-                cell_tmp[6].nb[14] = neighbors[16].children[3]
-                cell_tmp[6].nb[15] = neighbors[16].children[0]
-                cell_tmp[6].nb[16] = neighbors[16].children[2]
-                cell_tmp[7].nb[8] = neighbors[16].children[0]
-                cell_tmp[7].nb[9] = neighbors[16].children[1]
-                cell_tmp[7].nb[10] = neighbors[16].children[2]
-                cell_tmp[7].nb[16] = neighbors[16].children[3]
+            if check[NB["cl"]]:
+                cell_tmp[CH["swl"]].nb[NB["nl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
+                cell_tmp[CH["swl"]].nb[NB["nel"]] = neighbors[NB["cl"]].children[CH["neu"]]
+                cell_tmp[CH["swl"]].nb[NB["el"]] = neighbors[NB["cl"]].children[CH["seu"]]
+                cell_tmp[CH["swl"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["swu"]]
+                cell_tmp[CH["nwl"]].nb[NB["el"]] = neighbors[NB["cl"]].children[CH["neu"]]
+                cell_tmp[CH["nwl"]].nb[NB["sel"]] = neighbors[NB["cl"]].children[CH["seu"]]
+                cell_tmp[CH["nwl"]].nb[NB["sl"]] = neighbors[NB["cl"]].children[CH["swu"]]
+                cell_tmp[CH["nwl"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
+                cell_tmp[CH["nel"]].nb[NB["wl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
+                cell_tmp[CH["nel"]].nb[NB["sl"]] = neighbors[NB["cl"]].children[CH["seu"]]
+                cell_tmp[CH["nel"]].nb[NB["swl"]] = neighbors[NB["cl"]].children[CH["swu"]]
+                cell_tmp[CH["nel"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["neu"]]
+                cell_tmp[CH["sel"]].nb[NB["wl"]] = neighbors[NB["cl"]].children[CH["swu"]]
+                cell_tmp[CH["sel"]].nb[NB["nwl"]] = neighbors[NB["cl"]].children[CH["nwu"]]
+                cell_tmp[CH["sel"]].nb[NB["nl"]] = neighbors[NB["cl"]].children[CH["neu"]]
+                cell_tmp[CH["sel"]].nb[NB["cl"]] = neighbors[NB["cl"]].children[CH["seu"]]
             else:
-                cell_tmp[4].nb[10] = neighbors[16]
-                cell_tmp[4].nb[11] = neighbors[16]
-                cell_tmp[4].nb[12] = neighbors[16]
-                cell_tmp[4].nb[16] = neighbors[16]
-                cell_tmp[5].nb[12] = neighbors[16]
-                cell_tmp[5].nb[13] = neighbors[16]
-                cell_tmp[5].nb[14] = neighbors[16]
-                cell_tmp[5].nb[16] = neighbors[16]
-                cell_tmp[6].nb[8] = neighbors[16]
-                cell_tmp[6].nb[14] = neighbors[16]
-                cell_tmp[6].nb[15] = neighbors[16]
-                cell_tmp[6].nb[16] = neighbors[16]
-                cell_tmp[7].nb[8] = neighbors[16]
-                cell_tmp[7].nb[9] = neighbors[16]
-                cell_tmp[7].nb[10] = neighbors[16]
-                cell_tmp[7].nb[16] = neighbors[16]
+                cell_tmp[CH["swl"]].nb[NB["nl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["swl"]].nb[NB["nel"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["swl"]].nb[NB["el"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["swl"]].nb[NB["cl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nwl"]].nb[NB["el"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nwl"]].nb[NB["sel"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nwl"]].nb[NB["sl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nwl"]].nb[NB["cl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nel"]].nb[NB["wl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nel"]].nb[NB["sl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nel"]].nb[NB["swl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["nel"]].nb[NB["cl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["sel"]].nb[NB["wl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["sel"]].nb[NB["nwl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["sel"]].nb[NB["nl"]] = neighbors[NB["cl"]]
+                cell_tmp[CH["sel"]].nb[NB["cl"]] = neighbors[NB["cl"]]
 
-            if check[17]:
-                cell_tmp[0].nb[17] = neighbors[17].children[7]
-                cell_tmp[0].nb[18] = neighbors[17].children[6]
-                cell_tmp[1].nb[17] = neighbors[17].children[6]
-                cell_tmp[1].nb[24] = neighbors[17].children[7]
+            if check[NB["wu"]]:
+                cell_tmp[CH["swu"]].nb[NB["wu"]] = neighbors[NB["wu"]].children[CH["sel"]]
+                cell_tmp[CH["swu"]].nb[NB["nwu"]] = neighbors[NB["wu"]].children[CH["nel"]]
+                cell_tmp[CH["nwu"]].nb[NB["wu"]] = neighbors[NB["wu"]].children[CH["nel"]]
+                cell_tmp[CH["nwu"]].nb[NB["swu"]] = neighbors[NB["wu"]].children[CH["sel"]]
             else:
-                cell_tmp[0].nb[17] = neighbors[17]
-                cell_tmp[0].nb[18] = neighbors[17]
-                cell_tmp[1].nb[17] = neighbors[17]
-                cell_tmp[1].nb[24] = neighbors[17]
+                cell_tmp[CH["swu"]].nb[NB["wu"]] = neighbors[NB["wu"]]
+                cell_tmp[CH["swu"]].nb[NB["nwu"]] = neighbors[NB["wu"]]
+                cell_tmp[CH["nwu"]].nb[NB["wu"]] = neighbors[NB["wu"]]
+                cell_tmp[CH["nwu"]].nb[NB["swu"]] = neighbors[NB["wu"]]
 
-            if check[18]:
-                cell_tmp[1].nb[18] = neighbors[18].children[7]
+            if check[NB["nwu"]]:
+                cell_tmp[CH["nwu"]].nb[NB["nwu"]] = neighbors[NB["nwu"]].children[CH["sel"]]
             else:
-                cell_tmp[1].nb[18] = neighbors[18]
+                cell_tmp[CH["nwu"]].nb[NB["nwu"]] = neighbors[NB["nwu"]]
 
-            if check[19]:
-                cell_tmp[1].nb[19] = neighbors[19].children[4]
-                cell_tmp[1].nb[20] = neighbors[19].children[5]
-                cell_tmp[2].nb[18] = neighbors[19].children[4]
-                cell_tmp[2].nb[19] = neighbors[19].children[7]
+            if check[NB["nu"]]:
+                cell_tmp[CH["nwu"]].nb[NB["nu"]] = neighbors[NB["nu"]].children[CH["swl"]]
+                cell_tmp[CH["nwu"]].nb[NB["neu"]] = neighbors[NB["nu"]].children[CH["nwl"]]
+                cell_tmp[CH["neu"]].nb[NB["nwu"]] = neighbors[NB["nu"]].children[CH["swl"]]
+                cell_tmp[CH["neu"]].nb[NB["nu"]] = neighbors[NB["nu"]].children[CH["sel"]]
             else:
-                cell_tmp[1].nb[19] = neighbors[19]
-                cell_tmp[1].nb[20] = neighbors[19]
-                cell_tmp[2].nb[18] = neighbors[19]
-                cell_tmp[2].nb[19] = neighbors[19]
+                cell_tmp[CH["nwu"]].nb[NB["nu"]] = neighbors[NB["nu"]]
+                cell_tmp[CH["nwu"]].nb[NB["neu"]] = neighbors[NB["nu"]]
+                cell_tmp[CH["neu"]].nb[NB["nwu"]] = neighbors[NB["nu"]]
+                cell_tmp[CH["neu"]].nb[NB["nu"]] = neighbors[NB["nu"]]
 
-            if check[20]:
-                cell_tmp[2].nb[20] = neighbors[20].children[4]
+            if check[NB["neu"]]:
+                cell_tmp[CH["neu"]].nb[NB["neu"]] = neighbors[NB["neu"]].children[CH["swl"]]
             else:
-                cell_tmp[2].nb[20] = neighbors[20]
+                cell_tmp[CH["neu"]].nb[NB["neu"]] = neighbors[NB["neu"]]
 
-            if check[21]:
-                cell_tmp[2].nb[21] = neighbors[21].children[5]
-                cell_tmp[2].nb[22] = neighbors[21].children[4]
-                cell_tmp[3].nb[20] = neighbors[21].children[5]
-                cell_tmp[3].nb[21] = neighbors[21].children[4]
+            if check[NB["eu"]]:
+                cell_tmp[CH["neu"]].nb[NB["eu"]] = neighbors[NB["eu"]].children[CH["nwl"]]
+                cell_tmp[CH["neu"]].nb[NB["seu"]] = neighbors[NB["eu"]].children[CH["swl"]]
+                cell_tmp[CH["seu"]].nb[NB["neu"]] = neighbors[NB["eu"]].children[CH["nwl"]]
+                cell_tmp[CH["seu"]].nb[NB["eu"]] = neighbors[NB["eu"]].children[CH["swl"]]
             else:
-                cell_tmp[2].nb[21] = neighbors[21]
-                cell_tmp[2].nb[22] = neighbors[21]
-                cell_tmp[3].nb[20] = neighbors[21]
-                cell_tmp[3].nb[21] = neighbors[21]
+                cell_tmp[CH["neu"]].nb[NB["eu"]] = neighbors[NB["eu"]]
+                cell_tmp[CH["neu"]].nb[NB["seu"]] = neighbors[NB["eu"]]
+                cell_tmp[CH["seu"]].nb[NB["neu"]] = neighbors[NB["eu"]]
+                cell_tmp[CH["seu"]].nb[NB["eu"]] = neighbors[NB["eu"]]
 
-            if check[22]:
-                cell_tmp[3].nb[22] = neighbors[22].children[5]
+            if check[NB["seu"]]:
+                cell_tmp[CH["seu"]].nb[NB["seu"]] = neighbors[NB["seu"]].children[CH["nwl"]]
             else:
-                cell_tmp[3].nb[22] = neighbors[22]
+                cell_tmp[CH["seu"]].nb[NB["seu"]] = neighbors[NB["seu"]]
 
-            if check[23]:
-                cell_tmp[0].nb[22] = neighbors[23].children[6]
-                cell_tmp[0].nb[23] = neighbors[23].children[5]
-                cell_tmp[3].nb[23] = neighbors[23].children[6]
-                cell_tmp[3].nb[24] = neighbors[23].children[5]
+            if check[NB["su"]]:
+                cell_tmp[CH["swu"]].nb[NB["seu"]] = neighbors[NB["su"]].children[CH["nel"]]
+                cell_tmp[CH["swu"]].nb[NB["su"]] = neighbors[NB["su"]].children[CH["nwl"]]
+                cell_tmp[CH["seu"]].nb[NB["su"]] = neighbors[NB["su"]].children[CH["nel"]]
+                cell_tmp[CH["seu"]].nb[NB["swu"]] = neighbors[NB["su"]].children[CH["nwl"]]
             else:
-                cell_tmp[0].nb[22] = neighbors[23]
-                cell_tmp[0].nb[23] = neighbors[23]
-                cell_tmp[3].nb[23] = neighbors[23]
-                cell_tmp[3].nb[24] = neighbors[23]
+                cell_tmp[CH["swu"]].nb[NB["seu"]] = neighbors[NB["su"]]
+                cell_tmp[CH["swu"]].nb[NB["su"]] = neighbors[NB["su"]]
+                cell_tmp[CH["seu"]].nb[NB["su"]] = neighbors[NB["su"]]
+                cell_tmp[CH["seu"]].nb[NB["swu"]] = neighbors[NB["su"]]
 
-            if check[24]:
-                cell_tmp[0].nb[24] = neighbors[24].children[6]
+            if check[NB["swu"]]:
+                cell_tmp[CH["swu"]].nb[NB["swu"]] = neighbors[NB["swu"]].children[CH["nel"]]
             else:
-                cell_tmp[0].nb[24] = neighbors[24]
+                cell_tmp[CH["swu"]].nb[NB["swu"]] = neighbors[NB["swu"]]
 
-            if check[25]:
-                cell_tmp[0].nb[19] = neighbors[25].children[5]
-                cell_tmp[0].nb[20] = neighbors[25].children[6]
-                cell_tmp[0].nb[21] = neighbors[25].children[7]
-                cell_tmp[0].nb[25] = neighbors[25].children[4]
-                cell_tmp[1].nb[21] = neighbors[25].children[6]
-                cell_tmp[1].nb[22] = neighbors[25].children[7]
-                cell_tmp[1].nb[23] = neighbors[25].children[4]
-                cell_tmp[1].nb[25] = neighbors[25].children[5]
-                cell_tmp[2].nb[17] = neighbors[25].children[5]
-                cell_tmp[2].nb[23] = neighbors[25].children[7]
-                cell_tmp[2].nb[24] = neighbors[25].children[4]
-                cell_tmp[2].nb[25] = neighbors[25].children[6]
-                cell_tmp[3].nb[17] = neighbors[25].children[4]
-                cell_tmp[3].nb[18] = neighbors[25].children[5]
-                cell_tmp[3].nb[19] = neighbors[25].children[6]
-                cell_tmp[3].nb[25] = neighbors[25].children[7]
+            if check[NB["cu"]]:
+                cell_tmp[CH["swu"]].nb[NB["nu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
+                cell_tmp[CH["swu"]].nb[NB["neu"]] = neighbors[NB["cu"]].children[CH["nel"]]
+                cell_tmp[CH["swu"]].nb[NB["eu"]] = neighbors[NB["cu"]].children[CH["sel"]]
+                cell_tmp[CH["swu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["swl"]]
+                cell_tmp[CH["nwu"]].nb[NB["eu"]] = neighbors[NB["cu"]].children[CH["nel"]]
+                cell_tmp[CH["nwu"]].nb[NB["seu"]] = neighbors[NB["cu"]].children[CH["sel"]]
+                cell_tmp[CH["nwu"]].nb[NB["su"]] = neighbors[NB["cu"]].children[CH["swl"]]
+                cell_tmp[CH["nwu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
+                cell_tmp[CH["neu"]].nb[NB["wu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
+                cell_tmp[CH["neu"]].nb[NB["su"]] = neighbors[NB["cu"]].children[CH["sel"]]
+                cell_tmp[CH["neu"]].nb[NB["swu"]] = neighbors[NB["cu"]].children[CH["swl"]]
+                cell_tmp[CH["neu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["nel"]]
+                cell_tmp[CH["seu"]].nb[NB["wu"]] = neighbors[NB["cu"]].children[CH["swl"]]
+                cell_tmp[CH["seu"]].nb[NB["nwu"]] = neighbors[NB["cu"]].children[CH["nwl"]]
+                cell_tmp[CH["seu"]].nb[NB["nu"]] = neighbors[NB["cu"]].children[CH["nel"]]
+                cell_tmp[CH["seu"]].nb[NB["cu"]] = neighbors[NB["cu"]].children[CH["sel"]]
             else:
-                cell_tmp[0].nb[19] = neighbors[25]
-                cell_tmp[0].nb[20] = neighbors[25]
-                cell_tmp[0].nb[21] = neighbors[25]
-                cell_tmp[0].nb[25] = neighbors[25]
-                cell_tmp[1].nb[21] = neighbors[25]
-                cell_tmp[1].nb[22] = neighbors[25]
-                cell_tmp[1].nb[23] = neighbors[25]
-                cell_tmp[1].nb[25] = neighbors[25]
-                cell_tmp[2].nb[17] = neighbors[25]
-                cell_tmp[2].nb[23] = neighbors[25]
-                cell_tmp[2].nb[24] = neighbors[25]
-                cell_tmp[2].nb[25] = neighbors[25]
-                cell_tmp[3].nb[17] = neighbors[25]
-                cell_tmp[3].nb[18] = neighbors[25]
-                cell_tmp[3].nb[19] = neighbors[25]
-                cell_tmp[3].nb[25] = neighbors[25]
+                cell_tmp[CH["swu"]].nb[NB["nu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["swu"]].nb[NB["neu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["swu"]].nb[NB["eu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["swu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["nwu"]].nb[NB["eu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["nwu"]].nb[NB["seu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["nwu"]].nb[NB["su"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["nwu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["neu"]].nb[NB["wu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["neu"]].nb[NB["su"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["neu"]].nb[NB["swu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["neu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["seu"]].nb[NB["wu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["seu"]].nb[NB["nwu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["seu"]].nb[NB["nu"]] = neighbors[NB["cu"]]
+                cell_tmp[CH["seu"]].nb[NB["cu"]] = neighbors[NB["cu"]]
 
             # add the remaining nb
-            cell_tmp[0].nb[10] = cell_tmp[5]
-            cell_tmp[0].nb[11] = cell_tmp[6]
-            cell_tmp[0].nb[12] = cell_tmp[7]
-            cell_tmp[0].nb[16] = cell_tmp[4]
-            cell_tmp[1].nb[12] = cell_tmp[6]
-            cell_tmp[1].nb[13] = cell_tmp[7]
-            cell_tmp[1].nb[14] = cell_tmp[0]
-            cell_tmp[1].nb[16] = cell_tmp[5]
-            cell_tmp[2].nb[8] = cell_tmp[5]
-            cell_tmp[2].nb[14] = cell_tmp[7]
-            cell_tmp[2].nb[15] = cell_tmp[4]
-            cell_tmp[2].nb[16] = cell_tmp[6]
-            cell_tmp[3].nb[8] = cell_tmp[4]
-            cell_tmp[3].nb[9] = cell_tmp[5]
-            cell_tmp[3].nb[10] = cell_tmp[6]
-            cell_tmp[3].nb[16] = cell_tmp[7]
-            cell_tmp[4].nb[19] = cell_tmp[1]
-            cell_tmp[4].nb[20] = cell_tmp[2]
-            cell_tmp[4].nb[21] = cell_tmp[3]
-            cell_tmp[4].nb[25] = cell_tmp[0]
-            cell_tmp[5].nb[21] = cell_tmp[2]
-            cell_tmp[5].nb[22] = cell_tmp[3]
-            cell_tmp[5].nb[23] = cell_tmp[0]
-            cell_tmp[5].nb[25] = cell_tmp[1]
-            cell_tmp[6].nb[17] = cell_tmp[1]
-            cell_tmp[6].nb[23] = cell_tmp[3]
-            cell_tmp[6].nb[24] = cell_tmp[0]
-            cell_tmp[6].nb[25] = cell_tmp[2]
-            cell_tmp[7].nb[17] = cell_tmp[0]
-            cell_tmp[7].nb[18] = cell_tmp[1]
-            cell_tmp[7].nb[19] = cell_tmp[2]
-            cell_tmp[7].nb[25] = cell_tmp[3]
+            cell_tmp[CH["swu"]].nb[NB["nl"]] = cell_tmp[CH["nwl"]]
+            cell_tmp[CH["swu"]].nb[NB["nel"]] = cell_tmp[CH["nel"]]
+            cell_tmp[CH["swu"]].nb[NB["el"]] = cell_tmp[CH["sel"]]
+            cell_tmp[CH["swu"]].nb[NB["cl"]] = cell_tmp[CH["swl"]]
+            cell_tmp[CH["nwu"]].nb[NB["el"]] = cell_tmp[CH["nel"]]
+            cell_tmp[CH["nwu"]].nb[NB["sel"]] = cell_tmp[CH["sel"]]
+            cell_tmp[CH["nwu"]].nb[NB["sl"]] = cell_tmp[CH["swu"]]
+            cell_tmp[CH["nwu"]].nb[NB["cl"]] = cell_tmp[CH["nwl"]]
+            cell_tmp[CH["neu"]].nb[NB["wl"]] = cell_tmp[CH["nwl"]]
+            cell_tmp[CH["neu"]].nb[NB["sl"]] = cell_tmp[CH["sel"]]
+            cell_tmp[CH["neu"]].nb[NB["swl"]] = cell_tmp[CH["swl"]]
+            cell_tmp[CH["neu"]].nb[NB["cl"]] = cell_tmp[CH["nel"]]
+            cell_tmp[CH["seu"]].nb[NB["wl"]] = cell_tmp[CH["swl"]]
+            cell_tmp[CH["seu"]].nb[NB["nwl"]] = cell_tmp[CH["nwl"]]
+            cell_tmp[CH["seu"]].nb[NB["nl"]] = cell_tmp[CH["nel"]]
+            cell_tmp[CH["seu"]].nb[NB["cl"]] = cell_tmp[CH["sel"]]
+            cell_tmp[CH["swl"]].nb[NB["nu"]] = cell_tmp[CH["nwu"]]
+            cell_tmp[CH["swl"]].nb[NB["neu"]] = cell_tmp[CH["neu"]]
+            cell_tmp[CH["swl"]].nb[NB["eu"]] = cell_tmp[CH["seu"]]
+            cell_tmp[CH["swl"]].nb[NB["cu"]] = cell_tmp[CH["swu"]]
+            cell_tmp[CH["nwl"]].nb[NB["eu"]] = cell_tmp[CH["neu"]]
+            cell_tmp[CH["nwl"]].nb[NB["seu"]] = cell_tmp[CH["seu"]]
+            cell_tmp[CH["nwl"]].nb[NB["su"]] = cell_tmp[CH["swu"]]
+            cell_tmp[CH["nwl"]].nb[NB["cu"]] = cell_tmp[CH["nwu"]]
+            cell_tmp[CH["nel"]].nb[NB["wu"]] = cell_tmp[CH["nwu"]]
+            cell_tmp[CH["nel"]].nb[NB["su"]] = cell_tmp[CH["seu"]]
+            cell_tmp[CH["nel"]].nb[NB["swu"]] = cell_tmp[CH["swu"]]
+            cell_tmp[CH["nel"]].nb[NB["cu"]] = cell_tmp[CH["neu"]]
+            cell_tmp[CH["sel"]].nb[NB["wu"]] = cell_tmp[CH["swu"]]
+            cell_tmp[CH["sel"]].nb[NB["nwu"]] = cell_tmp[CH["nwu"]]
+            cell_tmp[CH["sel"]].nb[NB["nu"]] = cell_tmp[CH["neu"]]
+            cell_tmp[CH["sel"]].nb[NB["cu"]] = cell_tmp[CH["seu"]]
 
         return cell_tmp
 
@@ -1070,8 +1070,6 @@ class SamplingTree(object):
         :param cells: Tuple containing the child cells
         :return: None
         """
-        # TODO: documentation of this method & make more efficient
-
         for i in range(len(cells)):
             # add the cell center to the set containing all centers -> ensuring that order of nodes and centers is
             # consistent
@@ -1091,321 +1089,321 @@ class SamplingTree(object):
             if self._n_dimensions == 2:
                 if i == 0:
                     # left nb
-                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
-                        cells[i].node_idx[1] = cells[i].parent.nb[0].children[3].node_idx[2]
+                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["nwu"]] = cells[i].parent.nb[NB["w"]].children[CH["seu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[1, :])
-                        cells[i].node_idx[1] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nwu"]] = len(self.all_nodes) - 1
 
                     # lower nb
-                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
-                        cells[i].node_idx[3] = cells[i].parent.nb[6].children[1].node_idx[2]
+                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["s"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[3, :])
-                        cells[i].node_idx[3] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
 
                     # the remaining node in the center off all children
                     self.all_nodes.append(nodes[2, :])
-                    cells[i].node_idx[2] = len(self.all_nodes) - 1
+                    cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
 
                 elif i == 1:
                     # upper nb
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
-                        cells[i].node_idx[2] = cells[i].parent.nb[2].children[0].node_idx[3]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["neu"]] = cells[i].parent.nb[NB["n"]].children[CH["swu"]].node_idx[CH["seu"]]
                     else:
                         self.all_nodes.append(nodes[2, :])
-                        cells[i].node_idx[2] = len(self.all_nodes) - 1
-                    cells[i].node_idx[0] = cells[0].node_idx[1]
-                    cells[i].node_idx[3] = cells[0].node_idx[2]
+                        cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["nwu"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
 
                 elif i == 2:
                     # right nb
-                    if self.check_nb_node(cells[i], child_no=1, nb_no=4):
-                        cells[i].node_idx[3] = cells[i].parent.nb[4].children[1].node_idx[0]
+                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["e"]].children[CH["nwu"]].node_idx[CH["swu"]]
                     else:
                         self.all_nodes.append(nodes[3, :])
-                        cells[i].node_idx[3] = len(self.all_nodes) - 1
-                    cells[i].node_idx[0] = cells[0].node_idx[2]
-                    cells[i].node_idx[1] = cells[1].node_idx[2]
+                        cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["nwu"]].node_idx[CH["neu"]]
 
                 elif i == 3:
                     # all new nodes are already introduced
-                    cells[i].node_idx[0] = cells[0].node_idx[3]
-                    cells[i].node_idx[1] = cells[0].node_idx[2]
-                    cells[i].node_idx[2] = cells[2].node_idx[3]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["seu"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["neu"]].node_idx[CH["seu"]]
 
             else:
                 # child no. 0: new nodes 1, 2, 3, 4, 5, 6, 7 remain to add
                 if i == 0:
                     # check left nb (same plane) if node 1 is present
-                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
-                        cells[i].node_idx[1] = cells[i].parent.nb[0].children[3].node_idx[2]
+                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["nwu"]] = cells[i].parent.nb[NB["w"]].children[CH["seu"]].node_idx[CH["neu"]]
                     # check left nb (upper plane) if node 1 is present
-                    elif self.check_nb_node(cells[i], child_no=7, nb_no=17):
-                        cells[i].node_idx[1] = cells[i].parent.nb[17].children[7].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["wu"]):
+                        cells[i].node_idx[CH["nwu"]] = cells[i].parent.nb[NB["wu"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # check nb above current cell (upper plane) if node 1 is present
-                    elif self.check_nb_node(cells[i], child_no=4, nb_no=25):
-                        cells[i].node_idx[1] = cells[i].parent.nb[25].children[4].node_idx[5]
+                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                        cells[i].node_idx[CH["nwu"]] = cells[i].parent.nb[NB["cu"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[1, :])
-                        cells[i].node_idx[1] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nwu"]] = len(self.all_nodes) - 1
 
                     # check nb above current cell (upper plane) if node 2 is present
-                    if self.check_nb_node(cells[i], child_no=4, nb_no=25):
-                        cells[i].node_idx[2] = cells[i].parent.nb[25].children[4].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                        cells[i].node_idx[CH["neu"]] = cells[i].parent.nb[NB["cu"]].children[CH["swl"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[2, :])
-                        cells[i].node_idx[2] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 3 is present
-                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
-                        cells[i].node_idx[3] = cells[i].parent.nb[6].children[1].node_idx[2]
+                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["s"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # check lower nb (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=5, nb_no=23):
-                        cells[i].node_idx[3] = cells[i].parent.nb[23].children[5].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["su"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["su"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # check nb above current cell (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=4, nb_no=25):
-                        cells[i].node_idx[3] = cells[i].parent.nb[25].children[4].node_idx[7]
+                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["cu"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[3, :])
-                        cells[i].node_idx[3] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
 
                     # check left nb (same plane) if node 4 is present
-                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
-                        cells[i].node_idx[4] = cells[i].parent.nb[0].children[3].node_idx[7]
+                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["swl"]] = cells[i].parent.nb[NB["w"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # check lower left corner nb (same plane) if node 4 is present
-                    elif self.check_nb_node(cells[i], child_no=2, nb_no=7):
-                        cells[i].node_idx[4] = cells[i].parent.nb[7].children[2].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["sw"]):
+                        cells[i].node_idx[CH["swl"]] = cells[i].parent.nb[NB["sw"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # check lower nb (same plane) if node 4 is present
-                    elif self.check_nb_node(cells[i], child_no=1, nb_no=6):
-                        cells[i].node_idx[4] = cells[i].parent.nb[6].children[1].node_idx[5]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["swl"]] = cells[i].parent.nb[NB["s"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[4, :])
-                        cells[i].node_idx[4] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["swl"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=3, nb_no=0):
-                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[3].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["w"]].children[CH["seu"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[5, :])
-                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nwl"]] = len(self.all_nodes) - 1
 
                     # node no. 6 is in center of all child cells, this node can't exist in other nb
                     self.all_nodes.append(nodes[6, :])
-                    cells[i].node_idx[6] = len(self.all_nodes) - 1
+                    cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=1, nb_no=6):
-                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[1].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["s"]].children[CH["nwu"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[7, :])
-                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["sel"]] = len(self.all_nodes) - 1
 
                 elif i == 1:
                     # child no. 1: new nodes 2, 5, 6 remain to add
                     # check upper nb (same plane) if node 2 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
-                        cells[i].node_idx[2] = cells[i].parent.nb[2].children[0].node_idx[3]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["neu"]] = cells[i].parent.nb[NB["n"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # check upper nb (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=4, nb_no=19):
-                        cells[i].node_idx[2] = cells[i].parent.nb[19].children[4].node_idx[7]
+                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["nu"]):
+                        cells[i].node_idx[CH["neu"]] = cells[i].parent.nb[NB["nu"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # check nb above current cell (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=5, nb_no=25):
-                        cells[i].node_idx[2] = cells[i].parent.nb[25].children[5].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["cu"]):
+                        cells[i].node_idx[CH["neu"]] = cells[i].parent.nb[NB["cu"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[2, :])
-                        cells[i].node_idx[2] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
 
                     # check left nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=2, nb_no=0):
-                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[2].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["w"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # check upper left corner nb (same plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=3, nb_no=1):
-                        cells[i].node_idx[5] = cells[i].parent.nb[1].children[3].node_idx[7]
+                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["nw"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["nw"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # check upper nb (same plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=2):
-                        cells[i].node_idx[5] = cells[i].parent.nb[2].children[0].node_idx[4]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["n"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[5, :])
-                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nwl"]] = len(self.all_nodes) - 1
 
                     # check upper nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=2):
-                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[0].node_idx[7]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["n"]].children[CH["swu"]].node_idx[CH["sel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[6, :])
-                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[0].node_idx[1]
-                    cells[i].node_idx[3] = cells[0].node_idx[2]
-                    cells[i].node_idx[4] = cells[0].node_idx[5]
-                    cells[i].node_idx[7] = cells[0].node_idx[6]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["nwu"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["swu"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["sel"]] = cells[CH["swu"]].node_idx[CH["nel"]]
                 elif i == 2:
                     # child no. 2: new nodes 3, 6, 7 remain to add
                     # check right nb (same plane) if node 3 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
-                        cells[i].node_idx[3] = cells[i].parent.nb[4].children[0].node_idx[1]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["e"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # check right nb (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=4, nb_no=21):
-                        cells[i].node_idx[3] = cells[i].parent.nb[21].children[4].node_idx[5]
+                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["eu"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["eu"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # check nb above current cell (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=7, nb_no=25):
-                        cells[i].node_idx[3] = cells[i].parent.nb[25].children[7].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["cu"]):
+                        cells[i].node_idx[CH["seu"]] = cells[i].parent.nb[NB["cu"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[3, :])
-                        cells[i].node_idx[3] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
 
                     # check right nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=1, nb_no=4):
-                        cells[i].node_idx[6] = cells[i].parent.nb[4].children[1].node_idx[5]
+                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["e"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # check upper right corner nb (same plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=3):
-                        cells[i].node_idx[6] = cells[i].parent.nb[3].children[0].node_idx[4]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["ne"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["ne"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # check upper nb (same plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=3, nb_no=2):
-                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[3].node_idx[7]
+                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["n"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[6, :])
-                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
-                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[0].node_idx[5]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["e"]].children[CH["swu"]].node_idx[CH["nwl"]]
                     else:
                         self.all_nodes.append(nodes[7, :])
-                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["sel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[0].node_idx[2]
-                    cells[i].node_idx[1] = cells[1].node_idx[2]
-                    cells[i].node_idx[4] = cells[0].node_idx[6]
-                    cells[i].node_idx[5] = cells[1].node_idx[6]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["nwu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["swu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["nwl"]] = cells[CH["nwu"]].node_idx[CH["nel"]]
                 elif i == 3:
                     # child no. 3: new nodes 7 remain to add
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=4):
-                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[0].node_idx[4]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["e"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # check lower right corner nb (same plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=1, nb_no=5):
-                        cells[i].node_idx[7] = cells[i].parent.nb[5].children[1].node_idx[5]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["se"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["se"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # check lower nb (same plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=2, nb_no=6):
-                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[2].node_idx[6]
+                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["s"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[7, :])
-                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["sel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[0].node_idx[3]
-                    cells[i].node_idx[1] = cells[0].node_idx[2]
-                    cells[i].node_idx[2] = cells[2].node_idx[3]
-                    cells[i].node_idx[4] = cells[0].node_idx[7]
-                    cells[i].node_idx[5] = cells[0].node_idx[6]
-                    cells[i].node_idx[6] = cells[2].node_idx[7]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["seu"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["swu"]].node_idx[CH["neu"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["neu"]].node_idx[CH["seu"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["swu"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["nwl"]] = cells[CH["swu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["nel"]] = cells[CH["neu"]].node_idx[CH["sel"]]
                 elif i == 4:
                     # child no. 4: new nodes 5, 6, 7 remain to add
                     # check left nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=7, nb_no=0):
-                        cells[i].node_idx[5] = cells[i].parent.nb[0].children[7].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["w"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["w"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # check left nb (lower plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=3, nb_no=8):
-                        cells[i].node_idx[5] = cells[i].parent.nb[8].children[3].node_idx[2]
+                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["wl"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["wl"]].children[CH["seu"]].node_idx[CH["neu"]]
                     # check nb below current cell (lower plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=16):
-                        cells[i].node_idx[5] = cells[i].parent.nb[16].children[0].node_idx[1]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                        cells[i].node_idx[CH["nwl"]] = cells[i].parent.nb[NB["cl"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[5, :])
-                        cells[i].node_idx[5] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nwl"]] = len(self.all_nodes) - 1
 
                     # check nb below current cell (lower plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=0, nb_no=16):
-                        cells[i].node_idx[6] = cells[i].parent.nb[16].children[0].node_idx[2]
+                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["cl"]].children[CH["swu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[6, :])
-                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=5, nb_no=6):
-                        cells[i].node_idx[7] = cells[i].parent.nb[6].children[5].node_idx[6]
+                    if self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["s"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["s"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # check lower corner nb (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=1, nb_no=14):
-                        cells[i].node_idx[7] = cells[i].parent.nb[14].children[1].node_idx[2]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["sl"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["sl"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # check nb below current cell (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=16):
-                        cells[i].node_idx[7] = cells[i].parent.nb[16].children[0].node_idx[3]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["cl"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[7, :])
-                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["sel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[0].node_idx[4]
-                    cells[i].node_idx[1] = cells[0].node_idx[5]
-                    cells[i].node_idx[2] = cells[0].node_idx[6]
-                    cells[i].node_idx[3] = cells[0].node_idx[7]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["swu"]].node_idx[CH["swl"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["swu"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["swu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["swu"]].node_idx[CH["sel"]]
                 elif i == 5:
                     # child no. 5: new nodes 6 remain to add
                     # check upper nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=4, nb_no=2):
-                        cells[i].node_idx[6] = cells[i].parent.nb[2].children[4].node_idx[7]
+                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["n"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["n"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # check upper corner nb (lower plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=10):
-                        cells[i].node_idx[6] = cells[i].parent.nb[10].children[0].node_idx[3]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["nl"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["nl"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # check nb below current cell (lower plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=1, nb_no=16):
-                        cells[i].node_idx[6] = cells[i].parent.nb[16].children[1].node_idx[2]
+                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["cl"]):
+                        cells[i].node_idx[CH["nel"]] = cells[i].parent.nb[NB["cl"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[6, :])
-                        cells[i].node_idx[6] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[1].node_idx[4]
-                    cells[i].node_idx[1] = cells[1].node_idx[5]
-                    cells[i].node_idx[2] = cells[1].node_idx[6]
-                    cells[i].node_idx[3] = cells[1].node_idx[7]
-                    cells[i].node_idx[4] = cells[4].node_idx[5]
-                    cells[i].node_idx[7] = cells[4].node_idx[6]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["nwu"]].node_idx[CH["swl"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["nwu"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["nwu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["nwu"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["swl"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["sel"]] = cells[CH["swl"]].node_idx[CH["nel"]]
                 elif i == 6:
                     # child no. 6: new nodes 7 to add
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=4, nb_no=4):
-                        cells[i].node_idx[7] = cells[i].parent.nb[4].children[4].node_idx[5]
+                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["e"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["e"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # check right corner nb (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=0, nb_no=12):
-                        cells[i].node_idx[7] = cells[i].parent.nb[12].children[0].node_idx[1]
+                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["el"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["el"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # check nb below current cell (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=2, nb_no=16):
-                        cells[i].node_idx[7] = cells[i].parent.nb[16].children[2].node_idx[3]
+                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["cl"]):
+                        cells[i].node_idx[CH["sel"]] = cells[i].parent.nb[NB["cl"]].children[CH["neu"]].node_idx[CH["seu"]]
                     # otherwise this node does not exist yet
                     else:
                         self.all_nodes.append(nodes[7, :])
-                        cells[i].node_idx[7] = len(self.all_nodes) - 1
+                        cells[i].node_idx[CH["sel"]] = len(self.all_nodes) - 1
 
-                    cells[i].node_idx[0] = cells[2].node_idx[4]
-                    cells[i].node_idx[1] = cells[2].node_idx[5]
-                    cells[i].node_idx[2] = cells[2].node_idx[6]
-                    cells[i].node_idx[3] = cells[2].node_idx[7]
-                    cells[i].node_idx[4] = cells[5].node_idx[7]
-                    cells[i].node_idx[5] = cells[5].node_idx[6]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["neu"]].node_idx[CH["swl"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["neu"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["neu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["neu"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["nwl"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["nwl"]] = cells[CH["nwl"]].node_idx[CH["nel"]]
                 elif i == 7:
                     # child no. 7 no new nodes anymore, only assign the existing nodes
-                    cells[i].node_idx[0] = cells[3].node_idx[4]
-                    cells[i].node_idx[1] = cells[3].node_idx[5]
-                    cells[i].node_idx[2] = cells[3].node_idx[6]
-                    cells[i].node_idx[3] = cells[3].node_idx[7]
-                    cells[i].node_idx[4] = cells[4].node_idx[7]
-                    cells[i].node_idx[5] = cells[4].node_idx[6]
-                    cells[i].node_idx[6] = cells[6].node_idx[7]
+                    cells[i].node_idx[CH["swu"]] = cells[CH["seu"]].node_idx[CH["swl"]]
+                    cells[i].node_idx[CH["nwu"]] = cells[CH["seu"]].node_idx[CH["nwl"]]
+                    cells[i].node_idx[CH["neu"]] = cells[CH["seu"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["seu"]] = cells[CH["seu"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["swl"]] = cells[CH["swl"]].node_idx[CH["sel"]]
+                    cells[i].node_idx[CH["nwl"]] = cells[CH["swl"]].node_idx[CH["nel"]]
+                    cells[i].node_idx[CH["nel"]] = cells[CH["nel"]].node_idx[CH["sel"]]
 
     def check_nb_node(self, _cell, child_no, nb_no):
         return _cell.parent is not None and _cell.parent.nb[nb_no] is not None and \
@@ -1433,22 +1431,25 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
     orig_shape = all_idx.shape
     all_idx = all_idx.flatten()
     for i in range(all_nodes.shape[0]):
-        # TODO:
-        #  - _unused_idx is sorted and unique -> can we use this somehow?
-        #  - we can't sort all_idx ... otherwise cells are not correct
-        #  - number unused idx << number all_idx -> can we exploit that?
+        left = 0
+        right = len(_unused_idx) - 1
         check = False
-        for j in range(_unused_idx.shape[0]):
-            if i == _unused_idx[j]:
-                # _unused_idx is unique, so if we found one we can stop searching
+        while left <= right:
+            mid = (left + right) // 2
+            if _unused_idx[mid] == i:
                 check = True
                 break
+            elif _unused_idx[mid] < i:
+                left = mid + 1
+            else:
+                right = mid - 1
+
         if check:
             # decrement all idx which are > current index by 1, since we are deleting this node. but since we are
             # overwriting the all_idx tensor, we need to account for the entries we already deleted
             _visited += 1
             for j in range(all_idx.shape[0]):
-                if all_idx [j] > i - _visited:
+                if all_idx[j] > i - _visited:
                     all_idx[j] -= 1
         else:
             _unique_node_coord[_counter, :] = all_nodes[i, :]
