@@ -129,6 +129,7 @@ class SamplingTree(object):
         self.face_ids = None
         self._variances = []
         self.data_final_mesh = {}
+        self._n_cells_orig = self._target.size()[0]
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -398,6 +399,7 @@ class SamplingTree(object):
         end_time = time()
 
         # save and print timings and size of final mesh
+        self.data_final_mesh["n_cells_orig"] = self._n_cells_orig
         self.data_final_mesh["n_cells"] = len(self._leaf_cells)
         self.data_final_mesh["iterations"] = iteration_count
         self.data_final_mesh["min_level"] = self._current_min_level
