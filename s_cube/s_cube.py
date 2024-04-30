@@ -86,7 +86,7 @@ class SamplingTree(object):
     class implementing the SamplingTree, which is creates the grid (tree structure)
     """
 
-    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = True,
+    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = False,
                  min_variance: float = 0.75):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
@@ -127,7 +127,7 @@ class SamplingTree(object):
         self.all_nodes = []
         self.all_centers = []
         self.face_ids = None
-        self._last_variance = 0
+        self._variances = []
         self.data_final_mesh = {}
 
         # offset matrix, used for computing the cell centers
@@ -305,11 +305,12 @@ class SamplingTree(object):
         else:
             self._update_leaf_cells()
         end_time_uniform = time()
+        self._compute_global_gain()
         iteration_count = 0
 
         while self._compute_captured_variance() and self._n_cells <= self._n_cells_max:
-            print(f"\r\tStarting iteration no. {iteration_count}, captured variance: {self._last_variance} %", end="",
-                  flush=True)
+            print(f"\r\tStarting iteration no. {iteration_count}, captured variance: "
+                  f"{round(self._variances[-1] * 100, 2)} %", end="", flush=True)
 
             # update _n_cells_per_iter based on the gain difference and threshold for stopping
             if len(self._global_gain) > 3:
@@ -378,6 +379,9 @@ class SamplingTree(object):
 
             # check the newly generated cells if they are outside the domain or inside a geometry, if so delete them
             self.remove_invalid_cells([c.index for c in new_cells])
+
+            # compute global gain after refinement to check if we can stop the refinement
+            self._compute_global_gain()
             iteration_count += 1
 
         # refine the grid near geometry objects is specified
@@ -398,7 +402,7 @@ class SamplingTree(object):
         self.data_final_mesh["iterations"] = iteration_count
         self.data_final_mesh["min_level"] = self._current_min_level
         self.data_final_mesh["max_level"] = self._current_max_level
-        self.data_final_mesh["variance"] = self._last_variance
+        self.data_final_mesh["variance_per_iter"] = self._variances
         self.data_final_mesh["t_total"] = end_time - start_time
         self.data_final_mesh["t_uniform"] = end_time_uniform - start_time
         self.data_final_mesh["t_renumbering"] = end_time - t_start_renumber
@@ -605,8 +609,22 @@ class SamplingTree(object):
         # we don't need to compute it every iteration
         _ratio = pt.linalg.norm(_current_variance) / self._target
 
-        self._last_variance = round(_ratio.item() * 100, 2)
+        self._variances.append(_ratio.item())
         return _ratio.item() < self._min_variance
+
+    def _compute_global_gain(self) -> None:
+        """
+        compute a normalized gain of all cells in order to determine if we can stop the refinement. The gain is summed
+        up over all leaf cells and then scaled by the area (2D) or volume (3D) of each cell and the number of leaf cells
+        in total.
+
+        :return: None
+        """
+        normalized_gain = []
+        for c in self._leaf_cells:
+            area = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, self._cells[c].level), self._n_dimensions)
+            normalized_gain.append(self._cells[c].gain / area)
+        self._global_gain.append(sum(normalized_gain).item() / len(self._leaf_cells))
 
     def __len__(self):
         return self._n_cells
@@ -617,7 +635,7 @@ class SamplingTree(object):
                         Minimum ref. level: {:d}
                         Maximum ref. level: {:d}
                         Captured variance of original grid: {:.2f} %
-                  """.format(self._n_cells, self._current_min_level, self._current_max_level, self._last_variance)
+                  """.format(self._n_cells, self._current_min_level, self._current_max_level, self._variances[-1] * 100)
         return message
 
     @property

@@ -71,7 +71,8 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _save_name: name of the files (grid & data)
     :param _grid_name: name of the grid (used in XDMF file)
     :param _level_bounds: Tuple with (min., max.) Level
-    :param _n_cells_max: max. number of cells of the grid, if not set then early stopping will be used
+    :param _n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
+                         will be used
     :param _refine_geometry: flag for refinement of the mesh around geometries and domain boundaries, executed after
                             the final grid is generated
     :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
