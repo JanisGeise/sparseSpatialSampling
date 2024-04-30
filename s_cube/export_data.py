@@ -43,13 +43,14 @@ class DataWriter:
         self._face_id = face_ids
         self._n_vertices = self._vertices.size()[0]
         self._n_faces = self._face_id.size()[0]
-        self._n_dimensions = self._centers.size()[1]
+        self.n_dimensions = self._centers.size()[1]
         self.times = None
+        self.mesh_info = None
 
         # empty dict which stores the interpolated fields, created when calling the '_load_and_fit_data' method, if no
         # fields are specified all available fields will be interpolated onto the coarser mesh
         self._boundaries = domain_boundaries
-        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance")
+        self._knn = KNeighborsRegressor(n_neighbors=8 if self.n_dimensions == 2 else 26, weights="distance")
         self._interpolated_fields = {}
         self._snapshot_counter = 0
 
@@ -63,8 +64,8 @@ class DataWriter:
         print("Writing the data ...")
         _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
                          f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Collection" CollectionType="temporal">\n'
-        _grid_type = "Quadrilateral" if self._n_dimensions == 2 else "Hexahedron"
-        _dims = "XY" if self._n_dimensions == 2 else "XYZ"
+        _grid_type = "Quadrilateral" if self.n_dimensions == 2 else "Hexahedron"
+        _dims = "XY" if self.n_dimensions == 2 else "XYZ"
 
         # create a writer and datasets for the grid
         _writer = h5py.File(join(self._save_dir, f"{self._save_name}.h5"), "w")
@@ -99,7 +100,7 @@ class DataWriter:
                 tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
                       f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n' \
                       f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
-                      f'{pow(2, self._n_dimensions)}">\n'
+                      f'{pow(2, self.n_dimensions)}">\n'
                 f_out.write(tmp)
 
                 # include the grid data from the HDF5 file
@@ -109,7 +110,7 @@ class DataWriter:
             with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
                 # write header for geometry
                 f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
-                            f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self._n_dimensions}" '
+                            f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
                             f'NumberType="Float" Format="HDF">\n')
 
                 # write coordinates of vertices

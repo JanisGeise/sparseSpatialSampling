@@ -51,7 +51,8 @@ def check_geometry_objects(_geometries: list) -> bool:
 
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict], _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
-                            _n_cells_max: int = None) -> DataWriter:
+                            _n_cells_max: int = None, _refine_geometry: bool = False,
+                            _min_variance: float = 0.9) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
@@ -71,6 +72,10 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _grid_name: name of the grid (used in XDMF file)
     :param _level_bounds: Tuple with (min., max.) Level
     :param _n_cells_max: max. number of cells of the grid, if not set then early stopping will be used
+    :param _refine_geometry: flag for refinement of the mesh around geometries and domain boundaries, executed after
+                            the final grid is generated
+    :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
+                          grid), if 'None' the max. number of cells will be used as stopping criteria
     :return: None
     """
     # check if the dicts for the geometry objects are correct
@@ -83,7 +88,8 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
         _level_bounds = (1, _level_bounds[1])
 
     # coarsen the cube mesh based on the std. deviation of the pressure
-    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds)
+    sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
+                            _smooth_geometry=_refine_geometry, min_variance=_min_variance)
 
     # add the cube and the domain
     for g in _geometry_objects:
@@ -93,16 +99,19 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     # create the grid
     sampling.refine()
 
-    # create directory for plots
+    # create directory for data and final grid
     if not path.exists(_save_path):
         makedirs(_save_path)
 
     # fit the pressure field onto the new mesh and export the data
-    export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, save_dir=_save_path,
-                             domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
-                             save_name=_save_name, grid_name=_save_name)
+    _export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, save_dir=_save_path,
+                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
+                              save_name=_save_name, grid_name=_save_name)
 
-    return export_data
+    # add the final data of mesh and refinement
+    _export_data.mesh_info = sampling.data_final_mesh
+
+    return _export_data
 
 
 def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: list,
@@ -190,6 +199,44 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             return None, None
         else:
             return _fields_out[0]
+
+
+def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> None:
+    """
+    wrapper function for interpolating the original CFD data onto the generated grid with the S^3 algorithm
+
+    :param datawriter: Datawriter object resulting from the refinement with S^3
+    :param load_path: path to the original CFD data
+    :param boundaries: boundaries used for generating the mesh
+    :return: None
+    """
+    # export the data
+    times, fields = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
+                                              _get_field_names_and_times=True)
+
+    # save time steps of all snapshots, which will be exported to HDF5 & XDMF
+    datawriter.times = list(map(float, times))
+
+    # interpolate and export the specified fields
+    for f in fields:
+        coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, _field_names=f)
+
+        # in case the field is not available the function will return None
+        if data is not None:
+            datawriter.fit_data(coordinates, data, f, _n_snapshots_total=len(times))
+
+    """
+    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
+    for f in fields:
+        for t in times:
+            coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, 
+                                                          _field_names=f, _write_times=t)
+
+            # in case the field is not available the function will return None
+            if data is not None:
+                datawriter.fit_data(coordinates, data, f, _n_snapshots_total=len(times))
+    """
+    datawriter.write_data_to_file()
 
 
 if __name__ == "__main__":

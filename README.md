@@ -2,13 +2,8 @@
 Mesh reduction algorithm for CFD post-processing
 
 ## TODO
-- perform tests on larger cases and datasets -> test current implementation of calculating `n_cells_per_iter`
+- perform tests on larger cases and datasets
 - complete documentation of code and repository
-- use captured variance of the original data as stopping criteria and max. number as cells as 2nd optional stopping criteria
-instead of the gradient of the global gain
-- disable geometry refinement by default, but leave as option (if captured variance or max. number of cells is
-used as stopping criteria, geometry refinement would alter the grid leading to much finer grid than specified,
-because it is executed at the very end after the grid generation itself)
 - parameter studies for `_stop_thr`, `_cells_per_iter_start`, `_cells_per_iter_end`
 
 ## Potential features / Ideas

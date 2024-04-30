@@ -19,7 +19,7 @@ from typing import Tuple
 from os.path import join
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.execute_grid_generation import execute_grid_generation, load_original_Foam_fields
+from s_cube.execute_grid_generation import execute_grid_generation, export_data
 
 
 def load_cylinder_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, list]:
@@ -83,16 +83,16 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path_cube = join("", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
-    save_name = f"test_cube_new_data_from_original_cube"
+    save_name = f"variance_0.5_original_cube_full_domain_test"
 
     # surfaceMountedCube simulation with coarser grid for testing purposes
     # load_path_cube = join("", "data", "3D", "surfaceMountedCube", "fullCase")
-    # save_name = "test_cube_new"
+    # save_name = "variance_0.75_coarse_cube_bounded_domain"
     save_path_cube = join("", "data", "3D", "exported_grids")
 
     # boundaries of the masked domain for the cube
-    bounds = [[1.4, 3, 0], [9, 6, 1.5]]           # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    # bounds = [[0, 0, 0], [9, 14.5, 2]]              # full domain
+    # bounds = [[1.4, 3, 0], [9, 6, 1.5]]           # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    bounds = [[0, 0, 0], [9, 14.5, 2]]              # full domain
     cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
 
     # load the CFD data
@@ -102,40 +102,17 @@ if __name__ == "__main__":
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
     geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
 
-    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cube, save_name, "cube")
+    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cube, save_name, "cube",
+                                     _min_variance=0.5)
 
     # export the data
-    times, fields = load_original_Foam_fields(load_path_cube, 2, bounds, _get_field_names_and_times=True)
-
-    # save time steps of all snapshots, which will be exported to HDF5 & XDMF
-    export.times = list(map(float, times))
-
-    # interpolate and export the specified fields
-    for f in fields:
-        coord, data = load_original_Foam_fields(load_path_cube, 3, bounds, _field_names=f)
-
-        # in case the field is not available the function will return None
-        if data is not None:
-            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
-    export.write_data_to_file()
-
-    """
-    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    for f in fields:
-        for t in times:
-            coord, data = load_original_Foam_fields(load_path_cube, 3, bounds, _field_names=f, _write_times=t)
-            
-            # in case the field is not available the function will return None
-            if data is not None:
-                export.fit_data(coord, data, f, _n_snapshots_total=len(times))
-    export.write_data_to_file()
-    """
+    export_data(export, load_path_cube, bounds)
 
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
     load_path_cylinder = join("", "data", "2D", "cylinder2D_re1000")
     save_path_cylinder = join("", "data", "2D", "exported_grids")
-    save_name = f"test_cylinder_new_full_domain"
+    save_name = f"variance_0.5_test"
 
     # boundaries of the masked domain for the cylinder
     # bounds = [[0.1, 0], [1.0, 0.41]]      # [[xmin, ymin], [xmax, ymax]]
@@ -150,31 +127,7 @@ if __name__ == "__main__":
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
     export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cylinder, save_name,
-                                     "cylinder2D")
+                                     "cylinder2D", _min_variance=0.5)
 
     # export the data
-    times, fields = load_original_Foam_fields(load_path_cylinder, 2, bounds, _get_field_names_and_times=True)
-
-    # save time step of all snapshots, which will be exported to HDF5 & XDMF
-    export.times = list(map(float, times))
-
-    # interpolate and export the specified fields
-    for f in fields:
-        coord, data = load_original_Foam_fields(load_path_cylinder, 2, bounds, _field_names=f)
-
-        # in case the field is not available the function will return None
-        if data is not None:
-            export.fit_data(coord, data, f, _n_snapshots_total=len(times))
-    export.write_data_to_file()
-
-    """
-    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    for f in fields:
-        for t in times:
-            coord, data = load_original_Foam_fields(load_path_cylinder, 2, bounds, _field_names=f, _write_times=t)
-
-            # in case the field is not available the function will return None
-            if data is not None:
-                export.fit_data(coord, data, f, _n_snapshots_total=len(times))
-    export.write_data_to_file()
-    """
+    export_data(export, load_path_cylinder, bounds)
