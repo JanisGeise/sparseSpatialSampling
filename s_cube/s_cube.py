@@ -292,13 +292,28 @@ class SamplingTree(object):
     def leaf_cells(self) -> list:
         return [self._cells[i] for i in self._leaf_cells]
 
-    def _check_stopping_criteria(self):
+    def _check_stopping_criteria(self) -> bool:
+        """
+        check if the stopping criteria for ending the refinement process is met; either based on the capture variance
+        wrt to the original grid, or the max. number of cells specified
+
+        :return: None
+        """
         if abs(self._n_cells_max - 1e9) <= 1e-6:
             return self._variances[-1] < self._min_variance
         else:
             return self._n_cells <= self._n_cells_max
 
-    def _compute_n_cells_per_iter(self):
+    def _compute_n_cells_per_iter(self) -> None:
+        """
+        update the number of cells which should be refined within the next iteration. The end number is set to one,
+        because in the last iteration we only want to refine a single cell to meet the defined variance for stopping as
+        close as possible. The relationship is computed as linear approximation, the start and end values as well as the
+        current value is known, this approach is either executed for the variance, or the number of cells, depending
+        on the specified stopping criteria.
+
+        :return: None
+        """
         if abs(self._n_cells_max - 1e9) <= 1e-6:
             _delta_x = self._min_variance - self._variances[0]
             _current_x = self._variances[-1]
@@ -309,8 +324,8 @@ class SamplingTree(object):
         _delta_y = self._cells_per_iter_start - self._cells_per_iter_end
         _new = self._cells_per_iter_start - (_delta_y / _delta_x) * _current_x
 
-        # avoid negative updates
-        self._cells_per_iter = int(_new) if _new > 1else 1
+        # avoid negative updates or values of zeros
+        self._cells_per_iter = int(_new) if _new > 1 else 1
 
     def refine(self) -> None:
         """

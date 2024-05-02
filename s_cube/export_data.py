@@ -168,6 +168,11 @@ class DataWriter:
                                    that the provided data are all available snapshots
         :return: None
         """
+        # check if the field has the correct shape -> scalar fields need to be unsqueezed at dim=1 as:
+        # [N_cells, N_dimensions, N_snapshots] (vector field) or [N_cells, 1, N_snapshots] (scalar field)
+        assert len(_data.size()) == 3, "The provided field must have the shape '[N_cells, N_dimensions, N_snapshots]'" \
+                                       "for a vector field and '[N_cells, 1, N_snapshots]' for a scalar field"
+
         # determine the required size of the data matrix
         _n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
 
