@@ -50,8 +50,8 @@ if __name__ == "__main__":
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
     # execute the parameter study for the cylinder
-    # execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cylinder,
-    #                         load_path_cylinder, "cylinder2D")
+    execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cylinder,
+                            load_path_cylinder, "cylinder2D")
 
     # -----------------------------------------   execute for cube   -----------------------------------------
     load_path_cube = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")

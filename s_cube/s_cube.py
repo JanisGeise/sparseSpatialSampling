@@ -110,8 +110,8 @@ class SamplingTree(object):
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)  # end value = 1% of start value
+        self._cells_per_iter_start = int(0.001 * vertices.size()[0])  # starting value = 0.1% of original grid size
+        self._cells_per_iter_end = 1
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -122,8 +122,8 @@ class SamplingTree(object):
         self._geometry = []
         self._smooth_geometry = _smooth_geometry
         self._geometry_refinement_cycles = 1
-        self._global_gain = []
-        self._stop_thr = 1e-3
+        self._n_cells_after_uniform = None
+        self._N_cells_per_iter = []
         self.all_nodes = []
         self.all_centers = []
         self.face_ids = None
@@ -292,6 +292,26 @@ class SamplingTree(object):
     def leaf_cells(self) -> list:
         return [self._cells[i] for i in self._leaf_cells]
 
+    def _check_stopping_criteria(self):
+        if abs(self._n_cells_max - 1e9) <= 1e-6:
+            return self._variances[-1] < self._min_variance
+        else:
+            return self._n_cells <= self._n_cells_max
+
+    def _compute_n_cells_per_iter(self):
+        if abs(self._n_cells_max - 1e9) <= 1e-6:
+            _delta_x = self._min_variance - self._variances[0]
+            _current_x = self._variances[-1]
+        else:
+            _delta_x = self._n_cells_max - self._n_cells_after_uniform
+            _current_x = self._n_cells
+
+        _delta_y = self._cells_per_iter_start - self._cells_per_iter_end
+        _new = self._cells_per_iter_start - (_delta_y / _delta_x) * _current_x
+
+        # avoid negative updates
+        self._cells_per_iter = int(_new) if _new > 1else 1
+
     def refine(self) -> None:
         """
         implements the generation of the grid based on the original grid and a metric
@@ -306,22 +326,17 @@ class SamplingTree(object):
         else:
             self._update_leaf_cells()
         end_time_uniform = time()
-        self._compute_global_gain()
         iteration_count = 0
+        self._n_cells_after_uniform = self._n_cells
+        self._compute_captured_variance()
 
-        while self._compute_captured_variance() and self._n_cells <= self._n_cells_max:
+        while self._check_stopping_criteria():
             print(f"\r\tStarting iteration no. {iteration_count}, captured variance: "
                   f"{round(self._variances[-1] * 100, 2)} %", end="", flush=True)
 
-            # update _n_cells_per_iter based on the gain difference and threshold for stopping
-            if len(self._global_gain) > 3:
-                # predict the iterations left until stopping criteria is met (linearly), '_stop_thr' may be neglectable
-                # due to its small value. This is just an eq. for a linear function, with an intersection at _stop_thr
-                # and y-intercept at _global_gain[-3]
-                pred = (self._stop_thr - self._global_gain[-3]) / (self._global_gain[-1] - self._global_gain[-2])
-
-                # set the new n_cells_per_iter based on the distance to this iteration and its boundaries
-                self._cells_per_iter = int(self._cells_per_iter_start / pred + self._cells_per_iter_end)
+            # update _n_cells_per_iter based on the difference wrt variance or N_cells
+            if len(self._variances) >= 2:
+                self._compute_n_cells_per_iter()
 
             self._update_gain()
             self._leaf_cells.sort(key=lambda x: self._cells[x].gain, reverse=True)
@@ -382,7 +397,7 @@ class SamplingTree(object):
             self.remove_invalid_cells([c.index for c in new_cells])
 
             # compute global gain after refinement to check if we can stop the refinement
-            self._compute_global_gain()
+            self._compute_captured_variance()
             iteration_count += 1
 
         # refine the grid near geometry objects is specified
@@ -613,20 +628,6 @@ class SamplingTree(object):
 
         self._variances.append(_ratio.item())
         return _ratio.item() < self._min_variance
-
-    def _compute_global_gain(self) -> None:
-        """
-        compute a normalized gain of all cells in order to determine if we can stop the refinement. The gain is summed
-        up over all leaf cells and then scaled by the area (2D) or volume (3D) of each cell and the number of leaf cells
-        in total.
-
-        :return: None
-        """
-        normalized_gain = []
-        for c in self._leaf_cells:
-            area = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, self._cells[c].level), self._n_dimensions)
-            normalized_gain.append(self._cells[c].gain / area)
-        self._global_gain.append(sum(normalized_gain).item() / len(self._leaf_cells))
 
     def __len__(self):
         return self._n_cells
