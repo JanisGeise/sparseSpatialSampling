@@ -1,6 +1,8 @@
 """
     implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
 """
+from typing import Tuple
+
 import numpy as np
 import torch as pt
 
@@ -86,7 +88,7 @@ class SamplingTree(object):
     class implementing the SamplingTree, which is creates the grid (tree structure)
     """
 
-    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = False,
+    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = True,
                  min_variance: float = 0.75):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
@@ -95,7 +97,7 @@ class SamplingTree(object):
         :param target: the metric based on which the grid should be created, e.g. std. deviation of pressure wrt time
         :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically
         :param level_bounds: min. and max. number of levels of the final grid
-        :param _smooth_geometry: flag for final refinement of the mesh around geometries and domain boundaries
+        :param _smooth_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
         :param min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                              grid), if 'None' the max. number of cells will be used as stopping criteria
         """
@@ -110,8 +112,8 @@ class SamplingTree(object):
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter_start = int(0.001 * vertices.size()[0])  # starting value = 0.1% of original grid size
-        self._cells_per_iter_end = 1
+        self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
+        self._cells_per_iter_end = int(0.001 * vertices.size()[0])  # end value = 0.1% of original grid size
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -121,7 +123,6 @@ class SamplingTree(object):
         self._leaf_cells = None
         self._geometry = []
         self._smooth_geometry = _smooth_geometry
-        self._geometry_refinement_cycles = 1
         self._n_cells_after_uniform = None
         self._N_cells_per_iter = []
         self.all_nodes = []
@@ -362,21 +363,7 @@ class SamplingTree(object):
                 if self._current_min_level > 1:
                     # same plane (3D) or if 2D. We have 4 children in 2D & 8 in 3D, in this plane we need to check for
                     # children 0...3, so counter = 0, start = 0 and stop = 4
-                    to_refine.update(self._check_constraint(i, 0))
-
-                    # for 3D case, we additionally need to check upper and lower plane
-                    if self._n_dimensions == 3:
-                        # child cells 4...7 (same nb as children 0...3, but we need to check just in case)
-                        to_refine.update(self._check_constraint(i, 0, 4, 8))
-
-                        # then check nb of lower plane (plane under the current cell). Counter = 8, because cell 8
-                        # corresponds to left nb lower plane of children 4...7; start = 4 because we are looking at
-                        # children 4...7
-                        to_refine.update(self._check_constraint(i, 8, 4, 8))
-
-                        # now do the same for the upper plane (children 0...3), idx = 17 corresponds to left nb upper
-                        # plane (= counter), start = 0 because we check children 0...4
-                        to_refine.update(self._check_constraint(i, 17, 0, 4))
+                    to_refine.update(self._check_constraint(i))
 
             new_cells = []
             new_index = len(self._cells)
@@ -419,7 +406,7 @@ class SamplingTree(object):
         print("\nFinished adaptive refinement.")
         if self._smooth_geometry:
             t_start_geometry = time()
-            self._refine_geometry()
+            self._refine_geometry(_names=[g.obj_name for g in self._geometry if "domain" not in g.obj_name])
             t_end_geometry = time()
 
         # assemble the final grid
@@ -454,15 +441,19 @@ class SamplingTree(object):
         print("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
         print(self)
 
-    def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False) -> None or list:
+    def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False, _names: list = None) -> None or list:
         """
         check if any of the generated cells are located inside a geometry or outside a domain. If so, they are removed.
 
         :param _refined_cells: indices of the cells which are newly added
         :param _refine_geometry: flag if we want to refine the grid near geometry objects
+        :param _names:  TODO
         :return: None if we removed all invalid cells, if '_refine_geometry = True' returns list with indices of the
                  cells which are neighbors of geometries / domain boundaries
         """
+        # determine for which geometries we should check -> important for geometry refinement at the end
+        _geometries = [g for g in self._geometry if g.obj_name in _names] if _names is not None else self.geometry
+
         # check for each cell if it is located outside the domain or inside a geometry
         cells_invalid, idx = set(), set()
         for cell in _refined_cells:
@@ -470,7 +461,7 @@ class SamplingTree(object):
             nodes = self._compute_cell_centers(cell, factor_=0.5, keep_parent_center_=False)
 
             # check for each geometry object if the cell is inside the geometry or outside the domain
-            invalid = [g.check_geometry(nodes, _refine_geometry) for g in self._geometry]
+            invalid = [g.check_geometry(nodes, _refine_geometry) for g in _geometries]
 
             # save the cell and corresponding index, set the gain to zero and make sure this cell is not changed to
             # leaf cell in future iterations resulting from delta level
@@ -507,7 +498,7 @@ class SamplingTree(object):
         _unique_idx = _all_idx.flatten().unique()
         _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item()+1)
 
-        # get all node indices which are not used by all cells any more
+        # get all node indices which are not used by all cells anymore
         _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()
         del _unique_idx, _all_available_idx
 
@@ -554,63 +545,52 @@ class SamplingTree(object):
         # each cell, but we need the parent cell center e.g. for computing the gain)
         return coord_[1:, :] if not keep_parent_center_ else coord_
 
-    def _check_constraint(self, cell_no_, counter_, start_=0, stop_=4) -> list:
+    def _check_constraint(self, cell_no_: int, dl: int = 1) -> list:
         """
         check if the level difference between a cell and its neighbors is max. one, if not then we need to refine all
         cells for which the constraint is violated
 
         :param cell_no_: current cell index for which we want to check the constraint
-        :param counter_: current position of the nb we already checked based on the lasst cell
-        :param start_: min. idx which a nb can have based on the location of the current cell
-        :param stop_: max. idx which a nb can have based on the location of the current cell
         :return: list with indices of nb cell we need to refine, because delta level is > 1
         """
         # check if the level difference of current cell is larger than one wrt nb cells -> if so, then refine the nb
         # cell in order to avoid too large level differences between adjacent cells
         idx_list = []
-        for child_ in range(start_, stop_):
-            # if we have the correct child of the parent cell (aka current cell), then check its parent nb cell
-            if self._cells[cell_no_] == self._cells[cell_no_].parent.children[child_]:
-                # each child has 3 nb cells cornering it (the remaining cells are other child cells), so go around the
-                # child cell check its nb (3 nb per level in 3D)
-                for i in range(3):
-                    # in same plane (or 2D), nb(0) = nb(8), but we only have 7 nb, so set (counter_ + i) to zero
-                    # -> nb(0) = left nb of child 3 (i = 2, because left nb of child 3, counter_ = 6, because last cell)
-                    # we already added this cell, but otherwise this would lead to an index error
-                    if counter_ + i == 8 and stop_ == 4:
-                        counter_ = -6
-
-                    # if the nb parent cell of current parent cell is a leaf cell, and we are not at the domain boundary
-                    # then add this cell to refine, because if we refine current parent cell then delta level would be 2
-                    if self._cells[cell_no_].parent.nb[counter_ + i] is not None:
-                        if self._cells[cell_no_].parent.nb[counter_ + i].leaf_cell():
-                            idx_list.append(self._cells[cell_no_].parent.nb[counter_ + i].index)
-            # move idx by 2 (current idx + 2 idx = 3 nb cells)
-            counter_ += 2
+        for n in self._cells[cell_no_].nb:
+            if n is not None and n.leaf_cell() and abs(n.level - self._cells[cell_no_].level) > dl:
+                idx_list.append(n.index)
 
         return idx_list
 
-    def _refine_geometry(self) -> None:
+    def _refine_geometry(self, _names: list = None) -> None:
         """
         stripped down version of the 'refine()' method for refinement of the final grid near geometry objects or domain
         boundaries. The documentation of this method is equivalent to the 'refine()' method
         """
-        for _ in range(self._geometry_refinement_cycles):
-            print("Starting geometry refinement.")
+        print("Starting geometry refinement.")
+
+        # to save some time, only go through all leaf cells at the beginning. For later iterations we will use only the
+        # newly created cells
+        _all_cells = set(self.remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _names=_names))
+        _global_max_level = max([self._cells[cell].level for cell in _all_cells])
+        _global_min_level = min([self._cells[cell].level for cell in _all_cells])
+
+        while _global_max_level > _global_min_level:
             self._update_leaf_cells()
             self._update_gain()
             to_refine = set()
 
-            for i in set(self.remove_invalid_cells(self._leaf_cells, _refine_geometry=True)):
+            for i in _all_cells:
                 cell = self._cells[i]
-                to_refine.add(cell.index)
-                if self._current_min_level > 1:
-                    to_refine.update(self._check_constraint(i, 0))
 
-                    if self._n_dimensions == 3:
-                        to_refine.update(self._check_constraint(i, 0, 4, 8))
-                        to_refine.update(self._check_constraint(i, 8, 4, 8))
-                        to_refine.update(self._check_constraint(i, 17, 0, 4))
+                # don't refine which have reached the max. level
+                if cell.level < _global_max_level:
+                    to_refine.add(cell.index)
+
+                # but still check the constraint for the nb cells, but this time we don't want any level difference
+                # since we are directly at the geometry.
+                # TODO: constraint in vicinity not always fulfilled, max. delta level @ geometry: 1 < max. level
+                to_refine.update(self._check_constraint(i, dl=0))
 
             new_cells = []
             new_index = len(self._cells)
@@ -622,15 +602,23 @@ class SamplingTree(object):
                 self._assign_indices(cell.children)
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
-                self._current_max_level = max(self._current_max_level, cell.level + 1)
                 new_index += pow(2, self._n_dimensions)
 
             self._cells.extend(new_cells)
             self._update_leaf_cells()
             self._update_gain()
-            self._update_min_ref_level()
             self.remove_invalid_cells([c.index for c in new_cells])
-            print("Finished geometry refinement.")
+
+            # update '_all_cells', we can't just use 'new_cells', because we always add the nb to ensure that the nb
+            # have the same level. after every iteration, we need to check again which of the refined cells are in
+            # the vicinity of the geometry
+            _all_cells = set(self.remove_invalid_cells([c.index for c in new_cells if c is not None],
+                                                       _refine_geometry=True, _names=_names))
+
+            # update the min. level
+            _global_min_level += 1
+
+        print("Finished geometry refinement.")
 
     def _compute_captured_variance(self):
         # the metric is computed at the cell centers for the original grid from CFD
@@ -1295,7 +1283,18 @@ class SamplingTree(object):
 
 
 @njit(fastmath=True)
-def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: np.ndarray, dims: int):
+def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: np.ndarray,
+                          dims: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    remove all unused nodes and center coordinates from the list, re-number the node coordinates.
+
+    :param all_idx: array containing all indices of nodes, which are used within the grid
+    :param all_nodes: all nodes which have been created throughout the refinement process
+    :param _unused_idx: node indices of coordinates, which are not present in the final grid anymore
+    :param dims: number of physical dimensions
+    :return: array with unique node coordinates used in the final grid and array with re-numbered node indices pointing
+             to these node coordinates
+    """
     """
     some things regarding numba:
         - 'i in _unused_idx' or (i == _unused_idx).any() takes longer than the loop for assigning 'check'
@@ -1339,7 +1338,16 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
     return _unique_node_coord, all_idx.reshape(orig_shape)
 
 
-def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int):
+def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int) -> Cell:
+    """
+    get the neighbor cell of a newly created child cell
+
+    :param nb: list containing the neighbors of the current parent cell
+    :param check: flag if the current parent cell has children
+    :param nb_idx: index of the neighbor for which we want to check
+    :param child_idx: index of the possible child, which would be the nb of the child cell we are currently looking at
+    :return: the nb child cell of current child cell if present, else the nb parent cell of current child cell
+    """
     return nb[nb_idx].children[child_idx] if check else nb[nb_idx]
 
 

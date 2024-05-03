@@ -17,7 +17,14 @@ from post_processing.load_airfoil_data import compute_geometry_objects_OAT15
 from s_cube.execute_grid_generation import execute_grid_generation
 
 
+def prepare_fields(_load_path: str, _field_name: str) -> pt.Tensor:
+    # load all fields saved on external hard drive & only extract the small, masked fields.
+    # Return the field for interpolation & export
+    pass
+
+
 if __name__ == "__main__":
+    min_variance = 0.90
     load_path_pressure = join("..", "data", "2D", "OAT15")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15", "results")
 
@@ -38,13 +45,15 @@ if __name__ == "__main__":
 
     # execute the S^3 algorithm
     export = execute_grid_generation(xz, pt.std(p, dim=1), domain + geometry, save_path_results,
-                                     "OAT15_small_area_variance_0", "OAT15", _min_variance=0.5)
-    pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_small_area_variance_0.5.pt"))
+                                     "OAT15_small_area_variance_{:.2f}_test".format(min_variance), "OAT15",
+                                     _min_variance=min_variance)
+    pt.save(export.mesh_info, join(save_path_results,
+                                   "mesh_info_OAT15_small_area_variance__{:.2f}.pt".format(min_variance)))
 
     # TODO: - export all available fields & compare to original data -> time steps stored somewhere?
     # for now just name the write times t_i = 1, ... , N
-    export.times = list(range(xz.size(1)))
+    export.times = list(range(p.size(1)))
 
-    # we need to add one dimension, because the pressure is a scalar field:
+    # we need to add one dimension, because the pressure is a scalar field
     export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
     export.write_data_to_file()

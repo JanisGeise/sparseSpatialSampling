@@ -51,7 +51,7 @@ def check_geometry_objects(_geometries: list) -> bool:
 
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict], _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
-                            _n_cells_max: int = None, _refine_geometry: bool = False,
+                            _n_cells_max: int = None, _refine_geometry: bool = True,
                             _min_variance: float = 0.9) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
@@ -73,8 +73,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _level_bounds: Tuple with (min., max.) Level
     :param _n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
                          will be used
-    :param _refine_geometry: flag for refinement of the mesh around geometries and domain boundaries, executed after
-                            the final grid is generated
+    :param _refine_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
     :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                           grid), if 'None' the max. number of cells will be used as stopping criteria
     :return: None

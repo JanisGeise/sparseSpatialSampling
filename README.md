@@ -3,14 +3,24 @@ Mesh reduction algorithm for CFD post-processing
 
 ## TODO
 - perform tests on larger cases and datasets
-- complete documentation of code and repository
-- parameter studies for `_stop_thr`, `_cells_per_iter_start`, `_cells_per_iter_end`
+- complete documentation of repository
 
 ## Potential features / Ideas
 - automatic determination of reasonable value for min. of `level_bounds` for uniform refinement
 - testing different metrics and combinations thereof -> we need a second metric for e.g. sher stress to account
 for boundary layers etc.
 - generalization for arbitrary geometries and domain boundaries, handle stl files as input
+
+## Notes
+`s_cube.py, line (in __init__ - method, line 115 & 116)`:  
+- starting value `n_cells_per_iter` = 1% of original grid size  
+`self._cells_per_iter_start = int(0.01 * vertices.size()[0])`
+
+
+- end value `n_cells_per_iter` = 0.1% of original grid size  
+`self._cells_per_iter_end = int(0.001 * vertices.size()[0])`
+
+-> if target variance is not met accurately, then these values need to be decreased
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 

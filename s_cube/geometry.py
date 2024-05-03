@@ -13,7 +13,7 @@ class GeometryObject:
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
         self._obj_type = obj_type
-        self._obj_name = name
+        self.obj_name = name
         self._refine = _refine
 
         # check if the object type matches the ones currently implemented
