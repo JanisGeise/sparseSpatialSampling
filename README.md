@@ -17,10 +17,11 @@ for boundary layers etc.
 `self._cells_per_iter_start = int(0.01 * vertices.size()[0])`
 
 
-- end value `n_cells_per_iter` = 0.1% of original grid size  
-`self._cells_per_iter_end = int(0.001 * vertices.size()[0])`
+- end value `n_cells_per_iter` = 1% of start value 
+`self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)`
 
--> if target variance is not met accurately, then these values need to be decreased
+-> if target variance is not met accurately, then the value for `self._cells_per_iter_start` needs to be decreased, e.g.,
+by one order of magnitude
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 

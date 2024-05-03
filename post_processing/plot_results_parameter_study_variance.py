@@ -18,8 +18,8 @@ def load_results(_load_path: str) -> dict:
     :param _load_path: path to the results from the refinements with S^3
     :return: the loaded and sorted data
     """
-    file_names = sorted(glob(join(_load_path, "mesh_info_variance_0.*.pt")),
-                        key=lambda x: int(x.split("_")[-1].split(".")[1]))
+    file_names = sorted(glob(join(_load_path, "mesh_info_variance_*.pt")),
+                        key=lambda x: float(x.split("_")[-1].split(".pt")[0]))
     _data = [pt.load(f) for f in file_names]
 
     # re-sort results from list(dict) to dict(list) in order to plot the results easier / more efficient
@@ -44,25 +44,35 @@ def plot_results_parameter_study(_data: dict, save_path: str, _n_cells_orig: int
 
     # plot variance vs N_cells
     fig, ax = plt.subplots(nrows=1, sharex="col")
-    ax.plot(data["final_variance"], pt.tensor(_data["n_cells"]) / _n_cells_orig, marker="x",
+    ax.plot(_data["final_variance"], pt.tensor(_data["n_cells"]) / _n_cells_orig, marker="x",
             label=r"$N_{cells} \, / \, N_{cells, orig}$")
-    ax.plot(data["final_variance"], pt.tensor(_data["t_uniform"]) / pt.tensor(_data["t_total"]), marker="x",
+    ax.plot(_data["final_variance"], pt.tensor(_data["t_uniform"]) / pt.tensor(_data["t_total"]), marker="x",
             label=r"$t_{uniform} \, / \, t_{total}$")
-    ax.plot(data["final_variance"], pt.tensor(_data["t_adaptive"]) / pt.tensor(_data["t_total"]), marker="x",
+    ax.plot(_data["final_variance"], pt.tensor(_data["t_adaptive"]) / pt.tensor(_data["t_total"]), marker="x",
             label=r"$t_{adaptive} \, / \, t_{total}$")
-    ax.plot(data["final_variance"], pt.tensor(_data["t_renumbering"]) / pt.tensor(_data["t_total"]), marker="x",
+    ax.plot(_data["final_variance"], pt.tensor(_data["t_renumbering"]) / pt.tensor(_data["t_total"]), marker="x",
             label=r"$t_{renumbering} \, / \, t_{total}$")
-    # ax.set_xlim(0, 1)
+    if _data["t_geometry"]:
+        ax.plot(_data["final_variance"], pt.tensor(_data["t_geometry"]) / pt.tensor(_data["t_total"]), marker="x",
+                label=r"$t_{geometry} \, / \, t_{total}$")
+
+    # plot reference lines for variance = 100 % and N_cells / N_cells_orig = 1
+    ax.plot([min(_data["final_variance"]), max(_data["final_variance"])], [min(_data["n_cells"]) / _n_cells_orig, 1],
+            color="#1f77b4", ls="-.", label=r"$N_{cells} \propto \sigma(p)$")
+
     ax.set_ylim(0, 1)
     ax.set_xlabel(r"$\sigma(p) \, / \, \sigma(p_{orig})$")
-    ax.legend()
+    fig.legend(ncols=3, loc="upper center")
+    fig.subplots_adjust(top=0.86)
     plt.savefig(join(save_path, f"{save_name}.png"), dpi=340)
     plt.show()
 
 
 if __name__ == "__main__":
-    load_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
-    save_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "plots")
+    load_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D",
+                              "with_geometry_refinement", "results")
+    save_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D",
+                              "with_geometry_refinement", "plots")
     n_cells_orig = 21250
 
     # load the data
@@ -72,8 +82,10 @@ if __name__ == "__main__":
     plot_results_parameter_study(data, save_path_cylinder, n_cells_orig)
 
     # cube
-    load_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "results")
-    save_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "plots")
+    load_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
+                          "with_geometry_refinement", "results")
+    save_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
+                          "with_geometry_refinement", "plots")
     n_cells_orig = 1112000
 
     # load the data

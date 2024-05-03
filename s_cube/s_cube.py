@@ -113,7 +113,7 @@ class SamplingTree(object):
         self._current_min_level = 0
         self._current_max_level = 0
         self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.001 * vertices.size()[0])  # end value = 0.1% of original grid size
+        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)  # end value = 1% of start value
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -447,7 +447,7 @@ class SamplingTree(object):
 
         :param _refined_cells: indices of the cells which are newly added
         :param _refine_geometry: flag if we want to refine the grid near geometry objects
-        :param _names:  TODO
+        :param _names: names of the geometry object to check (or to refine)
         :return: None if we removed all invalid cells, if '_refine_geometry = True' returns list with indices of the
                  cells which are neighbors of geometries / domain boundaries
         """
