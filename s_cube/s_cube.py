@@ -1,13 +1,12 @@
 """
     implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
 """
-from typing import Tuple
-
 import numpy as np
 import torch as pt
 
 from time import time
 from numba import njit
+from typing import Tuple
 from sklearn.neighbors import KNeighborsRegressor
 
 """
@@ -89,7 +88,7 @@ class SamplingTree(object):
     """
 
     def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), smooth_geometry: bool = True,
-                 min_variance: float = 0.75, min_refinement_geometry: int = None):
+                 min_variance: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -101,6 +100,7 @@ class SamplingTree(object):
         :param min_refinement_geometry: flag if the geometries should be resolved with a min. refinement level.
                                         If 'None' and 'smooth_geometry = True', the geometries are resolved with the
                                         max. refinement level encountered at the geometry
+        :param which_geometries: which geometries should be refined, if None all except the domain will be refined
         :param min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                              grid), if 'None' the max. number of cells will be used as stopping criteria
         """
@@ -126,6 +126,7 @@ class SamplingTree(object):
         self._leaf_cells = None
         self._geometry = []
         self._smooth_geometry = smooth_geometry
+        self._which_geometries = which_geometries
         self._min_refinement_geometry = min_refinement_geometry
         self._n_cells_after_uniform = None
         self._N_cells_per_iter = []
@@ -288,13 +289,28 @@ class SamplingTree(object):
                             * sum_delta_metric
 
     def _update_leaf_cells(self) -> None:
+        """
+        update the leaf cells, make sure all parent cells are removed as leaf cell
+
+        :return: None
+        """
         self._leaf_cells = [cell.index for cell in self._cells if cell.leaf_cell()]
 
     def _update_min_ref_level(self) -> None:
+        """
+        update the current min. refinement level within the grid
+
+        :return: None
+        """
         min_level = min([self._cells[index].level for index in self._leaf_cells])
         self._current_min_level = max(self._current_min_level, min_level)
 
     def leaf_cells(self) -> list:
+        """
+        get all current leaf cells
+
+        :return: list containingg all current leaf cells
+        """
         return [self._cells[i] for i in self._leaf_cells]
 
     def _check_stopping_criteria(self) -> bool:
@@ -410,7 +426,11 @@ class SamplingTree(object):
         print("\nFinished adaptive refinement.")
         if self._smooth_geometry:
             t_start_geometry = time()
-            self._refine_geometry(_names=[g.obj_name for g in self._geometry if "domain" not in g.obj_name])
+            if self._which_geometries is None:
+                obj_to_refine = [g.obj_name for g in self._geometry if g.inside]
+            else:
+                obj_to_refine = self._which_geometries
+            self._refine_geometry(_names=obj_to_refine)
             t_end_geometry = time()
 
         # assemble the final grid
@@ -629,7 +649,13 @@ class SamplingTree(object):
 
         print("Finished geometry refinement.")
 
-    def _compute_captured_variance(self):
+    def _compute_captured_variance(self) -> bool:
+        """
+        compute the variance of the metric captured by the current grid, relative to the variance of the original grid
+
+        :return: bool, indicating if the current captured variance is larger than the min. variance defined as stopping
+                 criteria
+        """
         # the metric is computed at the cell centers for the original grid from CFD
         _centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
         _current_variance = pt.from_numpy(self._knn.predict(_centers))

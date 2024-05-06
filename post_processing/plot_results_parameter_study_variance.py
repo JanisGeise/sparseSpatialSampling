@@ -1,8 +1,6 @@
 """
     plot the results of the parameter study executed with the 'parameter_study_variance_vs_cells.py' script
 """
-import os.path
-
 import torch as pt
 import matplotlib.pyplot as plt
 
@@ -34,7 +32,7 @@ def load_results(_load_path: str) -> dict:
 
 
 def plot_results_parameter_study(_data: dict, save_path: str, _n_cells_orig: int,
-                                 save_name: str = "parameters_vs_captured_variance"):
+                                 save_name: str = "parameters_vs_captured_variance") -> None:
     # create directory for plots
     if not path.exists(save_path):
         makedirs(save_path)

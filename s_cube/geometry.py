@@ -2,21 +2,50 @@
     implements class for storing the geometry and the domain, currently only simple geometries are allowed, such as:
         - rectangle (2D), cube (3D)
         - circle (2D), sphere (3D)
+
+    Further, STL files are allowed (currently,the coordinates within the STL file must be provided, will be changed in
+    the future)
+        - currently only 2D tested
 """
 import torch as pt
-from flowtorch.data import mask_box, mask_sphere
 from shapely import Point
+from flowtorch.data import mask_box, mask_sphere
 
 
 class GeometryObject:
     def __init__(self, lower_bound, upper_bound, obj_type: str, geometry: bool = True, name: str = "cube",
-                 _refine: bool = False, _coordinates: any = None):
-        self._inside = geometry
+                 _coordinates: any = None):
+        """
+        Implements a geometry object acting as geometry inside the numerical domain, or as the numerical domain.
+
+        Important Note: exactly one geometry needs to be specified as (main) domain, which is use to compute the main
+                        dimensions of the domain and to initialize everything. If further sub-domains need to be
+                        specified, e.g., to mask out other areas (e.g. a step at the domain boundary), these geometry
+                        objects are not allowed to have the 'obj_type' domain. To define that these objects should act
+                        as a domain, the parameter 'inside' needs to be set to False instead
+
+        :param lower_bound: lower boundary, sorted as:
+
+                            [x_min, y_min, z_min]               (3D, cube type)
+                            [x_center, y_center, z_center]      (3D, sphere type)
+
+                            for 2D, the z-component is not present. If lower_bound is 'None', an STL file needs to be
+                            provided as geometry
+        :param upper_bound: upper boundary, sorted as:
+                            [x_max, y_max, z_max]       (3D, cube type)
+                            [radius]                    (3D, sphere type)
+                            If 'None', an STL file needs to be provided as geometry
+        :param obj_type: Either "sphere", "cube" or "STL". If 'STL', the coordinates of the geometry need to be provided
+        :param geometry: if we have a geometry type or a domain type. If 'False', all points outside this geometry will
+                         be removed, if 'True' all points inside the geometry will be removed
+        :param name: name of the geometry object, can be chosen freely
+        :param _coordinates: coordinates of the geometry, required if an STL file is provided ass geometry
+        """
+        self.inside = geometry
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
         self._obj_type = obj_type
         self.obj_name = name
-        self._refine = _refine
         self._coordinates = _coordinates
 
         # check if the object type matches the ones currently implemented
@@ -37,7 +66,7 @@ class GeometryObject:
         # geometry or outside the domain
         if not _refine:
             # any(~geometry), because mask returns False if we are outside, but we want True if we are outside
-            if self._inside:
+            if self.inside:
                 if any(~mask):
                     invalid = False
                 else:
@@ -52,7 +81,7 @@ class GeometryObject:
 
         # otherwise we want to refine all cells which have at least one node in the geometry / outside the domain
         else:
-            if self._inside:
+            if self.inside:
                 if all(~mask):
                     invalid = False
                 else:

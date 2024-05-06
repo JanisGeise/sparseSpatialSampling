@@ -4,7 +4,6 @@
 import torch as pt
 
 from os import path, makedirs
-from typing import List
 from typing import Union
 from flowtorch.data import FOAMDataloader, mask_box
 
@@ -50,10 +49,10 @@ def check_geometry_objects(_geometries: list) -> bool:
     return True
 
 
-def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: List[dict], _save_path: str,
+def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
                             _n_cells_max: int = None, _refine_geometry: bool = True,
-                            _min_variance: float = 0.9) -> DataWriter:
+                            _min_variance: float = 0.9, _to_refine: list = None) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
@@ -77,6 +76,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _refine_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
     :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                           grid), if 'None' the max. number of cells will be used as stopping criteria
+    :param _to_refine: which geometries should be refined, if None all except the domain will be refined
     :return: None
     """
     # check if the dicts for the geometry objects are correct
@@ -90,7 +90,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
-                            smooth_geometry=_refine_geometry, min_variance=_min_variance)
+                            smooth_geometry=_refine_geometry, min_variance=_min_variance, which_geometries=_to_refine)
 
     # add the cube and the domain
     for g in _geometry_objects:
@@ -124,8 +124,17 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                               _field_names: Union[list, str] = None, _write_times: list = None,
                               _get_field_names_and_times: bool = False):
     """
-        function for loading fields from OpenFoam either for a single field, multiple fields at once, single time steps
-        or multiple time steps at once. documentation coming soon ...
+    function for loading fields from OpenFoam either for a single field, multiple fields at once, single time steps
+    or multiple time steps at once.
+
+    :param _load_dir: path to the original CFD data
+    :param _n_dimensions: number of physical dimensions
+    :param _boundaries: boundaries of the numerical domain, need to be the same as used for the execution of the S^3
+    :param _field_names: names of the fields which should be exported
+    :param _write_times: numerical time steps which should be exported
+    :param _get_field_names_and_times: returns available field names at first available time steps and write times
+    :return: if _get_field_names_and_times = True: available field names at first available time steps and write times
+             if False: the specified field, if field can't be found, 'None' is returned
     """
     # create foam loader object
     loader = FOAMDataloader(_load_dir)
