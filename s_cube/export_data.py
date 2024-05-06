@@ -80,14 +80,14 @@ class DataWriter:
 
             # write the datasets for each time step
             for i, t in enumerate(self.times):
-                # in case we have a scalar
-                if len(self._interpolated_fields[key].centers.size()) == 2:
-                    _center.create_dataset(str(t), data=self._interpolated_fields[key].centers[:, i])
-                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key].vertices[:, i])
+                # in case we have a scalar we need to remove the additional dimension we created for fitting the data
+                if len(self._interpolated_fields[key].centers.squeeze().size()) == 2:
+                    _center.create_dataset(str(t.item()), data=self._interpolated_fields[key].centers.squeeze()[:, i])
+                    _vertices.create_dataset(str(t.item()), data=self._interpolated_fields[key].vertices.squeeze()[:, i])
                 # in case we have a vector
                 else:
-                    _center.create_dataset(str(t), data=self._interpolated_fields[key].centers[:, :, i])
-                    _vertices.create_dataset(str(t), data=self._interpolated_fields[key].vertices[:, :, i])
+                    _center.create_dataset(str(t.item()), data=self._interpolated_fields[key].centers[:, :, i])
+                    _vertices.create_dataset(str(t.item()), data=self._interpolated_fields[key].vertices[:, :, i])
 
         # write global header of XDMF file
         with open(join(self._save_dir, f"{self._save_name}.xdmf"), "w") as f_out:
