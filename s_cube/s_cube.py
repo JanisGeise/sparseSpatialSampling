@@ -88,8 +88,8 @@ class SamplingTree(object):
     class implementing the SamplingTree, which is creates the grid (tree structure)
     """
 
-    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), _smooth_geometry: bool = True,
-                 min_variance: float = 0.75):
+    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), smooth_geometry: bool = True,
+                 min_variance: float = 0.75, min_refinement_geometry: int = None):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -97,7 +97,10 @@ class SamplingTree(object):
         :param target: the metric based on which the grid should be created, e.g. std. deviation of pressure wrt time
         :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically
         :param level_bounds: min. and max. number of levels of the final grid
-        :param _smooth_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
+        :param smooth_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
+        :param min_refinement_geometry: flag if the geometries should be resolved with a min. refinement level.
+                                        If 'None' and 'smooth_geometry = True', the geometries are resolved with the
+                                        max. refinement level encountered at the geometry
         :param min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                              grid), if 'None' the max. number of cells will be used as stopping criteria
         """
@@ -113,7 +116,7 @@ class SamplingTree(object):
         self._current_min_level = 0
         self._current_max_level = 0
         self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)  # end value = 1% of start value
+        self._cells_per_iter_end = int(0.05 * self._cells_per_iter_start)  # end value = 5% of start value
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -122,7 +125,8 @@ class SamplingTree(object):
         self._cells = None
         self._leaf_cells = None
         self._geometry = []
-        self._smooth_geometry = _smooth_geometry
+        self._smooth_geometry = smooth_geometry
+        self._min_refinement_geometry = min_refinement_geometry
         self._n_cells_after_uniform = None
         self._N_cells_per_iter = []
         self.all_nodes = []
@@ -555,6 +559,7 @@ class SamplingTree(object):
         """
         # check if the level difference of current cell is larger than one wrt nb cells -> if so, then refine the nb
         # cell in order to avoid too large level differences between adjacent cells
+        # TODO. sometimes the constraint is violated for some reason -> needs to be investigated
         idx_list = []
         for n in self._cells[cell_no_].nb:
             if n is not None and n.leaf_cell() and abs(n.level - self._cells[cell_no_].level) > dl:
@@ -572,8 +577,13 @@ class SamplingTree(object):
         # to save some time, only go through all leaf cells at the beginning. For later iterations we will use only the
         # newly created cells
         _all_cells = set(self.remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _names=_names))
-        _global_max_level = max([self._cells[cell].level for cell in _all_cells])
         _global_min_level = min([self._cells[cell].level for cell in _all_cells])
+
+        # determine the max. refinement level for the geometries
+        if self._min_refinement_geometry is None:
+            _global_max_level = max([self._cells[cell].level for cell in _all_cells])
+        else:
+            _global_max_level = self._min_refinement_geometry
 
         while _global_max_level > _global_min_level:
             self._update_leaf_cells()
@@ -589,7 +599,6 @@ class SamplingTree(object):
 
                 # but still check the constraint for the nb cells, but this time we don't want any level difference
                 # since we are directly at the geometry.
-                # TODO: constraint in vicinity not always fulfilled, max. delta level @ geometry: 1 < max. level
                 to_refine.update(self._check_constraint(i, dl=0))
 
             new_cells = []

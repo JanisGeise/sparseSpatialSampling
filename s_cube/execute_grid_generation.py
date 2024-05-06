@@ -25,24 +25,25 @@ def check_geometry_objects(_geometries: list) -> bool:
 
     # loop over all entries and check if all keys are present and match the required format
     counter = 0
+    keys = {"name", "is_geometry", "bounds", "type"}
     for i, g in enumerate(_geometries):
-        assert set(g.keys()) == {"name", "is_geometry", "bounds", "type"}, f"The specified keys of geometry no. {i}" \
-                                                                           f" 'g.keys()' do not match the required keys" \
-                                                                           f"'{'name', 'is_geometry', 'bounds', 'type'}'."
+        assert all([k in set(g.keys()) for k in keys]), f"The specified keys of geometry no. {i} do not match the " \
+                                                        f"required keys '{'name', 'is_geometry', 'bounds', 'type'}'."
 
         # check if we have exactly one domain specified
         if not g["is_geometry"]:
             counter += 1
 
         # check if the format of the bounds are correct
-        assert len(g["bounds"]) == 2, f"too many bounds for geometry no. {i} specified. Expected exactly 2 lists."
+        if g["type"].lower() != "stl":
+            assert len(g["bounds"]) == 2, f"too many bounds for geometry no. {i} specified. Expected exactly 2 lists."
 
-        # for sphere, we have only the radius as 2nd element
-        if g["type"] != "sphere":
-            assert len(g["bounds"][0]) == len(g["bounds"][1]), f"the size of the lower bounds for geometry no. {i} " \
-                                                               f"does not match the size of the upper bounds."
-            assert all(min_val < max_val for min_val, max_val
-                       in zip(g["bounds"][0], g["bounds"][1])), f"lower boundaries of geometry no. {i} > upper bounds."
+            # for sphere, we have only the radius as 2nd element
+            if g["type"] != "sphere":
+                assert len(g["bounds"][0]) == len(g["bounds"][1]), f"the size of the lower bounds for geometry no. " \
+                                                                   f"{i} does not match the size of the upper bounds."
+                assert all(min_val < max_val for min_val, max_val in
+                           zip(g["bounds"][0], g["bounds"][1])), f"lower boundaries of geometry no. {i} > upper bounds."
 
     assert counter == 1, "More than one domain specified."
 
@@ -89,12 +90,17 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
-                            _smooth_geometry=_refine_geometry, min_variance=_min_variance)
+                            smooth_geometry=_refine_geometry, min_variance=_min_variance)
 
     # add the cube and the domain
     for g in _geometry_objects:
-        sampling.geometry.append(GeometryObject(lower_bound=g["bounds"][0], upper_bound=g["bounds"][1],
-                                                obj_type=g["type"], geometry=g["is_geometry"], name=g["name"]))
+        if g["type"].lower() == "stl":
+            sampling.geometry.append(GeometryObject(lower_bound=None, upper_bound=None, obj_type=g["type"],
+                                                    geometry=g["is_geometry"], name=g["name"],
+                                                    _coordinates=g["coordinates"]))
+        else:
+            sampling.geometry.append(GeometryObject(lower_bound=g["bounds"][0], upper_bound=g["bounds"][1],
+                                                    obj_type=g["type"], geometry=g["is_geometry"], name=g["name"]))
 
     # create the grid
     sampling.refine()

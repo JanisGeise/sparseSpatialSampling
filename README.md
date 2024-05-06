@@ -12,7 +12,7 @@ for boundary layers etc.
 - generalization for arbitrary geometries and domain boundaries, handle stl files as input
 
 ## Notes
-`s_cube.py, line (in __init__ - method, line 115 & 116)`:  
+`s_cube.py, line (in __init__ - method, line 118 & 119)`:  
 - starting value `n_cells_per_iter` = 1% of original grid size  
 `self._cells_per_iter_start = int(0.01 * vertices.size()[0])`
 
