@@ -3,12 +3,13 @@
         - rectangle (2D), cube (3D)
         - circle (2D), sphere (3D)
 
-    Further, STL files are allowed (currently,the coordinates within the STL file must be provided, will be changed in
-    the future)
-        - currently only 2D tested
+    Further, arbitrary geometries, e.g., loaded from STL files, can be used. However, these geometries need to be
+    provided in a form such their coordinates represent an enclosed area (2D)
+
+        - currently only 2D tested and implemented, 3D will be coming soon...
 """
-import torch as pt
-from shapely import Point
+from torch import tensor
+from shapely import Point, Polygon
 from flowtorch.data import mask_box, mask_sphere
 
 
@@ -18,8 +19,8 @@ class GeometryObject:
         """
         Implements a geometry object acting as geometry inside the numerical domain, or as the numerical domain.
 
-        Important Note: exactly one geometry needs to be specified as (main) domain, which is use to compute the main
-                        dimensions of the domain and to initialize everything. If further sub-domains need to be
+        Important Note: exactly one geometry needs to be specified as (main) domain, which is used to compute the main
+                        dimensions of the domain and to initialize everything. If further subdomains need to be
                         specified, e.g., to mask out other areas (e.g. a step at the domain boundary), these geometry
                         objects are not allowed to have the 'obj_type' domain. To define that these objects should act
                         as a domain, the parameter 'inside' needs to be set to False instead
@@ -39,14 +40,15 @@ class GeometryObject:
         :param geometry: if we have a geometry type or a domain type. If 'False', all points outside this geometry will
                          be removed, if 'True' all points inside the geometry will be removed
         :param name: name of the geometry object, can be chosen freely
-        :param _coordinates: coordinates of the geometry, required if an STL file is provided ass geometry
+        :param _coordinates: coordinates of the geometry, required if an STL file is provided as geometry. Note: The
+                             coordinates have to form an enclosed ares (2D)
         """
         self.inside = geometry
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
         self._obj_type = obj_type
         self.obj_name = name
-        self._coordinates = _coordinates
+        self._coordinates = Polygon(_coordinates) if _coordinates is not None else None
 
         # check if the object type matches the ones currently implemented
         self._check_obj_type()
@@ -60,7 +62,7 @@ class GeometryObject:
         else:
             # for each node of the cell check if it is inside the geometry. We can't compute this at once for all nodes,
             # because within() method only returns a single bool, but we need to have a bool for each node
-            mask = pt.tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
+            mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
 
         # if we are not refining the geometry, then we want to remove the cells which have all nodes located inside a
         # geometry or outside the domain
