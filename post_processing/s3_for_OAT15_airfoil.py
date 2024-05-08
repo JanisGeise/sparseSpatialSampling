@@ -78,21 +78,21 @@ def prepare_fields(_load_path: str, _field_name: str) -> pt.Tensor:
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     load_path = join("..", "data", "2D", "OAT15")
-    area = "large"
+    area = "small"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"results_metric_based_on_ma_stl_{area}")
+                             f"results_metric_based_on_p_stl_{area}")
     # execute S^3 for range of variances (for parameter study)
-    min_variance = pt.arange(0.25, 1.05, 0.05)
+    # min_variance = pt.arange(0.25, 1.05, 0.05)
+    min_variance = [0.20]
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    # p = pt.load(join(load_path, "p_small_every10.pt"))
+    p = pt.load(join(load_path, "p_small_every10.pt"))
     xz = pt.load(join(load_path, "vertices_and_masks.pt"))
-    # xz = pt.stack([xz["x_small"], xz["z_small"]], dim=-1)
 
     # test on the large field with 245 568 cells
     load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
-    ma = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    # ma = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
 
     # load the airfoil geometry of the leading airfoil from STL file
     oat15 = load_airfoil_as_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
@@ -111,20 +111,17 @@ if __name__ == "__main__":
     times = pt.load(join(load_path, "oat15_tandem_times.pt"))[::10]
 
     # execute the S^3 algorithm and export the pressure field for the generated grid
-    # metric = pt.std(p, dim=1)
-    metric = pt.std(ma, dim=1)
+    metric = pt.std(p, dim=1)
+    # metric = pt.std(ma, dim=1)
 
     for v in min_variance:
         export = execute_grid_generation(xz, metric, geometry, save_path_results, "OAT15_" + str(area) +
-                                         "_area_variance_{:.2f}".format(v), "OAT15", _min_variance=v)
+                                         "_area_variance_{:.2f}_test_no_g_refinement".format(v), "OAT15",
+                                         _min_variance=v, _write_times=times, _refine_geometry=False)
         pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_" + str(area) +
                                        "_area_variance_{:.2f}.pt".format(v)))
-        export.times = times
 
         # we need to add one dimension, if we have a scalar field
-        if len(ma.size()) == 2:
-            # export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
-            export.fit_data(xz, ma.unsqueeze(1), "Ma", _n_snapshots_total=None)
-        else:
-            export.fit_data(xz, ma, "Ma", _n_snapshots_total=None)
+        export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
+        # export.fit_data(xz, ma.unsqueeze(1), "Ma", _n_snapshots_total=None)
         export.write_data_to_file()

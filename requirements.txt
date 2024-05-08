@@ -1,8 +1,8 @@
-numpy~=1.22.4
-torch~=1.13.1
-numba~=0.58.1
-scikit-learn~=1.1.1
-flowTorch~=1.2
-shapely~=2.0.4
-h5py~=3.7.0
-matplotlib~=3.6.2
+numpy
+torch
+numba
+scikit-learn
+flowTorch
+shapely
+h5py
+matplotlib

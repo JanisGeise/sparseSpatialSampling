@@ -50,7 +50,7 @@ def load_cylinder_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.T
     return data, xy, list(map(float, write_time))
 
 
-def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, list]:
+def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
     """
     load the pressure field of the surfaceMountedCube case, mask out an area
 
@@ -76,7 +76,7 @@ def load_cube_data(load_dir: str, boundaries: list) -> Tuple[pt.Tensor, pt.Tenso
     xyz = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
                     pt.masked_select(vertices[:, 2], mask)], dim=1)
 
-    return data, xyz, list(map(float, write_time))
+    return data, xyz, pt.tensor(list(map(float, write_time)))
 
 
 if __name__ == "__main__":

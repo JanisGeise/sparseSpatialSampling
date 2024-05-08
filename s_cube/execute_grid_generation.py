@@ -52,7 +52,8 @@ def check_geometry_objects(_geometries: list) -> bool:
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
                             _n_cells_max: int = None, _refine_geometry: bool = True,
-                            _min_variance: float = 0.9, _to_refine: list = None) -> DataWriter:
+                            _min_variance: float = 0.9, _to_refine: list = None,
+                            _write_times: pt.Tensor = None) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
     one entry containing information about the domain.
@@ -77,6 +78,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
                           grid), if 'None' the max. number of cells will be used as stopping criteria
     :param _to_refine: which geometries should be refined, if None all except the domain will be refined
+    :param _write_times: numerical time steps of the simulation
     :return: None
     """
     # check if the dicts for the geometry objects are correct
@@ -112,7 +114,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     # fit the pressure field onto the new mesh and export the data
     _export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, save_dir=_save_path,
                               domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
-                              save_name=_save_name, grid_name=_save_name)
+                              save_name=_save_name, grid_name=_save_name, times=_write_times)
 
     # add the final data of mesh and refinement
     _export_data.mesh_info = sampling.data_final_mesh
@@ -218,7 +220,10 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
 def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> None:
     """
-    wrapper function for interpolating the original CFD data onto the generated grid with the S^3 algorithm
+    wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
+    S^3 algorithm. If the data was not generated with OpenFoam, the 'fit()' method of the DataWriter class needs to be
+    called directly with the CFD data and coordinates of the original grid as, e.g., implemented in
+    'post_processing/s3_for_OAT15_airfoil.py'
 
     :param datawriter: Datawriter object resulting from the refinement with S^3
     :param load_path: path to the original CFD data
@@ -230,7 +235,7 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
                                               _get_field_names_and_times=True)
 
     # save time steps of all snapshots, which will be exported to HDF5 & XDMF
-    datawriter.times = list(map(float, times))
+    datawriter.times = pt.tensor(list(map(float, times)))
 
     # interpolate and export the specified fields
     for f in fields:
