@@ -8,9 +8,14 @@
 
         - currently only 2D tested and implemented, 3D will be coming soon...
 """
+import logging
+
 from torch import tensor
 from shapely import Point, Polygon
 from flowtorch.data import mask_box, mask_sphere
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class GeometryObject:
@@ -98,11 +103,11 @@ class GeometryObject:
 
     def _check_obj_type(self):
         if self._obj_type != "cube" and self._obj_type != "sphere" and self._obj_type.upper() != "STL":
-            print(f"Unknown object type '{self._obj_type}'. Valid object types are 'sphere' or 'cube'")
+            logger.critical(f"Unknown object type '{self._obj_type}'. Valid object types are 'sphere' or 'cube'")
             exit()
         if self._obj_type.upper() == "STL" and self._coordinates is None:
             # if we have an STL file check if the coordinates are provided, if not then exit
-            print(f"Coordinates of the STL file for geometry '{self.obj_name}' are not provided.")
+            logger.critical(f"Coordinates of the STL file for geometry '{self.obj_name}' are not provided.")
             exit()
 
 

@@ -28,7 +28,7 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
     for v in variances_to_run:
         export = execute_grid_generation(coordinates, metric, geometries, save_path,
                                          "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
-                                         _min_variance=v.item())
+                                         _min_metric=v.item())
         pt.save(export.mesh_info, join(save_path, "mesh_info_variance_{:.2f}.pt".format(v.item())))
         export_data(export, load_path, boundaries)
 

@@ -1,13 +1,18 @@
 """
     implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
 """
+import logging
 import numpy as np
 import torch as pt
 
 from time import time
 from numba import njit
-from typing import Tuple
+from typing import Tuple, Union
 from sklearn.neighbors import KNeighborsRegressor
+
+DEBUG = False
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 """
 Note:
@@ -88,7 +93,8 @@ class SamplingTree(object):
     """
 
     def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), smooth_geometry: bool = True,
-                 min_variance: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None):
+                 min_metric: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None,
+                 max_delta_level: bool = False):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -101,12 +107,15 @@ class SamplingTree(object):
                                         If 'None' and 'smooth_geometry = True', the geometries are resolved with the
                                         max. refinement level encountered at the geometry
         :param which_geometries: which geometries should be refined, if None all except the domain will be refined
-        :param min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
-                             grid), if 'None' the max. number of cells will be used as stopping criteria
+        :param min_metric: percentage the metric the generated grid should capture (wrt the original grid), if 'None'
+                            the max. number of cells will be used as stopping criteria
+        :param max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
+                                difference of one (not working properly at the moment)
         """
-        # if 'min_variance' is not set, then use 'n_cells' as stopping criteria -> variance of 1 means we capture all
+        # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
-        self._min_variance = min_variance if min_variance is not None else 1
+        self._max_delta_level = max_delta_level
+        self._min_metric = min_metric if min_metric is not None else 1
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -133,7 +142,7 @@ class SamplingTree(object):
         self.all_nodes = []
         self.all_centers = []
         self.face_ids = None
-        self._variances = []
+        self._metric = []
         self.data_final_mesh = {}
         self._n_cells_orig = self._target.size()[0]
 
@@ -197,28 +206,6 @@ class SamplingTree(object):
                             dimensions=self._n_dimensions, idx=list(range(nodes.size()[0])))]
         self._update_leaf_cells()
 
-    def _find_neighbors(self, cell) -> list:
-        """
-        find all the neighbors of the current cell
-
-        :param cell: the current cell
-        :return: list with all neighbors of the cell, if geometry or domain bound is neighbor, the entry is set to'None'
-        """
-        n_neighbors = self._knn.n_neighbors
-        if cell.level < 2:
-            return n_neighbors * [None]
-        else:
-            # iterate over all possible neighbor cells and assign them if they are present
-            # TODO: why parent cell, we didn't create any children of the current cell so far...
-            #  -> doesn't make a difference within the results, delta level constraint is violated in both cases at the
-            #  same positions
-            nb_tmp = n_neighbors * [None]
-            for n in range(len(nb_tmp)):
-                if cell.nb[n] is not None:
-                    nb_tmp[n] = cell.nb[n]
-
-            return nb_tmp
-
     def _refine_uniform(self) -> None:
         """
         create uniform background mesh to save runtime, since the min. level of the generated grid is likely to be > 1
@@ -232,21 +219,23 @@ class SamplingTree(object):
             for i in self._leaf_cells:
                 cell = self._cells[i]
 
-                # find the neighbors of current cell
-                neighbors = self._find_neighbors(cell)
-
                 # compute cell centers
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
                 # assign the neighbors of current cell and add all new cells as children
-                cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
+                cell.children = list(self._assign_neighbors(cell, loc_center, new_index))
 
                 # assign idx for the newly created nodes
                 self._assign_indices(cell.children)
 
                 new_cells.extend(cell.children)
-                self._n_cells += (pow(2, self._n_dimensions) - 1)
+                self._n_cells += pow(2, self._n_dimensions)
                 new_index += pow(2, self._n_dimensions)
+
+            # update all nb
+            for cell in range(len(new_cells)):
+                new_cells[cell].parent.children = self._assign_neighbors(new_cells[cell].parent,
+                                                                         children=new_cells[cell].parent.children)
 
             self._cells.extend(new_cells)
             self._update_leaf_cells()
@@ -318,29 +307,29 @@ class SamplingTree(object):
 
     def _check_stopping_criteria(self) -> bool:
         """
-        check if the stopping criteria for ending the refinement process is met; either based on the capture variance
+        check if the stopping criteria for ending the refinement process is met; either based on the captured metric
         wrt to the original grid, or the max. number of cells specified
 
         :return: None
         """
         if abs(self._n_cells_max - 1e9) <= 1e-6:
-            return self._variances[-1] < self._min_variance
+            return self._metric[-1] < self._min_metric
         else:
-            return self._n_cells <= self._n_cells_max
+            return len(self._leaf_cells) <= self._n_cells_max
 
     def _compute_n_cells_per_iter(self) -> None:
         """
         update the number of cells which should be refined within the next iteration. The end number is set to one,
-        because in the last iteration we only want to refine a single cell to meet the defined variance for stopping as
+        because in the last iteration we only want to refine a single cell to meet the defined metric for stopping as
         close as possible. The relationship is computed as linear approximation, the start and end values as well as the
-        current value is known, this approach is either executed for the variance, or the number of cells, depending
+        current value is known, this approach is either executed for the metric, or the number of cells, depending
         on the specified stopping criteria.
 
         :return: None
         """
         if abs(self._n_cells_max - 1e9) <= 1e-6:
-            _delta_x = self._min_variance - self._variances[0]
-            _current_x = self._variances[-1]
+            _delta_x = self._min_metric - self._metric[0]
+            _current_x = self._metric[-1]
         else:
             _delta_x = self._n_cells_max - self._n_cells_after_uniform
             _current_x = self._n_cells
@@ -357,24 +346,24 @@ class SamplingTree(object):
 
         :return: None
         """
-        print("Starting refinement:")
+        logger.info("Starting refinement:")
         start_time = time()
         if self._min_level > 0:
             self._refine_uniform()
-            print("Finished uniform refinement.")
+            logger.info("Finished uniform refinement.")
         else:
             self._update_leaf_cells()
         end_time_uniform = time()
         iteration_count = 0
-        self._n_cells_after_uniform = self._n_cells
-        self._compute_captured_variance()
+        self._n_cells_after_uniform = len(self._leaf_cells)
+        self._compute_captured_metric()
 
         while self._check_stopping_criteria():
-            print(f"\r\tStarting iteration no. {iteration_count}, captured variance: "
-                  f"{round(self._variances[-1] * 100, 2)} %", end="", flush=True)
+            logger.info(f"\r\tStarting iteration no. {iteration_count}, captured metric: "
+                         f"{round(self._metric[-1] * 100, 2)} %")
 
-            # update _n_cells_per_iter based on the difference wrt variance or N_cells
-            if len(self._variances) >= 2:
+            # update _n_cells_per_iter based on the difference wrt metric or N_cells
+            if len(self._metric) >= 2:
                 self._compute_n_cells_per_iter()
 
             self._update_gain()
@@ -383,8 +372,12 @@ class SamplingTree(object):
             for i in self._leaf_cells[:min(self._cells_per_iter, self._n_cells)]:
                 cell = self._cells[i]
                 to_refine.add(cell.index)
-                if self._current_min_level > 1:
-                    # check if the nb cells have a max. delta level of one
+
+                # update nb of current cell
+                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
+
+                # check if the nb cells have the same level
+                if self._max_delta_level:
                     to_refine.update(self._check_constraint(i))
 
             new_cells = []
@@ -392,20 +385,17 @@ class SamplingTree(object):
             for i in to_refine:
                 cell = self._cells[i]
 
-                # find the neighbors of current cell
-                neighbors = self._find_neighbors(cell)
-
                 # compute cell centers
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
                 # assign the neighbors of current cell and add all new cells as children
-                cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
+                cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
 
                 # assign idx for the newly created nodes
                 self._assign_indices(cell.children)
 
                 new_cells.extend(cell.children)
-                self._n_cells += (pow(2, self._n_dimensions) - 1)
+                self._n_cells += pow(2, self._n_dimensions)
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
 
                 # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
@@ -421,15 +411,17 @@ class SamplingTree(object):
             self.remove_invalid_cells([c.index for c in new_cells])
 
             # compute global gain after refinement to check if we can stop the refinement
-            self._compute_captured_variance()
+            self._compute_captured_metric()
             iteration_count += 1
 
-        # [DEBUG] gather information about constraint violations
-        # self._search_for_constraint_violation()
-        # exit()
-
         # refine the grid near geometry objects is specified
-        print("\nFinished adaptive refinement.")
+        logger.info("\nFinished adaptive refinement.")
+
+        # [DEBUG] gather information about constraint violations
+        if DEBUG:
+            logger.debug("Checking for constraint violations prior after adaptive refinement.")
+            self._search_for_constraint_violation()
+
         if self._smooth_geometry:
             t_start_geometry = time()
             if self._which_geometries is None:
@@ -439,45 +431,56 @@ class SamplingTree(object):
             self._refine_geometry(_names=obj_to_refine)
             t_end_geometry = time()
 
+            # [DEBUG] gather information about constraint violations
+            if DEBUG:
+                logger.debug("Checking for constraint violations after geometry refinement.")
+                self._search_for_constraint_violation()
+
         # assemble the final grid
-        print("Starting renumbering final mesh.")
+        logger.info("Starting renumbering final mesh.")
         t_start_renumber = time()
         self._resort_nodes_and_indices_of_grid()
         end_time = time()
 
         # save and print timings and size of final mesh
+        self.data_final_mesh["size_initial_cell"] = self._width
         self.data_final_mesh["n_cells_orig"] = self._n_cells_orig
         self.data_final_mesh["n_cells"] = len(self._leaf_cells)
         self.data_final_mesh["iterations"] = iteration_count
         self.data_final_mesh["min_level"] = self._current_min_level
         self.data_final_mesh["max_level"] = self._current_max_level
-        self.data_final_mesh["variance_per_iter"] = self._variances
+        self.data_final_mesh["metric_per_iter"] = self._metric
         self.data_final_mesh["t_total"] = end_time - start_time
         self.data_final_mesh["t_uniform"] = end_time_uniform - start_time
         self.data_final_mesh["t_renumbering"] = end_time - t_start_renumber
 
-        print("Finished refinement in {:2.4f} s ({:d} iterations).".format(self.data_final_mesh["t_total"],
-                                                                           iteration_count))
-        print("Time for uniform refinement: {:2.4f} s".format(self.data_final_mesh["t_uniform"]))
+        logger.info("Finished refinement in {:2.4f} s ({:d} iterations).".format(self.data_final_mesh["t_total"],
+                                                                                  iteration_count))
+        logger.info("Time for uniform refinement: {:2.4f} s".format(self.data_final_mesh["t_uniform"]))
         if self._smooth_geometry:
             self.data_final_mesh["t_geometry"] = t_end_geometry - t_start_geometry
             self.data_final_mesh["t_adaptive"] = t_start_geometry - end_time_uniform
-            print("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
-            print("Time for geometry refinement: {:2.4f} s".format(self.data_final_mesh["t_geometry"]))
+            logger.info("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
+            logger.info("Time for geometry refinement: {:2.4f} s".format(self.data_final_mesh["t_geometry"]))
         else:
             self.data_final_mesh["t_geometry"] = None
             self.data_final_mesh["t_adaptive"] = t_start_renumber - end_time_uniform
-            print("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
-        print("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
-        print(self)
+            logger.info("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
+        logger.info("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
+        logger.info(self)
 
     def _search_for_constraint_violation(self):
-        # DEBUG: check if delta level is violated
-        print(f"\n\nmin. level: {self._current_min_level}, max. level: {self._current_max_level}\n")
+        # update all nb
+        for i in self._leaf_cells:
+            self._cells[i].parent.children = self._assign_neighbors(self._cells[i].parent,
+                                                                    children=self._cells[i].parent.children)
 
+        logger.info("\n")
+        # method for debugging, will be removed once everything works as expected
         fail, nb_no = set(), []
         for i in self._leaf_cells:
             cell = self._cells[i]
+            cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
             tmp = []
             for n, nb in enumerate(cell.nb):
                 if nb is not None and nb.leaf_cell() and abs(cell.level - nb.level) > 1:
@@ -499,9 +502,10 @@ class SamplingTree(object):
             numbers.append(n)
             indices.append(idx)  # same cell for all nb, so just take the 1st one
 
-        print(f"found {len(indices)} cells violating the delta level constraint:")
+        logger.debug(f"found {len(indices)} cells violating the delta level constraint:")
         for cell, nb, i, l in zip(fail, numbers, indices, levels):
-            print(f"cell idx. {cell[0]},\tlevel = {cell[1]},\tnb no. {nb},  \tidx. {i},\tmin. level = {l}")
+            logger.debug(f"cell idx. {cell[0]},\tlevel = {cell[1]},\tcenter: {self._cells[cell[0]].center},\tnb no. "
+                          f"{nb},  \tidx. {i},\tmin. level = {l}")
 
     def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False, _names: list = None) -> None or list:
         """
@@ -546,9 +550,6 @@ class SamplingTree(object):
             # remove all invalid cells as leaf cells if we have any
             self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
 
-            # update n_cells
-            self._n_cells = len(self._leaf_cells)
-
     def _resort_nodes_and_indices_of_grid(self) -> None:
         """
         remove all invalid and parent cells from the mesh. Sort the cell centers and vertices of the cells of the final
@@ -572,6 +573,7 @@ class SamplingTree(object):
         self.face_ids = pt.from_numpy(_all_idx)
         self.all_nodes = pt.from_numpy(_unique_node_coord)
         self.all_centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
+        self.all_levels = pt.tensor([self._cells[cell].level for cell in self._leaf_cells]).unsqueeze(-1)
 
     def _compute_cell_centers(self, idx_: int = None, factor_: float = 0.25, keep_parent_center_: bool = True,
                               cell_: Cell = None) -> pt.Tensor:
@@ -607,31 +609,29 @@ class SamplingTree(object):
         # each cell, but we need the parent cell center e.g. for computing the gain)
         return coord_[1:, :] if not keep_parent_center_ else coord_
 
-    def _check_constraint(self, cell_no_: int, dl: int = 1) -> list:
+    def _check_constraint(self, cell_no_: int) -> list:
         """
-        check if the level difference between a cell and its neighbors is max. one, if not then we need to refine all
-        cells for which the constraint is violated
-
-        TODO: still issue with delta level!
+        check if a cell and its neighbors have the same level, if not then we need to refine all cells for which this
+        constraint is violated, because after refinement of the current cell, we would end up with a level difference
+        of two
 
         :param cell_no_: current cell index for which we want to check the constraint
-        :return: list with indices of nb cell we need to refine, because delta level is > 1
+        :return: list with indices of nb cell we need to refine, because delta level is >= 1
         """
-        # check if the level difference of current cell is larger than one wrt nb cells -> if so, then refine the nb
-        # cell in order to avoid too large level differences between adjacent cells
-        idx_list = []
-        for n in self._cells[cell_no_].nb:
-            if n is not None and n.leaf_cell() and abs(n.level - self._cells[cell_no_].level) > dl:
-                idx_list.append(n.index)
-
-        return idx_list
+        # check if the level of current cell is the same as the one of all nb cells -> if not, then refine the nb
+        # cell in order to avoid too large level differences between adjacent cells. The same level is required,
+        # because at this point the child cells of the current cell are not yet created. If we allow a level difference
+        # here, this would lead to a delta level of 2 once the children are created
+        return [n.index for n in self._cells[cell_no_].nb if n is not None and n.leaf_cell() and
+                # abs(self._cells[cell_no_].level - n.level) > 0]
+                n.level < self._cells[cell_no_].level]
 
     def _refine_geometry(self, _names: list = None) -> None:
         """
         stripped down version of the 'refine()' method for refinement of the final grid near geometry objects or domain
         boundaries. The documentation of this method is equivalent to the 'refine()' method
         """
-        print("Starting geometry refinement.")
+        logger.info("Starting geometry refinement.")
 
         # to save some time, only go through all leaf cells at the beginning. For later iterations we will use only the
         # newly created cells
@@ -651,21 +651,22 @@ class SamplingTree(object):
 
             for i in _all_cells:
                 cell = self._cells[i]
+                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
 
                 # don't refine which have reached the max. level
                 if cell.level < _global_max_level:
                     to_refine.add(cell.index)
 
-                # but still check the constraint for the nb cells
-                to_refine.update(self._check_constraint(i))
+                # but still check the constraint for the nb cells if specified
+                if self._max_delta_level:
+                    to_refine.update(self._check_constraint(i))
 
             new_cells = []
             new_index = len(self._cells)
             for i in to_refine:
                 cell = self._cells[i]
-                neighbors = self._find_neighbors(cell)
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
-                cell.children = tuple(self._assign_neighbors(loc_center, cell, neighbors, new_index))
+                cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
                 self._assign_indices(cell.children)
                 new_cells.extend(cell.children)
                 self._n_cells += (pow(2, self._n_dimensions) - 1)
@@ -685,26 +686,26 @@ class SamplingTree(object):
             # update the min. level
             _global_min_level += 1
 
-        print("Finished geometry refinement.")
+        logger.info("Finished geometry refinement.")
 
-    def _compute_captured_variance(self) -> bool:
+    def _compute_captured_metric(self) -> bool:
         """
-        compute the variance of the metric captured by the current grid, relative to the variance of the original grid
+        compute the metric of the metric captured by the current grid, relative to the metric of the original grid
 
-        :return: bool, indicating if the current captured variance is larger than the min. variance defined as stopping
+        :return: bool, indicating if the current captured metric is larger than the min. metric defined as stopping
                  criteria
         """
         # the metric is computed at the cell centers for the original grid from CFD
         _centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
-        _current_variance = pt.from_numpy(self._knn.predict(_centers))
+        _current_metric = pt.from_numpy(self._knn.predict(_centers))
 
         # N_leaf_cells != N_cells_orig, so we need to use a norm. Target is saved as L2-Norm once the KNN is fitted, so
         # we don't need to compute it every iteration, since we have a vector, the Frobenius norm (used as default) is
         # the same as L2-norm
-        _ratio = pt.linalg.norm(_current_variance) / self._target
+        _ratio = pt.linalg.norm(_current_metric) / self._target
 
-        self._variances.append(_ratio.item())
-        return _ratio.item() < self._min_variance
+        self._metric.append(_ratio.item())
+        return _ratio.item() < self._min_metric
 
     def __len__(self):
         return self._n_cells
@@ -714,8 +715,8 @@ class SamplingTree(object):
                         Number of cells: {:d}
                         Minimum ref. level: {:d}
                         Maximum ref. level: {:d}
-                        Captured variance of original grid: {:.2f} %
-                  """.format(self._n_cells, self._current_min_level, self._current_max_level, self._variances[-1] * 100)
+                        Captured metric of original grid: {:.2f} %
+                  """.format(self._n_cells, self._current_min_level, self._current_max_level, self._metric[-1] * 100)
         return message
 
     @property
@@ -730,53 +731,54 @@ class SamplingTree(object):
     def geometry(self):
         return self._geometry
 
-    def _assign_neighbors(self, loc_center: pt.Tensor, cell: Cell, neighbors: list, new_idx: int) -> list:
+    def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor = None, new_idx: int = None,
+                          children: Union[Tuple, list] = None) -> list:
         """
         create a child cell from a given parent cell, assign its neighbors correctly to each child cell
 
         :param loc_center: center coordinates of the cell and its sub-cells
         :param cell: current cell
-        :param neighbors: list containing all neighbors of current cell
         :param new_idx: new index of the cell
         :return: the child cells with correctly assigned neighbors
         """
-        # each child cell gets new index within all cells
-        children = [Cell(new_idx + idx, cell, len(neighbors) * [None], loc, cell.level + 1,
-                         dimensions=self._n_dimensions) for idx, loc in enumerate(loc_center)]
+        if children is None:
+            # each child cell gets new index within all cells
+            children = [Cell(new_idx + idx, cell, len(cell.nb) * [None], loc, cell.level + 1,
+                             dimensions=self._n_dimensions) for idx, loc in enumerate(loc_center)]
 
         # add the neighbors for each of the child cells
         # neighbors for new lower left cell, we need to check for children, because we only assigned the parent cell,
         # which is ambiguous for the non-cornering neighbors. Further, we need to make sure that we have exactly N
         # children (if cells is removed due to geometry issues, then the children are empty list)
-        check = [n is not None and n.children is not None and n.children for n in neighbors]
+        check = [True if n is not None and n.children is not None and n.children else False for n in cell.nb]
 
         # lower left child, same plane (= south west upper))
-        children[CH["swu"]].nb[NB["w"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
-        children[CH["swu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+        children[CH["swu"]].nb[NB["w"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["seu"])
+        children[CH["swu"]].nb[NB["nw"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["neu"])
         children[CH["swu"]].nb[NB["n"]] = children[CH["nwu"]]
         children[CH["swu"]].nb[NB["ne"]] = children[CH["neu"]]
         children[CH["swu"]].nb[NB["e"]] = children[CH["seu"]]
-        children[CH["swu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
-        children[CH["swu"]].nb[NB["s"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
-        children[CH["swu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["neu"])
+        children[CH["swu"]].nb[NB["se"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["neu"])
+        children[CH["swu"]].nb[NB["s"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwu"])
+        children[CH["swu"]].nb[NB["sw"]] = parent_or_child(cell.nb, check[NB["sw"]], NB["sw"], CH["neu"])
 
         # upper left child, same plane (= north west upper))
-        children[CH["nwu"]].nb[NB["w"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
-        children[CH["nwu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["seu"])
-        children[CH["nwu"]].nb[NB["n"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
-        children[CH["nwu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
+        children[CH["nwu"]].nb[NB["w"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["neu"])
+        children[CH["nwu"]].nb[NB["nw"]] = parent_or_child(cell.nb, check[NB["nw"]], NB["nw"], CH["seu"])
+        children[CH["nwu"]].nb[NB["n"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swu"])
+        children[CH["nwu"]].nb[NB["ne"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["seu"])
         children[CH["nwu"]].nb[NB["e"]] = children[CH["neu"]]
         children[CH["nwu"]].nb[NB["se"]] = children[CH["seu"]]
         children[CH["nwu"]].nb[NB["s"]] = children[CH["swu"]]
-        children[CH["nwu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
+        children[CH["nwu"]].nb[NB["sw"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["seu"])
 
         # upper right child, same plane (= north east upper))
         children[CH["neu"]].nb[NB["w"]] = children[CH["nwu"]]
-        children[CH["neu"]].nb[NB["nw"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
-        children[CH["neu"]].nb[NB["n"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
-        children[CH["neu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swu"])
-        children[CH["neu"]].nb[NB["e"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
-        children[CH["neu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
+        children[CH["neu"]].nb[NB["nw"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swu"])
+        children[CH["neu"]].nb[NB["n"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["seu"])
+        children[CH["neu"]].nb[NB["ne"]] = parent_or_child(cell.nb, check[NB["ne"]], NB["ne"], CH["swu"])
+        children[CH["neu"]].nb[NB["e"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
+        children[CH["neu"]].nb[NB["se"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swu"])
         children[CH["neu"]].nb[NB["s"]] = children[CH["seu"]]
         children[CH["neu"]].nb[NB["sw"]] = children[CH["swu"]]
 
@@ -784,174 +786,174 @@ class SamplingTree(object):
         children[CH["seu"]].nb[NB["w"]] = children[CH["swu"]]
         children[CH["seu"]].nb[NB["nw"]] = children[CH["nwu"]]
         children[CH["seu"]].nb[NB["n"]] = children[CH["neu"]]
-        children[CH["seu"]].nb[NB["ne"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
-        children[CH["seu"]].nb[NB["e"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
-        children[CH["seu"]].nb[NB["se"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwu"])
-        children[CH["seu"]].nb[NB["s"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
-        children[CH["seu"]].nb[NB["sw"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
+        children[CH["seu"]].nb[NB["ne"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
+        children[CH["seu"]].nb[NB["e"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swu"])
+        children[CH["seu"]].nb[NB["se"]] = parent_or_child(cell.nb, check[NB["se"]], NB["se"], CH["nwu"])
+        children[CH["seu"]].nb[NB["s"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["neu"])
+        children[CH["seu"]].nb[NB["sw"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwu"])
 
         # if 2D, then we are done but for 3D, we need to add neighbors of upper and lower plane
         # same plane as current cell is always the same as for 2D
         if self._n_dimensions == 3:
             # lower left child, lower plane (= south west lower)
-            children[CH["swl"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["seu"])
-            children[CH["swl"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["neu"])
-            children[CH["swl"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
-            children[CH["swl"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
-            children[CH["swl"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
-            children[CH["swl"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["neu"])
-            children[CH["swl"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["nwu"])
-            children[CH["swl"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["swl"]], NB["swl"], CH["neu"])
-            children[CH["swl"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
-            children[CH["swl"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
-            children[CH["swl"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
+            children[CH["swl"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["wl"]], NB["wl"], CH["seu"])
+            children[CH["swl"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["wl"]], NB["wl"], CH["neu"])
+            children[CH["swl"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["nwu"])
+            children[CH["swl"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["neu"])
+            children[CH["swl"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["seu"])
+            children[CH["swl"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["sl"]], NB["sl"], CH["neu"])
+            children[CH["swl"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["sl"]], NB["sl"], CH["nwu"])
+            children[CH["swl"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["swl"]], NB["swl"], CH["neu"])
+            children[CH["swl"]].nb[NB["cl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["swu"])
+            children[CH["swl"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["seu"])
+            children[CH["swl"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["neu"])
             children[CH["swl"]].nb[NB["nu"]] = children[CH["nwu"]]
             children[CH["swl"]].nb[NB["neu"]] = children[CH["neu"]]
             children[CH["swl"]].nb[NB["eu"]] = children[CH["seu"]]
-            children[CH["swl"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
-            children[CH["swl"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
-            children[CH["swl"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["neu"])
+            children[CH["swl"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["neu"])
+            children[CH["swl"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwu"])
+            children[CH["swl"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["sw"]], NB["sw"], CH["neu"])
             children[CH["swl"]].nb[NB["cu"]] = children[CH["swu"]]
 
             # upper left child, lower plane (= north west lower)
-            children[CH["nwl"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["neu"])
-            children[CH["nwl"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nwl"]], NB["nwl"], CH["seu"])
-            children[CH["nwl"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["swu"])
-            children[CH["nwl"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["seu"])
-            children[CH["nwl"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
-            children[CH["nwl"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
-            children[CH["nwl"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
-            children[CH["nwl"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["wl"]], NB["wl"], CH["seu"])
-            children[CH["nwl"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
-            children[CH["nwl"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["neu"])
-            children[CH["nwl"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["seu"])
-            children[CH["nwl"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
-            children[CH["nwl"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
+            children[CH["nwl"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["wl"]], NB["wl"], CH["neu"])
+            children[CH["nwl"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["nwl"]], NB["nwl"], CH["seu"])
+            children[CH["nwl"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["nl"]], NB["nl"], CH["swu"])
+            children[CH["nwl"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["nl"]], NB["nl"], CH["seu"])
+            children[CH["nwl"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["neu"])
+            children[CH["nwl"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["seu"])
+            children[CH["nwl"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["swu"])
+            children[CH["nwl"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["wl"]], NB["wl"], CH["seu"])
+            children[CH["nwl"]].nb[NB["cl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["nwu"])
+            children[CH["nwl"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["neu"])
+            children[CH["nwl"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["nw"]], NB["nw"], CH["seu"])
+            children[CH["nwl"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swu"])
+            children[CH["nwl"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["seu"])
             children[CH["nwl"]].nb[NB["eu"]] = children[CH["neu"]]
             children[CH["nwl"]].nb[NB["seu"]] = children[CH["seu"]]
             children[CH["nwl"]].nb[NB["su"]] = children[CH["swu"]]
-            children[CH["nwl"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["seu"])
+            children[CH["nwl"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["seu"])
             children[CH["nwl"]].nb[NB["cu"]] = children[CH["nwu"]]
 
             # upper right child, lower plane (= north east lower)
-            children[CH["nel"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
-            children[CH["nel"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["swu"])
-            children[CH["nel"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["nl"]], NB["nl"], CH["seu"])
-            children[CH["nel"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["nel"]], NB["nel"], CH["swu"])
-            children[CH["nel"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["nwu"])
-            children[CH["nel"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["swu"])
-            children[CH["nel"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
-            children[CH["nel"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
-            children[CH["nel"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
+            children[CH["nel"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["nwu"])
+            children[CH["nel"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["nl"]], NB["nl"], CH["swu"])
+            children[CH["nel"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["nl"]], NB["nl"], CH["seu"])
+            children[CH["nel"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["nel"]], NB["nel"], CH["swu"])
+            children[CH["nel"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["nwu"])
+            children[CH["nel"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["swu"])
+            children[CH["nel"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["seu"])
+            children[CH["nel"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["swu"])
+            children[CH["nel"]].nb[NB["cl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["neu"])
             children[CH["nel"]].nb[NB["wu"]] = children[CH["nwu"]]
-            children[CH["nel"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swu"])
-            children[CH["nel"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["seu"])
-            children[CH["nel"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swu"])
-            children[CH["nel"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
-            children[CH["nel"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
+            children[CH["nel"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swu"])
+            children[CH["nel"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["seu"])
+            children[CH["nel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["ne"]], NB["ne"], CH["swu"])
+            children[CH["nel"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
+            children[CH["nel"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swu"])
             children[CH["nel"]].nb[NB["su"]] = children[CH["seu"]]
             children[CH["nel"]].nb[NB["swu"]] = children[CH["swu"]]
             children[CH["nel"]].nb[NB["cu"]] = children[CH["neu"]]
 
             # lower right child, lower plane (= south east lower)
-            children[CH["sel"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["swu"])
-            children[CH["sel"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["nwu"])
-            children[CH["sel"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["neu"])
-            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwu"])
-            children[CH["sel"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["swu"])
-            children[CH["sel"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["sel"]], NB["sel"], CH["nwu"])
-            children[CH["sel"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["neu"])
-            children[CH["sel"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["sl"]], NB["sl"], CH["nwu"])
-            children[CH["sel"]].nb[NB["cl"]] = parent_or_child(neighbors, check[NB["cl"]], NB["cl"], CH["seu"])
+            children[CH["sel"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["swu"])
+            children[CH["sel"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["nwu"])
+            children[CH["sel"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["neu"])
+            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
+            children[CH["sel"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["swu"])
+            children[CH["sel"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["sel"]], NB["sel"], CH["nwu"])
+            children[CH["sel"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["sl"]], NB["sl"], CH["neu"])
+            children[CH["sel"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["sl"]], NB["sl"], CH["nwu"])
+            children[CH["sel"]].nb[NB["cl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["seu"])
             children[CH["sel"]].nb[NB["wu"]] = children[CH["swu"]]
             children[CH["sel"]].nb[NB["nwu"]] = children[CH["nwu"]]
             children[CH["sel"]].nb[NB["nu"]] = children[CH["neu"]]
-            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["el"]], NB["el"], CH["nwu"])
-            children[CH["sel"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swu"])
-            children[CH["sel"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwu"])
-            children[CH["sel"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["neu"])
-            children[CH["sel"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwu"])
+            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["nwu"])
+            children[CH["sel"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swu"])
+            children[CH["sel"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["se"]], NB["se"], CH["nwu"])
+            children[CH["sel"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["neu"])
+            children[CH["sel"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwu"])
             children[CH["sel"]].nb[NB["cu"]] = children[CH["seu"]]
 
             # lower left child, upper plane (= south west upper)
-            children[CH["swu"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["sel"])
-            children[CH["swu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["nel"])
+            children[CH["swu"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["sel"])
+            children[CH["swu"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["nel"])
             children[CH["swu"]].nb[NB["nl"]] = children[CH["nwl"]]
             children[CH["swu"]].nb[NB["nel"]] = children[CH["nel"]]
             children[CH["swu"]].nb[NB["el"]] = children[CH["sel"]]
-            children[CH["swu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nel"])
-            children[CH["swu"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwl"])
-            children[CH["swu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["sw"]], NB["sw"], CH["nel"])
+            children[CH["swu"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nel"])
+            children[CH["swu"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwl"])
+            children[CH["swu"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["sw"]], NB["sw"], CH["nel"])
             children[CH["swu"]].nb[NB["cl"]] = children[CH["swl"]]
-            children[CH["swu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["sel"])
-            children[CH["swu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["nel"])
-            children[CH["swu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
-            children[CH["swu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
-            children[CH["swu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
-            children[CH["swu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nel"])
-            children[CH["swu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nwl"])
-            children[CH["swu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["swu"]], NB["swu"], CH["nel"])
-            children[CH["swu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
+            children[CH["swu"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["wu"]], NB["wu"], CH["sel"])
+            children[CH["swu"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["wu"]], NB["wu"], CH["nel"])
+            children[CH["swu"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nwl"])
+            children[CH["swu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nel"])
+            children[CH["swu"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["sel"])
+            children[CH["swu"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["su"]], NB["su"], CH["nel"])
+            children[CH["swu"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["su"]], NB["su"], CH["nwl"])
+            children[CH["swu"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["swu"]], NB["swu"], CH["nel"])
+            children[CH["swu"]].nb[NB["cu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["swl"])
 
             # upper left child, upper plane (= north west upper)
-            children[CH["nwu"]].nb[NB["wl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["nel"])
-            children[CH["nwu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["nw"]], NB["nw"], CH["sel"])
-            children[CH["nwu"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swl"])
-            children[CH["nwu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["sel"])
+            children[CH["nwu"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["nel"])
+            children[CH["nwu"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["nw"]], NB["nw"], CH["sel"])
+            children[CH["nwu"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swl"])
+            children[CH["nwu"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["sel"])
             children[CH["nwu"]].nb[NB["el"]] = children[CH["nel"]]
             children[CH["nwu"]].nb[NB["sel"]] = children[CH["sel"]]
             children[CH["nwu"]].nb[NB["sl"]] = children[CH["swu"]]
-            children[CH["nwu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["w"]], NB["w"], CH["sel"])
+            children[CH["nwu"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["sel"])
             children[CH["nwu"]].nb[NB["cl"]] = children[CH["nwl"]]
-            children[CH["nwu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["nel"])
-            children[CH["nwu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nwu"]], NB["nwu"], CH["sel"])
-            children[CH["nwu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["swl"])
-            children[CH["nwu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["nwl"])
-            children[CH["nwu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
-            children[CH["nwu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
-            children[CH["nwu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
-            children[CH["nwu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["wu"]], NB["wu"], CH["sel"])
-            children[CH["nwu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
+            children[CH["nwu"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["wu"]], NB["wu"], CH["nel"])
+            children[CH["nwu"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["nwu"]], NB["nwu"], CH["sel"])
+            children[CH["nwu"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["swl"])
+            children[CH["nwu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["nwl"])
+            children[CH["nwu"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nel"])
+            children[CH["nwu"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["sel"])
+            children[CH["nwu"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["swl"])
+            children[CH["nwu"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["wu"]], NB["wu"], CH["sel"])
+            children[CH["nwu"]].nb[NB["cu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nwl"])
 
             # upper right child, upper plane (= north east upper)
             children[CH["neu"]].nb[NB["wl"]] = children[CH["nwl"]]
-            children[CH["neu"]].nb[NB["nwl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["swl"])
-            children[CH["neu"]].nb[NB["nl"]] = parent_or_child(neighbors, check[NB["n"]], NB["n"], CH["sel"])
-            children[CH["neu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["ne"]], NB["ne"], CH["swl"])
-            children[CH["neu"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwl"])
-            children[CH["neu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swl"])
+            children[CH["neu"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swl"])
+            children[CH["neu"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["sel"])
+            children[CH["neu"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["ne"]], NB["ne"], CH["swl"])
+            children[CH["neu"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwl"])
+            children[CH["neu"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swl"])
             children[CH["neu"]].nb[NB["sl"]] = children[CH["sel"]]
             children[CH["neu"]].nb[NB["swl"]] = children[CH["swl"]]
             children[CH["neu"]].nb[NB["cl"]] = children[CH["nel"]]
-            children[CH["neu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
-            children[CH["neu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["swl"])
-            children[CH["neu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["nu"]], NB["nu"], CH["sel"])
-            children[CH["neu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["neu"]], NB["neu"], CH["swl"])
-            children[CH["neu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["nwl"])
-            children[CH["neu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["swl"])
-            children[CH["neu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
-            children[CH["neu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
-            children[CH["neu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
+            children[CH["neu"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nwl"])
+            children[CH["neu"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["swl"])
+            children[CH["neu"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["sel"])
+            children[CH["neu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["neu"]], NB["neu"], CH["swl"])
+            children[CH["neu"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["eu"]], NB["eu"], CH["nwl"])
+            children[CH["neu"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["eu"]], NB["eu"], CH["swl"])
+            children[CH["neu"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["sel"])
+            children[CH["neu"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["swl"])
+            children[CH["neu"]].nb[NB["cu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nel"])
 
             # lower right child, upper plane (= south east upper)
             children[CH["seu"]].nb[NB["wl"]] = children[CH["swl"]]
             children[CH["seu"]].nb[NB["nwl"]] = children[CH["nwl"]]
             children[CH["seu"]].nb[NB["nl"]] = children[CH["nel"]]
-            children[CH["seu"]].nb[NB["nel"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["nwl"])
-            children[CH["seu"]].nb[NB["el"]] = parent_or_child(neighbors, check[NB["e"]], NB["e"], CH["swl"])
-            children[CH["seu"]].nb[NB["sel"]] = parent_or_child(neighbors, check[NB["se"]], NB["se"], CH["nwl"])
-            children[CH["seu"]].nb[NB["sl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nel"])
-            children[CH["seu"]].nb[NB["swl"]] = parent_or_child(neighbors, check[NB["s"]], NB["s"], CH["nwl"])
+            children[CH["seu"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwl"])
+            children[CH["seu"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swl"])
+            children[CH["seu"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["se"]], NB["se"], CH["nwl"])
+            children[CH["seu"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nel"])
+            children[CH["seu"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["nwl"])
             children[CH["seu"]].nb[NB["cl"]] = children[CH["sel"]]
-            children[CH["seu"]].nb[NB["wu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["swl"])
-            children[CH["seu"]].nb[NB["nwu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nwl"])
-            children[CH["seu"]].nb[NB["nu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["nel"])
-            children[CH["seu"]].nb[NB["neu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["nwl"])
-            children[CH["seu"]].nb[NB["eu"]] = parent_or_child(neighbors, check[NB["eu"]], NB["eu"], CH["swl"])
-            children[CH["seu"]].nb[NB["seu"]] = parent_or_child(neighbors, check[NB["seu"]], NB["seu"], CH["nwl"])
-            children[CH["seu"]].nb[NB["su"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nel"])
-            children[CH["seu"]].nb[NB["swu"]] = parent_or_child(neighbors, check[NB["su"]], NB["su"], CH["nwl"])
-            children[CH["seu"]].nb[NB["cu"]] = parent_or_child(neighbors, check[NB["cu"]], NB["cu"], CH["sel"])
+            children[CH["seu"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["swl"])
+            children[CH["seu"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nwl"])
+            children[CH["seu"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nel"])
+            children[CH["seu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["eu"]], NB["eu"], CH["nwl"])
+            children[CH["seu"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["eu"]], NB["eu"], CH["swl"])
+            children[CH["seu"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["seu"]], NB["seu"], CH["nwl"])
+            children[CH["seu"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["su"]], NB["su"], CH["nel"])
+            children[CH["seu"]].nb[NB["swu"]] = parent_or_child(cell.nb, check[NB["su"]], NB["su"], CH["nwl"])
+            children[CH["seu"]].nb[NB["cu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["sel"])
 
         return children
 

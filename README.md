@@ -4,9 +4,9 @@ Mesh reduction algorithm for CFD post-processing
 ## TODO
 - test handling of STL files for domain and for 3D cases (currently only 2D is tested and runs without issues)
 - complete documentation of repository
+- debugging delta level constraint -> not always fulfilled
 
 ## Potential features / Ideas
-- automatic determination of reasonable value for min. of `level_bounds` for uniform refinement
 - testing different metrics and combinations thereof -> we need a second metric for e.g. sher stress to account
 for boundary layers etc.
 

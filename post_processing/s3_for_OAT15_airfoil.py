@@ -83,7 +83,7 @@ if __name__ == "__main__":
                              f"results_metric_based_on_p_stl_{area}")
     # execute S^3 for range of variances (for parameter study)
     # min_variance = pt.arange(0.25, 1.05, 0.05)
-    min_variance = [0.20]
+    min_variance = [0.75]
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
     p = pt.load(join(load_path, "p_small_every10.pt"))
@@ -116,8 +116,8 @@ if __name__ == "__main__":
 
     for v in min_variance:
         export = execute_grid_generation(xz, metric, geometry, save_path_results, "OAT15_" + str(area) +
-                                         "_area_variance_{:.2f}_test_no_g_refinement".format(v), "OAT15",
-                                         _min_variance=v, _write_times=times, _refine_geometry=False)
+                                         "_area_variance_{:.2f}_test".format(v), "OAT15", _min_metric=v,
+                                         _write_times=times)
         pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_" + str(area) +
                                        "_area_variance_{:.2f}.pt".format(v)))
 

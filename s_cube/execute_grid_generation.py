@@ -1,6 +1,7 @@
 """
     implements wrapper function for executing the S^3 algorithm and a function for loading fields from OpenFoam
 """
+import logging
 import torch as pt
 
 from os import path, makedirs
@@ -10,6 +11,9 @@ from flowtorch.data import FOAMDataloader, mask_box
 from s_cube.export_data import DataWriter
 from s_cube.geometry import GeometryObject
 from s_cube.s_cube import SamplingTree
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def check_geometry_objects(_geometries: list) -> bool:
@@ -52,7 +56,7 @@ def check_geometry_objects(_geometries: list) -> bool:
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
                             _n_cells_max: int = None, _refine_geometry: bool = True,
-                            _min_variance: float = 0.9, _to_refine: list = None,
+                            _min_metric: float = 0.9, _to_refine: list = None, _max_delta_level: bool = False,
                             _write_times: pt.Tensor = None) -> DataWriter:
     """
     wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
@@ -75,9 +79,11 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
                          will be used
     :param _refine_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
-    :param _min_variance: percentage of variance of the metric the generated grid should capture (wrt the original
+    :param _min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
                           grid), if 'None' the max. number of cells will be used as stopping criteria
     :param _to_refine: which geometries should be refined, if None all except the domain will be refined
+    :param _max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
+                             difference of one (not working properly at the moment)
     :param _write_times: numerical time steps of the simulation
     :return: None
     """
@@ -87,12 +93,13 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     if _level_bounds[0] == 0:
         # we need lower level >= 1, because otherwise the stopping criteria is not working
-        print(f"lower bound of {_level_bounds[0]} is invalid. Changed lower bound to 1.")
+        logger.info(f"lower bound of {_level_bounds[0]} is invalid. Changed lower bound to 1.")
         _level_bounds = (1, _level_bounds[1])
 
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
-                            smooth_geometry=_refine_geometry, min_variance=_min_variance, which_geometries=_to_refine)
+                            smooth_geometry=_refine_geometry, min_metric=_min_metric, which_geometries=_to_refine,
+                            max_delta_level=_max_delta_level)
 
     # add the cube and the domain
     for g in _geometry_objects:
@@ -112,9 +119,9 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
         makedirs(_save_path)
 
     # fit the pressure field onto the new mesh and export the data
-    _export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, save_dir=_save_path,
-                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0],
-                              save_name=_save_name, grid_name=_save_name, times=_write_times)
+    _export_data = DataWriter(sampling.face_ids, sampling.all_nodes, sampling.all_centers, sampling.all_levels,
+                              save_dir=_save_path, save_name=_save_name, grid_name=_save_name, times=_write_times,
+                              domain_boundaries=[g["bounds"] for g in _geometry_objects if not g["is_geometry"]][0])
 
     # add the final data of mesh and refinement
     _export_data.mesh_info = sampling.data_final_mesh
@@ -178,7 +185,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             try:
                 _field_size = loader.load_snapshot(field, _write_times[0]).size()
             except ValueError:
-                print(f"\tField '{field}' is not available. Skipping this field...")
+                logger.warning(f"\tField '{field}' is not available. Skipping this field...")
                 continue
 
             if len(_field_size) == 1:
@@ -200,7 +207,8 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
             # part of this mask)
             except RuntimeError:
-                print(f"\tField '{field}' is does not match the size of the masked domain. Skipping this field...")
+                logger.warning(f"\tField '{field}' is does not match the size of the masked domain. Skipping this "
+                                f"field...")
                 continue
 
             # since size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or

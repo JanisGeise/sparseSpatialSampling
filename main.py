@@ -103,7 +103,7 @@ if __name__ == "__main__":
     geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
 
     export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cube, save_name, "cube",
-                                     _min_variance=0.5)
+                                     _min_metric=0.5)
 
     # export the data
     export_data(export, load_path_cube, bounds)
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
     export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cylinder, save_name,
-                                     "cylinder2D", _min_variance=0.5)
+                                     "cylinder2D", _min_metric=0.5)
 
     # export the data
     export_data(export, load_path_cylinder, bounds)
