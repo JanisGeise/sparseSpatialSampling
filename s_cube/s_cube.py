@@ -455,7 +455,7 @@ class SamplingTree(object):
         self.data_final_mesh["t_renumbering"] = end_time - t_start_renumber
 
         logger.info("Finished refinement in {:2.4f} s ({:d} iterations).".format(self.data_final_mesh["t_total"],
-                                                                                  iteration_count))
+                                                                                 iteration_count))
         logger.info("Time for uniform refinement: {:2.4f} s".format(self.data_final_mesh["t_uniform"]))
         if self._smooth_geometry:
             self.data_final_mesh["t_geometry"] = t_end_geometry - t_start_geometry

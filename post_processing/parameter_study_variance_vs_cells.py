@@ -36,8 +36,7 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
 if __name__ == "__main__":
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     load_path_cylinder = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D",
-                              "with_geometry_refinement", "results")
+    save_path_cylinder = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0, 0], [2.2, 0.41]]  # full domain
@@ -57,7 +56,7 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     load_path_cube = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
     save_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
-                          "with_geometry_refinement", "results")
+                          "results")
 
     # boundaries of the masked domain for the cube
     bounds = [[0, 0, 0], [9, 14.5, 2]]              # full domain
