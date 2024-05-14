@@ -93,7 +93,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     if _level_bounds[0] == 0:
         # we need lower level >= 1, because otherwise the stopping criteria is not working
-        logger.info(f"lower bound of {_level_bounds[0]} is invalid. Changed lower bound to 1.")
+        logger.warning(f"lower bound of {_level_bounds[0]} is invalid. Changed lower bound to 1.")
         _level_bounds = (1, _level_bounds[1])
 
     # coarsen the cube mesh based on the std. deviation of the pressure

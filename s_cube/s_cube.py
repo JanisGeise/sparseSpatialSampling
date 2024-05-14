@@ -115,7 +115,6 @@ class SamplingTree(object):
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
         self._max_delta_level = max_delta_level
-        self._min_metric = min_metric if min_metric is not None else 1
         self._vertices = vertices
         self._target = target
         self._n_cells = 0
@@ -145,6 +144,14 @@ class SamplingTree(object):
         self._metric = []
         self.data_final_mesh = {}
         self._n_cells_orig = self._target.size()[0]
+
+        # set target value for min. metric
+        if min_metric is not None:
+            if min_metric > 1:
+                logger.warning("Min. metric > 1 is invalid. Changed min. metric to 1.")
+            self._min_metric = min_metric if min_metric < 1 else 1
+        else:
+            self._min_metric = 1
 
         # offset matrix, used for computing the cell centers
         if self._n_dimensions == 2:
@@ -312,6 +319,8 @@ class SamplingTree(object):
 
         :return: None
         """
+        # if a max. number of cells is specified, then the default value of 1e9 will be overwritten. If not then use
+        # the stopping criteria based on metric
         if abs(self._n_cells_max - 1e9) <= 1e-6:
             return self._metric[-1] < self._min_metric
         else:
@@ -360,7 +369,7 @@ class SamplingTree(object):
 
         while self._check_stopping_criteria():
             logger.info(f"\r\tStarting iteration no. {iteration_count}, captured metric: "
-                         f"{round(self._metric[-1] * 100, 2)} %")
+                        f"{round(self._metric[-1] * 100, 2)} %")
 
             # update _n_cells_per_iter based on the difference wrt metric or N_cells
             if len(self._metric) >= 2:

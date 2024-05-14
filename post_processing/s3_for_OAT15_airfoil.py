@@ -101,6 +101,7 @@ if __name__ == "__main__":
     oat15 = load_airfoil_as_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
 
     # define the boundaries for the domain and assemble the geometry objects
+    xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
     bounds = [[pt.min(xz[:, 0]).item(), pt.min(xz[:, 1]).item()], [pt.max(xz[:, 0]).item(), pt.max(xz[:, 1]).item()]]
     geometry = [{"name": "domain", "bounds": bounds, "type": "cube", "is_geometry": False},
                 {"name": "OAT15", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": oat15}]
@@ -112,7 +113,6 @@ if __name__ == "__main__":
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join(load_path, "oat15_tandem_times.pt"))[::10]
-    xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # execute the S^3 algorithm and export the pressure field for the generated grid
     for v in min_variance:
