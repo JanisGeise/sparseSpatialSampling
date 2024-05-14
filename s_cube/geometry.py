@@ -1,5 +1,5 @@
 """
-    implements class for storing the geometry and the domain, currently only simple geometries are allowed, such as:
+    Implements class for storing the geometry and the domain; currently only simple geometries are allowed, such as
         - rectangle (2D), cube (3D)
         - circle (2D), sphere (3D)
 
@@ -9,6 +9,7 @@
         - currently only 2D tested and implemented, 3D will be coming soon...
 """
 import logging
+import pyvista as pv
 
 from torch import tensor
 from shapely import Point, Polygon
@@ -20,12 +21,12 @@ logging.basicConfig(level=logging.INFO)
 
 class GeometryObject:
     def __init__(self, lower_bound, upper_bound, obj_type: str, geometry: bool = True, name: str = "cube",
-                 _coordinates: any = None):
+                 _coordinates: any = None, _dimensions: int = None):
         """
         Implements a geometry object acting as geometry inside the numerical domain, or as the numerical domain.
 
-        Important Note: exactly one geometry needs to be specified as (main) domain, which is used to compute the main
-                        dimensions of the domain and to initialize everything. If further subdomains need to be
+        Important Note: exactly one geometry needs to be specified as the (main) domain, which is used to compute the
+                        main dimensions of the domain and to initialize everything. If further subdomains need to be
                         specified, e.g., to mask out other areas (e.g. a step at the domain boundary), these geometry
                         objects are not allowed to have the 'obj_type' domain. To define that these objects should act
                         as a domain, the parameter 'inside' needs to be set to False instead
@@ -47,13 +48,20 @@ class GeometryObject:
         :param name: name of the geometry object, can be chosen freely
         :param _coordinates: coordinates of the geometry, required if an STL file is provided as geometry. Note: The
                              coordinates have to form an enclosed ares (2D)
+        :param _dimensions: number of physical dimensions, needs to be provided if an STL file is used
         """
         self.inside = geometry
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
         self._obj_type = obj_type
         self.obj_name = name
-        self._coordinates = Polygon(_coordinates) if _coordinates is not None else None
+        self._dimensions = _dimensions
+
+        if _coordinates is not None:
+            if _dimensions == 2:
+                self._coordinates = Polygon(_coordinates)
+            else:
+                self._coordinates = _coordinates
 
         # check if the object type matches the ones currently implemented
         self._check_obj_type()
@@ -65,9 +73,14 @@ class GeometryObject:
         elif self._obj_type == "cube":
             mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
         else:
-            # for each node of the cell check if it is inside the geometry. We can't compute this at once for all nodes,
-            # because within() method only returns a single bool, but we need to have a bool for each node
-            mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
+            # for each node of the cell, check if it is inside the geometry. We can't compute this at once for all
+            # nodes, because within() method only returns a single bool, but we need to have a bool for each node
+            if self._dimensions == 2:
+                mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
+            else:
+                # for 3D geometries represented by STL files, we need to mask using pyVista
+                n = pv.PolyData(cell_nodes.tolist())
+                mask = tensor(n.select_enclosed_points(self._coordinates, check_surface=False)["SelectedPoints"]).bool()
 
         # if we are not refining the geometry, then we want to remove the cells which have all nodes located inside a
         # geometry or outside the domain
@@ -79,14 +92,14 @@ class GeometryObject:
                 else:
                     invalid = True
 
-            # if we are outside the domain we want to return False
+            # if we are outside the domain, we want to return False
             else:
                 if any(mask):
                     invalid = False
                 else:
                     invalid = True
 
-        # otherwise we want to refine all cells which have at least one node in the geometry / outside the domain
+        # otherwise, we want to refine all cells that have at least one node in the geometry / outside the domain
         else:
             if self.inside:
                 if all(~mask):
