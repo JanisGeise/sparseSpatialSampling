@@ -37,7 +37,7 @@ def check_geometry_objects(_geometries: list) -> bool:
         if not g["is_geometry"]:
             counter += 1
 
-        # check if the format of the bounds are correct
+        # check if the format of the bounds is correct
         if g["type"].lower() != "stl":
             assert len(g["bounds"]) == 2, f"too many bounds for geometry no. {i} specified. Expected exactly 2 lists."
 
@@ -59,11 +59,12 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
                             _min_metric: float = 0.9, _to_refine: list = None, _max_delta_level: bool = False,
                             _write_times: pt.Tensor = None) -> DataWriter:
     """
-    wrapper function for executing the S^3 algorithm. Note: the parameter "_geometry_objects" needs to have at least
-    one entry containing information about the domain.
+    Wrapper function for executing the S^3 algorithm.
 
-    :param coordinates: coordinates of the original grid
-    :param metric: quantity which should be used as indicator for refinement of a cell
+    Note: the parameter "_geometry_objects" needs to have at least one entry containing information about the domain.
+
+    :param coordinates: Coordinates of the original grid
+    :param metric: quantity which should be used as an indicator for refinement of a cell
     :param _geometry_objects: list with dict containing information about the domain and geometries in it; each
                               geometry is passed in as dict. The dict must contain the entries:
                               "name", "bounds", "type" and "is_geometry".
@@ -106,7 +107,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
         if g["type"].lower() == "stl":
             sampling.geometry.append(GeometryObject(lower_bound=None, upper_bound=None, obj_type=g["type"],
                                                     geometry=g["is_geometry"], name=g["name"],
-                                                    _coordinates=g["coordinates"]))
+                                                    _coordinates=g["coordinates"], _dimensions=coordinates.size(1)))
         else:
             sampling.geometry.append(GeometryObject(lower_bound=g["bounds"][0], upper_bound=g["bounds"][1],
                                                     obj_type=g["type"], geometry=g["is_geometry"], name=g["name"]))
@@ -169,13 +170,13 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
         # get all available time steps, skip the zero folder
         if _write_times is None:
             _write_times = [t for t in loader.write_times[1:]]
-        elif type(_write_times) == str:
+        elif type(_write_times) is str:
             _write_times = [_write_times]
 
         # in case there are no fields specified, take all available fields
         if _field_names is None:
             _field_names = loader.field_names[_write_times[0]]
-        elif type(_field_names) == str:
+        elif type(_field_names) is str:
             _field_names = [_field_names]
 
         # assemble data matrix for each field and interpolate the values onto the coarser grid
@@ -203,9 +204,9 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                     else:
                         data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
 
-            # if fields are written out only for specific parts of domain, this leads to dimension mismatch between
-            # the field and the mask (mask takes all cells in the specified area, but field is only written out in a
-            # part of this mask)
+            # if fields are written out only for specific parts of the domain, this leads to dimension mismatch between
+            # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
+            # in a part of this mask.
             except RuntimeError:
                 logger.warning(f"\tField '{field}' is does not match the size of the masked domain. Skipping this "
                                 f"field...")
@@ -228,7 +229,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
 def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> None:
     """
-    wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
+    Wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
     S^3 algorithm. If the data was not generated with OpenFoam, the 'fit()' method of the DataWriter class needs to be
     called directly with the CFD data and coordinates of the original grid as, e.g., implemented in
     'post_processing/s3_for_OAT15_airfoil.py'

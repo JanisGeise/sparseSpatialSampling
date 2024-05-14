@@ -1,9 +1,9 @@
 # Sparse Spatial Sampling ($S^3$)
-A different version of the existing $S^3-$algorithm (see [references](#References)) for processing large amounts of CFD data. Idea is to create a grid based on a metric provided by 
-the user, e.g., the standard deviation of the pressure fields over time. The $S^3-$algorithm then generates a grid which
-captures *x%* of the metric from the original grid or contains a specified max. number of cells, depending on the setup 
-given by the user. After generating the grid, the original CFD data is interpolated onto the sampled grid and exported 
-to HDF5 & XDMF files.
+A different version of the existing $S^3$ algorithm (see [references](#References)) for processing large amounts of CFD data. 
+The Idea is to create a grid based on a metric provided by the user, e.g., the standard deviation of the pressure fields 
+over time. The $S^3$ algorithm then generates a grid which captures *x%* of the metric from the original grid or contains
+a specified max. number of cells, depending on the setup given by the user. After generating the grid, the original CFD 
+data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## TODO & current issues
 ### TODO
@@ -12,12 +12,16 @@ to HDF5 & XDMF files.
 
 ### Current issues
 - delta level constraint is not always fulfilled (if active)
-- for interpolated volume solution, there exists cells (mostly near geometries) in which the interpolated values 
-don't make sense and don't change wrt time -> not sure if this is an issue resulting from the KNN interpolator or
-if this is an algorithmic issue. This issue is present independently of the delta level constraint for all test cases
+- for interpolated volume solution, there exist cells (mostly near geometries) in which the interpolated values 
+don't make sense and don't change wrt time   
+-> not sure if this is an issue resulting from the KNN interpolator or
+if this is an algorithmic issue
+-> this issue is present independently of the delta level constraint for all test cases
+-> interpolation error vanishes with increasing mesh size (higher percentage of captured metric) -> most likely an issue 
+with the KNN interpolator
 
 ## Potential features / Ideas
-- testing different metrics and combinations thereof -> we need a second metric for e.g. sher stress to account
+- testing different metrics and combinations thereof -> we need a second metric for e.g. shear stress to account
 for boundary layers etc.
 
 ## Notes

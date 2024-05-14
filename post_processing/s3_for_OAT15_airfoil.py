@@ -1,6 +1,6 @@
 """
-    test the S^3 algorithm on larger CFD dataset, namely the OAT 15 airfoil (2D). The test dataset was already reduced
-    (only ever 10th numerical dt) and pre-processed, some key infos:
+    Test the S^3 algorithm on larger CFD dataset, namely the OAT 15 airfoil (2D). The test dataset was already reduced
+    (only ever 10th numerical dt) and pre-processed, some key info:
 
         - each field contains approx. 3.4 GB of data
         - all fields combined contain approx. 17 GB of data
@@ -21,21 +21,21 @@ from s_cube.execute_grid_generation import execute_grid_generation
 def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: float = 1.0, dimensions: str = "xy",
                              x_offset: float = 0.0, y_offset: float = 0.0, z_offset: float = 0.0):
     """
-    example function for loading airfoil geometries stored as STL file and extract an enclosed 2D-area from it.
+    Example function for loading airfoil geometries stored as STL file and extract an enclosed 2D-area from it.
     Important Note:
 
-        the structure of the coordinates within the stl files depend on the order the blocks are exported from paraview
-        the goal is to form an enclosed area, through wich we can draw a polygon. Therefore, the way of loading and
-        sorting the data depends on the stl file. For an airfoil, the data can be sorted as:
+        the structure of the coordinates within the stl files depends on the order the blocks are exported from
+        Paraview; the goal is to form an enclosed area, through which we can draw a polygon. Therefore, the way of
+        loading and sorting the data depends on the stl file. For an airfoil, the data can be sorted as:
 
             TE -> via suction side -> LE -> via pressure side -> TE
 
-        it is helpful to export the airfoil geometry without a training edge and close it manually by connecting the
+        It is helpful to export the airfoil geometry without a training edge and close it manually by connecting the
         last points from pressure to suction side
 
     :param _load_path: path to the STL file
     :param _name: name of the STL file
-    :param sf: scaling factor, in case the airfoil need to be scaled
+    :param sf: scaling factor, in case the airfoil needs to be scaled
     :param dimensions: which plane (orientation) to extract from the STL file
     :param x_offset: offset for x-direction, in case the airfoil should be shifted in x-direction
     :param y_offset: offset for y-direction, in case the airfoil should be shifted in y-direction
@@ -69,18 +69,12 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: floa
     return coord_af
 
 
-def prepare_fields(_load_path: str, _field_name: str) -> pt.Tensor:
-    # load all fields saved on external hard drive & only extract the small, masked fields.
-    # Return the field for interpolation & export
-    pass
-
-
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     load_path = join("..", "data", "2D", "OAT15")
-    area = "large"
+    area = "small"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"results_metric_based_on_ma_stl_{area}")
+                             f"results_metric_based_on_p_stl_{area}")
 
     # execute S^3 for range of variances (for parameter study)
     min_variance = pt.arange(0.25, 1.05, 0.05)
@@ -89,13 +83,13 @@ if __name__ == "__main__":
     xz = pt.load(join(load_path, "vertices_and_masks.pt"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    # p = pt.load(join(load_path, "p_small_every10.pt"))
-    # metric = pt.std(p, dim=1)
+    p = pt.load(join(load_path, "p_small_every10.pt"))
+    metric = pt.std(p, dim=1)
 
     # test on the large field with 245 568 cells
-    load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-    ma = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
-    metric = pt.std(ma, dim=1)
+    # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+    # ma = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    # metric = pt.std(ma, dim=1)
 
     # load the airfoil geometry of the leading airfoil from STL file
     oat15 = load_airfoil_as_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
@@ -122,7 +116,7 @@ if __name__ == "__main__":
         pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_" + str(area) +
                                        "_area_variance_{:.2f}.pt".format(v)))
 
-        # we need to add one dimension, if we have a scalar field
-        # export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
-        export.fit_data(xz, ma.unsqueeze(1), "Ma", _n_snapshots_total=None)
+        # we need to add one dimension if we have a scalar field
+        export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
+        # export.fit_data(xz, ma.unsqueeze(1), "Ma", _n_snapshots_total=None)
         export.write_data_to_file()

@@ -6,3 +6,4 @@ flowTorch
 shapely
 h5py
 matplotlib
+pyvista
