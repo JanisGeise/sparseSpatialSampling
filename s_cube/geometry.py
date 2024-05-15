@@ -25,11 +25,22 @@ class GeometryObject:
         """
         Implements a geometry object acting as geometry inside the numerical domain, or as the numerical domain.
 
-        Important Note: exactly one geometry needs to be specified as the (main) domain, which is used to compute the
-                        main dimensions of the domain and to initialize everything. If further subdomains need to be
-                        specified, e.g., to mask out other areas (e.g., a step at the domain boundary), these geometry
-                        objects are not allowed to have the 'obj_type' domain. To define that these objects should act
-                        as a domain, the parameter 'inside' needs to be set to False instead
+        Note:
+
+            - for 3D-STL files, the STL file needs to be loaded and passed directly via pyVIsta, e.g.
+
+                cube = pv.PolyData(join("..", "tests", "cube.stl"))
+
+            - for 2D STL files, only the coordinates need to be passed; the type is irrelevant, since they will be
+              converted to shapely.Polygon() types.However, it is important that these points form an enclosed area.
+
+
+        Further:
+                exactly one geometry needs to be specified as the (main) domain, which is used to compute the
+                main dimensions of the domain and to initialize everything. If further subdomains need to be
+                specified, e.g., to mask out other areas (e.g., a step at the domain boundary), these geometry
+                objects are not allowed to have the 'obj_type' domain. To define that these objects should act
+                as a domain, the parameter 'inside' needs to be set to False instead
 
         :param lower_bound: Lower boundary, sorted as:
 
@@ -48,7 +59,7 @@ class GeometryObject:
         :param name: name of the geometry object, can be chosen freely
         :param _coordinates: coordinates of the geometry, required if an STL file is provided as geometry. Note: The
                              coordinates have to form an enclosed ares (2D)
-        :param _dimensions: number of physical dimensions, needs to be provided if an STL file is used
+        :param _dimensions: number of physical dimensions, needs to be provided if an STL file for 3D is used
         """
         self.inside = geometry
         self._lower_bound = lower_bound
@@ -58,6 +69,8 @@ class GeometryObject:
         self._dimensions = _dimensions
 
         if _coordinates is not None:
+            assert self._dimensions is not None, ("When providing Coordinates for geometry objects, the number of "
+                                                  "physical dimensions have to be provided as well.")
             if _dimensions == 2:
                 self._coordinates = Polygon(_coordinates)
             else:

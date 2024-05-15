@@ -8,15 +8,16 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 ## TODO & current issues
 ### TODO
 - write unit tests for relevant methods and functions
-- if possible: try to use pyVista for 2D STL file handling as well
 - complete documentation of repository
 
 ### Current issues
 - delta level constraint is not always fulfilled (if active)
+- there seems to be an issue with the assignment of nb when refining the geometry and active delta level constraint
 
 ## Potential features / Ideas
 - testing different metrics and combinations thereof -> we need a second metric for e.g. shear stress to account
 for boundary layers etc.
+- try to use pyVista for 2D STL file handling as well, so we only have one library for STL file handling
 
 ## Notes
 `s_cube.py, line (in __init__ - method, line 119 & 120)`:  
@@ -31,9 +32,17 @@ for boundary layers etc.
 by one order of magnitude
 
 ### Cell centered solution near geometries
-- for interpolated cell solution at the cell center it may happen that the interpolation is slightly off near geometries, 
-especially if the grid is coarse. These errors are typically small and constant over time, but it is best to apply the
-`Points to Cell` filter in Paraview to compute an improved version of the cell centered solution if this is an issue.
+- for interpolated cell solution at the cell center, it may happen that the interpolation is slightly off near geometries, 
+especially if the grid is coarse. These errors are typically small and constant over time, 
+but it is best to apply the `Points to Cell` filter in Paraview to compute an improved version of the cell centered solution 
+if this is an issue.
+
+-> maybe this will be improved in the future, but it is likely that the delta level constraint will mitigate this 
+(once the constraint works)
+
+## Tests
+- tests can be executed with `pytest` inside the `tests` directory
+- `pytest` can be installed via: `pip install pytest`
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 
