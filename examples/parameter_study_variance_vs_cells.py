@@ -1,10 +1,12 @@
 """
-    execute parameter study for different target variances of the generated grid wrt the original grid from CFD
+    execute parameter study for different target metrics of the generated grid wrt the original grid from CFD for
+    various test cases
 """
 import torch as pt
 from os.path import join
 
-from main import load_cylinder_data, load_cube_data
+from s3_for_cylinder2D import load_cylinder_data
+from s3_for_surfaceMountedCube import load_cube_data
 from s_cube.execute_grid_generation import execute_grid_generation, export_data
 
 
@@ -59,15 +61,19 @@ if __name__ == "__main__":
                           "results")
 
     # boundaries of the masked domain for the cube
-    bounds = [[0, 0, 0], [9, 14.5, 2]]              # full domain
-    cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    bounds = [[0, 0, 0], [9, 14.5, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
 
     # load the CFD data
     pressure, coord, _ = load_cube_data(load_path_cube, bounds)
 
-    # generate the grid, export the data
-    domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
+    # either define the cube with its dimensions...
+    cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
     geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
+
+    # ... or use the provided STL file
+    # cube = pv.PolyData(join("..", "tests", "cube.stl"))
+    # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
 
     # execute the parameter study for the cylinder
     execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cube, load_path_cube,

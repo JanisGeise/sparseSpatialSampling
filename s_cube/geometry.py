@@ -27,16 +27,16 @@ class GeometryObject:
 
         Important Note: exactly one geometry needs to be specified as the (main) domain, which is used to compute the
                         main dimensions of the domain and to initialize everything. If further subdomains need to be
-                        specified, e.g., to mask out other areas (e.g. a step at the domain boundary), these geometry
+                        specified, e.g., to mask out other areas (e.g., a step at the domain boundary), these geometry
                         objects are not allowed to have the 'obj_type' domain. To define that these objects should act
                         as a domain, the parameter 'inside' needs to be set to False instead
 
-        :param lower_bound: lower boundary, sorted as:
+        :param lower_bound: Lower boundary, sorted as:
 
                             [x_min, y_min, z_min]               (3D, cube type)
                             [x_center, y_center, z_center]      (3D, sphere type)
 
-                            for 2D, the z-component is not present. If lower_bound is 'None', an STL file needs to be
+                            For 2D, the z-component is not present. If lower_bound is 'None', an STL file needs to be
                             provided as geometry
         :param upper_bound: upper boundary, sorted as:
                             [x_max, y_max, z_max]       (3D, cube type)

@@ -7,18 +7,12 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## TODO & current issues
 ### TODO
-- test handling of STL files for domain and for 3D cases (currently only 2D is tested and runs without issues)
+- write unit tests for relevant methods and functions
+- if possible: try to use pyVista for 2D STL file handling as well
 - complete documentation of repository
 
 ### Current issues
 - delta level constraint is not always fulfilled (if active)
-- for interpolated volume solution, there exist cells (mostly near geometries) in which the interpolated values 
-don't make sense and don't change wrt time   
--> not sure if this is an issue resulting from the KNN interpolator or
-if this is an algorithmic issue
--> this issue is present independently of the delta level constraint for all test cases
--> interpolation error vanishes with increasing mesh size (higher percentage of captured metric) -> most likely an issue 
-with the KNN interpolator
 
 ## Potential features / Ideas
 - testing different metrics and combinations thereof -> we need a second metric for e.g. shear stress to account
@@ -35,6 +29,11 @@ for boundary layers etc.
 
 -> if target metric is not met accurately, then the value for `self._cells_per_iter_start` needs to be decreased, e.g.,
 by one order of magnitude
+
+### Cell centered solution near geometries
+- for interpolated cell solution at the cell center it may happen that the interpolation is slightly off near geometries, 
+especially if the grid is coarse. These errors are typically small and constant over time, but it is best to apply the
+`Points to Cell` filter in Paraview to compute an improved version of the cell centered solution if this is an issue.
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 

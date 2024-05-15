@@ -123,8 +123,8 @@ class SamplingTree(object):
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter_start = int(0.001 * vertices.size()[0])  # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.01 * self._cells_per_iter_start)  # end value = 5% of start value
+        self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
+        self._cells_per_iter_end = int(0.05 * self._cells_per_iter_start)  # end value = 5% of start value
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -133,7 +133,7 @@ class SamplingTree(object):
         self._cells = None
         self._leaf_cells = None
         self._geometry = []
-        self._smooth_geometry = False
+        self._smooth_geometry = smooth_geometry
         self._which_geometries = which_geometries
         self._min_refinement_geometry = min_refinement_geometry
         self._n_cells_after_uniform = None

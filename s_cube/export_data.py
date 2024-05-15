@@ -218,8 +218,13 @@ class DataWriter:
         # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
         for dimension in range(_data.size()[1]):
             self._knn.fit(_coord, _data[:, dimension, :])
-            centers[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._centers))
             vertices[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._vertices))
+
+            # interpolate the center value from the values at the nodes, because the KNN sometimes creates weird
+            # values near geometries if the value at the cell center is interpolated directly. We can't just use the
+            # avg., because we don't know which nodes belong to which centers
+            self._knn.fit(self._vertices, vertices[:, dimension, :_nc])
+            centers[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._centers))
 
         # update the fields, for which snapshots we already executed the interpolation
         self._interpolated_fields[_field_name].centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
