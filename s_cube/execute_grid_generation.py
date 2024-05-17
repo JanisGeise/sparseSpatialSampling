@@ -54,10 +54,9 @@ def check_geometry_objects(_geometries: list) -> bool:
 
 
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
-                            _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25),
-                            _n_cells_max: int = None, _refine_geometry: bool = True,
-                            _min_metric: float = 0.9, _to_refine: list = None, _max_delta_level: bool = False,
-                            _write_times: pt.Tensor = None) -> DataWriter:
+                            _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25), _n_cells_max: int = None,
+                            _refine_geometry: bool = True, _min_metric: float = 0.9, _to_refine: list = None,
+                            _max_delta_level: bool = True, _write_times: pt.Tensor = None) -> DataWriter:
     """
     Wrapper function for executing the S^3 algorithm.
 
@@ -84,7 +83,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
                           grid), if 'None' the max. number of cells will be used as stopping criteria
     :param _to_refine: which geometries should be refined, if None all except the domain will be refined
     :param _max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
-                             difference of one (not working properly at the moment)
+                             difference of one
     :param _write_times: numerical time steps of the simulation
     :return: None
     """
@@ -209,7 +208,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             # in a part of this mask.
             except RuntimeError:
                 logger.warning(f"\tField '{field}' is does not match the size of the masked domain. Skipping this "
-                                f"field...")
+                               f"field...")
                 continue
 
             # since size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or

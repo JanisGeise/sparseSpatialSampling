@@ -11,12 +11,12 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 - complete documentation of repository
 
 ### Current issues
-- delta level constraint is not always fulfilled (if active)
-- there seems to be an issue with the assignment of nb when refining the geometry and active delta level constraint
+- there seems to be an issue with the assignment of nodes when refining the geometry and active delta level constraint
+for some cells
 
 ## Potential features / Ideas
-- testing different metrics and combinations thereof -> we need a second metric for e.g. shear stress to account
-for boundary layers etc.
+- testing different metrics and combinations thereof -> we need a second metric for, e.g., shear stress to account
+for boundary layers, etc.
 - try to use pyVista for 2D STL file handling as well, so we only have one library for STL file handling
 
 ## Notes
@@ -31,14 +31,12 @@ for boundary layers etc.
 -> if target metric is not met accurately, then the value for `self._cells_per_iter_start` needs to be decreased, e.g.,
 by one order of magnitude
 
-### Cell centered solution near geometries
-- for interpolated cell solution at the cell center, it may happen that the interpolation is slightly off near geometries, 
-especially if the grid is coarse. These errors are typically small and constant over time, 
-but it is best to apply the `Points to Cell` filter in Paraview to compute an improved version of the cell centered solution 
-if this is an issue.
-
--> maybe this will be improved in the future, but it is likely that the delta level constraint will mitigate this 
-(once the constraint works)
+### Cell centered solution near geometries 
+If the option `max_delta_level = False` is set, the interpolated cell solution at the cell center is slightly off near 
+geometries, especially if the grid is coarse. These errors are typically small and constant over time, but it is best 
+to apply the `Points to Cell` filter in Paraview to compute an improved version of the cell centered solution if this 
+is an issue. Otherwise, the option `max_delta_level = True` fixes this issue, but this currently doesn't works for 
+geometry refinement
 
 ## Tests
 - tests can be executed with `pytest` inside the `tests` directory

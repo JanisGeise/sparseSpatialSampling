@@ -57,10 +57,10 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path_cube = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
-    save_path_cube = join("..", "data", "3D", "exported_grids")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "test")
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.75
+    min_metric = 0.25
     save_name = f"metric_{round(min_metric, 2)}_cube_full_domain"
 
     # load the CFD data in the given boundaries
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
 
     # execute the S^3 algorithm
-    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cube, save_name, "cube",
+    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name, "cube",
                                      _min_metric=min_metric)
 
     # export the data

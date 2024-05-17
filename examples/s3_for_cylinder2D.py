@@ -56,11 +56,11 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
     load_path_cylinder = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path_cylinder = join("..", "data", "2D", "exported_grids")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "test")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
-    save_name = f"metric_{round(min_metric, 2)}_cube_full_domain"
+    save_name = f"metric_{round(min_metric, 2)}_cylinder_full_domain"
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0, 0], [2.2, 0.41]]          # [[xmin, ymin], [xmax, ymax]]
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
     # generate the grid
-    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path_cylinder, save_name,
+    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name,
                                      "cylinder2D", _min_metric=min_metric)
 
     # export the data

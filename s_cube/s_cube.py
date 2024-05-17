@@ -94,7 +94,7 @@ class SamplingTree(object):
 
     def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), smooth_geometry: bool = True,
                  min_metric: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None,
-                 max_delta_level: bool = False):
+                 max_delta_level: bool = True):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -110,7 +110,7 @@ class SamplingTree(object):
         :param min_metric: percentage the metric the generated grid should capture (wrt the original grid), if 'None'
                             the max. number of cells will be used as stopping criteria
         :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
-                                difference of one (not working properly at the moment)
+                                difference of one
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -385,9 +385,14 @@ class SamplingTree(object):
                 # update nb of current cell
                 cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
 
-                # check if the nb cells have the same level
+                # in case the delta level constraint is active, we need to check if the nb cells have the same level
                 if self._max_delta_level:
-                    to_refine.update(self._check_constraint(i))
+                    # check if the nb cells have the same level
+                    nb_to_refine_as_well = set(self._check_nb(i))
+
+                    # then we need to check each nb of the nb cell, in case the nb was added to to_refine to avoid
+                    # constraint violations between a nb and its nb cells
+                    to_refine.update(self._check_constraint(nb_to_refine_as_well))
 
             new_cells = []
             new_index = len(self._cells)
@@ -396,6 +401,9 @@ class SamplingTree(object):
 
                 # compute cell centers
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
+
+                # update nb
+                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
 
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
@@ -428,9 +436,8 @@ class SamplingTree(object):
 
         # [DEBUG] gather information about constraint violations
         if DEBUG:
-            logger.info("Checking for constraint violations prior after adaptive refinement.")
+            logger.info("Checking for constraint violations after adaptive refinement.")
             self._search_for_constraint_violation()
-            exit()
 
         if self._smooth_geometry:
             t_start_geometry = time()
@@ -619,7 +626,7 @@ class SamplingTree(object):
         # centers of each cell, but we need the parent cell center, e.g., for computing the gain)
         return coord_[1:, :] if not keep_parent_center_ else coord_
 
-    def _check_constraint(self, cell_no_: int) -> list:
+    def _check_nb(self, cell_no_: int) -> list:
         """
         check if a cell and its neighbors have the same level, if not then we need to refine all cells for which this
         constraint is violated, because after refinement of the current cell, we would end up with a level difference
@@ -633,8 +640,40 @@ class SamplingTree(object):
         # because at this point the child cells of the current cell are not yet created. If we allow a level difference
         # here, this would lead to a delta level of 2 once the children are created
         return [n.index for n in self._cells[cell_no_].nb if n is not None and n.leaf_cell() and
-                # abs(self._cells[cell_no_].level - n.level) > 0]
                 n.level < self._cells[cell_no_].level]
+
+    def _check_constraint(self, nb_violating_constraint: set) -> set:
+        """
+        Check if the constraint is violated when a nb cell of the current cell is refined for nb's of the nb cell. For
+        example, consider:
+
+            We want to refine a cell A with level i and the neu-cell B violates the constraint, because it has the level
+            i-1. However, the nb cell C of cell B has the level i-2 (which is still a delta level of one, relative to
+            the nb of B). If we now add B to to_refine (because we want to refine cell A), the constraint between B & C
+            would be violated. So we need to check the constraint for cell C as well, and if the constraint is violated
+            for any nb of cell C, we need to check these nb as well and so on.
+
+        :param nb_violating_constraint: NB cells of current cell, which violate the delta level constraint
+        :return: all nb cells which need to be refined as well (basically all cells that need to be refined in the
+                 current iteration)
+        """
+        new_cells_to_check = True if nb_violating_constraint else False
+        while new_cells_to_check:
+            # create an  empty set for each iteration check
+            tmp = set()
+
+            # now go through all cells violating the constraint, which have been added so far and check their nb for
+            # constraint violations
+            for c in nb_violating_constraint:
+                tmp.update(self._check_nb(c))
+
+            # check if we added new cells or if we checked this cell already, if yes then we are done, if not then we
+            # need to check the nb cells of the newly added cells as well
+            if not tmp or tmp.issubset(nb_violating_constraint):
+                new_cells_to_check = False
+            else:
+                nb_violating_constraint.update(tmp)
+        return nb_violating_constraint
 
     def _refine_geometry(self, _names: list = None) -> None:
         """
@@ -642,6 +681,12 @@ class SamplingTree(object):
         boundaries. The documentation of this method is equivalent to the 'refine()' method
         """
         logger.info("Starting geometry refinement.")
+
+        # add a warning message that the delta level constraint needs to be set to False, because there is still an
+        # issue somewhere when assigning the nodes
+        logger.warning("Delta level constraint was deactivated for geometry refinement since it may lead to wrong node "
+                       "assignments near the geometry. Will be fixed in the future...")
+        self._max_delta_level = False
 
         # To save some time, only go through all leaf cells at the beginning. For later iterations, we will use only the
         # newly created cells
@@ -655,27 +700,39 @@ class SamplingTree(object):
             _global_max_level = self._min_refinement_geometry
 
         while _global_max_level > _global_min_level:
-            self._update_leaf_cells()
             self._update_gain()
-            to_refine = set()
+            to_refine, checked = set(), set()
 
             for i in _all_cells:
+                # if we already refined this cell due to delta level constraint, then we don't need to refine it again
+                if i in checked:
+                    continue
+
+                # otherwise refine the cell
                 cell = self._cells[i]
-                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
 
                 # don't refine which have reached the max. level
                 if cell.level < _global_max_level:
                     to_refine.add(cell.index)
+                    cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
 
                 # but still check the constraint for the nb cells if specified
                 if self._max_delta_level:
-                    to_refine.update(self._check_constraint(i))
+                    # check if the nb cells have the same level
+                    # TODO: The constraint check sometimes messes up a node assignment near the geometry for some
+                    #  reason, independently of version / settings. Sorting of all_cells mitigates this issue, but
+                    #  doesn't solves it, so the delta level constraint is currently deactivated for geometry refinement
+                    nb_to_refine_as_well = set(self._check_nb(i))
+                    nb_to_refine_as_well.update(self._check_constraint(nb_to_refine_as_well))
+                    to_refine.update(nb_to_refine_as_well)
+                    checked.update(nb_to_refine_as_well)
 
             new_cells = []
             new_index = len(self._cells)
             for i in to_refine:
                 cell = self._cells[i]
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
+                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
                 cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
                 self._assign_indices(cell.children)
                 new_cells.extend(cell.children)
@@ -696,6 +753,8 @@ class SamplingTree(object):
             # update the min. level
             _global_min_level += 1
 
+        # we need to update the leaf cells, because otherwise the levels are not assigned correctly for some reason
+        self._update_leaf_cells()
         logger.info("Finished geometry refinement.")
 
     def _compute_captured_metric(self) -> bool:
@@ -753,8 +812,8 @@ class SamplingTree(object):
         """
         if children is None:
             # each child cell gets a new index within all cells
-            children = [Cell(new_idx + idx, cell, len(cell.nb) * [None], loc, cell.level + 1,
-                             dimensions=self._n_dimensions) for idx, loc in enumerate(loc_center)]
+            children = [Cell(new_idx + i, cell, len(cell.nb) * [None], loc_center[i, :], cell.level + 1,
+                             dimensions=self._n_dimensions) for i in range(loc_center.size(0))]
 
         # Add the neighbors for each of the child cells
         # neighbors for new lower left cell; we need to check for children, because we only assigned the parent cell,
@@ -908,7 +967,7 @@ class SamplingTree(object):
             children[CH["sel"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["swu"])
             children[CH["sel"]].nb[NB["nwl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["nwu"])
             children[CH["sel"]].nb[NB["nl"]] = parent_or_child(cell.nb, check[NB["cl"]], NB["cl"], CH["neu"])
-            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
+            children[CH["sel"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["nwu"])
             children[CH["sel"]].nb[NB["el"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["swu"])
             children[CH["sel"]].nb[NB["sel"]] = parent_or_child(cell.nb, check[NB["sel"]], NB["sel"], CH["nwu"])
             children[CH["sel"]].nb[NB["sl"]] = parent_or_child(cell.nb, check[NB["sl"]], NB["sl"], CH["neu"])
@@ -918,7 +977,7 @@ class SamplingTree(object):
             children[CH["sel"]].nb[NB["wu"]] = children[CH["swu"]]
             children[CH["sel"]].nb[NB["nwu"]] = children[CH["nwu"]]
             children[CH["sel"]].nb[NB["nu"]] = children[CH["neu"]]
-            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["el"]], NB["el"], CH["nwu"])
+            children[CH["sel"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["nwu"])
             children[CH["sel"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["e"]], NB["e"], CH["swu"])
             children[CH["sel"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["se"]], NB["se"], CH["nwu"])
             children[CH["sel"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["s"]], NB["s"], CH["neu"])
@@ -960,7 +1019,7 @@ class SamplingTree(object):
             children[CH["nwu"]].nb[NB["wu"]] = parent_or_child(cell.nb, check[NB["wu"]], NB["wu"], CH["nel"])
             children[CH["nwu"]].nb[NB["nwu"]] = parent_or_child(cell.nb, check[NB["nwu"]], NB["nwu"], CH["sel"])
             children[CH["nwu"]].nb[NB["nu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["swl"])
-            children[CH["nwu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["nwl"])
+            children[CH["nwu"]].nb[NB["neu"]] = parent_or_child(cell.nb, check[NB["nu"]], NB["nu"], CH["sel"])
             children[CH["nwu"]].nb[NB["eu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["nel"])
             children[CH["nwu"]].nb[NB["seu"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["sel"])
             children[CH["nwu"]].nb[NB["su"]] = parent_or_child(cell.nb, check[NB["cu"]], NB["cu"], CH["swl"])

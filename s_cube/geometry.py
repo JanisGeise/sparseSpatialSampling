@@ -4,9 +4,12 @@
         - circle (2D), sphere (3D)
 
     Further, arbitrary geometries, e.g., loaded from STL files, can be used. However, these geometries need to be
-    provided in a form such their coordinates represent an enclosed area (2D)
+    provided in a form such their coordinates represent an enclosed area (2D). For 3D, the STL file can be loaded
+    directly using pyVista as
 
-        - currently only 2D tested and implemented, 3D will be coming soon...
+    'pyvista.Polydata("path_to_stl_file")'
+
+    For more information, it is referred to the examples in the 'examples' directory
 """
 import logging
 import pyvista as pv
