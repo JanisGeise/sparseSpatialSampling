@@ -10,10 +10,6 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 - write unit tests for relevant methods and functions
 - complete documentation of repository
 
-### Current issues
-- there seems to be an issue with the assignment of nodes when refining the geometry and active delta level constraint
-for some cells
-
 ## Potential features / Ideas
 - testing different metrics and combinations thereof -> we need a second metric for, e.g., shear stress to account
 for boundary layers, etc.

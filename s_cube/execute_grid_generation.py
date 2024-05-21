@@ -56,7 +56,7 @@ def check_geometry_objects(_geometries: list) -> bool:
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25), _n_cells_max: int = None,
                             _refine_geometry: bool = True, _min_metric: float = 0.9, _to_refine: list = None,
-                            _max_delta_level: bool = True, _write_times: pt.Tensor = None) -> DataWriter:
+                            _max_delta_level: bool = False, _write_times: pt.Tensor = None) -> DataWriter:
     """
     Wrapper function for executing the S^3 algorithm.
 
@@ -211,7 +211,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                                f"field...")
                 continue
 
-            # since size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or
+            # since the size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or
             # [N_cells, 1, N_snapshots] (scalar field); unsqueeze if we have a scalar field
             if len(_field_size) == 1:
                 data = data.unsqueeze(1)
@@ -249,7 +249,7 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
     for f in fields:
         coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, _field_names=f)
 
-        # in case the field is not available the function will return None
+        # in case the field is not available, the function will return None
         if data is not None:
             datawriter.fit_data(coordinates, data, f, _n_snapshots_total=len(times))
 

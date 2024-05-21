@@ -111,8 +111,7 @@ if __name__ == "__main__":
     # execute the S^3 algorithm and export the pressure field for the generated grid
     for v in min_variance:
         export = execute_grid_generation(xz, metric, geometry, save_path_results, "OAT15_" + str(area) +
-                                         "_area_variance_{:.2f}".format(v), "OAT15", _min_metric=v,
-                                         _write_times=times)
+                                         "_area_variance_{:.2f}".format(v), "OAT15", _min_metric=v, _write_times=times)
         pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_" + str(area) +
                                        "_area_variance_{:.2f}.pt".format(v)))
 

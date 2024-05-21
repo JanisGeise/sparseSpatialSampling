@@ -10,7 +10,6 @@ from numba import njit
 from typing import Tuple, Union
 from sklearn.neighbors import KNeighborsRegressor
 
-DEBUG = False
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -92,9 +91,9 @@ class SamplingTree(object):
     class implementing the SamplingTree, which creates the grid (tree structure)
     """
 
-    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(2, 25), smooth_geometry: bool = True,
+    def __init__(self, vertices, target, n_cells: int = None, level_bounds=(3, 25), smooth_geometry: bool = True,
                  min_metric: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None,
-                 max_delta_level: bool = True):
+                 max_delta_level: bool = False):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -284,8 +283,8 @@ class SamplingTree(object):
                 # the target function the most relative to the original cell center to each newly created cell center
                 sum_delta_metric = sum([abs(metric[i, 0] - metric[i, j]) for j in range(1, metric.size()[1])])
 
-                cell.gain = 1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, cell.level), self._n_dimensions) \
-                            * sum_delta_metric
+                cell.gain = (1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, cell.level), self._n_dimensions)
+                             * sum_delta_metric)
 
     def _update_leaf_cells(self) -> None:
         """
@@ -402,9 +401,6 @@ class SamplingTree(object):
                 # compute cell centers
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
 
-                # update nb
-                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
-
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
 
@@ -434,11 +430,6 @@ class SamplingTree(object):
         # refine the grid near geometry objects is specified
         logger.info("\nFinished adaptive refinement.")
 
-        # [DEBUG] gather information about constraint violations
-        if DEBUG:
-            logger.info("Checking for constraint violations after adaptive refinement.")
-            self._search_for_constraint_violation()
-
         if self._smooth_geometry:
             t_start_geometry = time()
             if self._which_geometries is None:
@@ -446,12 +437,8 @@ class SamplingTree(object):
             else:
                 obj_to_refine = self._which_geometries
             self._refine_geometry(_names=obj_to_refine)
-            t_end_geometry = time()
-
-            # [DEBUG] gather information about constraint violations
-            if DEBUG:
-                logger.info("Checking for constraint violations after geometry refinement.")
-                self._search_for_constraint_violation()
+            self.data_final_mesh["t_geometry"] = time() - t_start_geometry
+            self.data_final_mesh["t_adaptive"] = t_start_geometry - end_time_uniform
 
         # assemble the final grid
         logger.info("Starting renumbering final mesh.")
@@ -475,8 +462,6 @@ class SamplingTree(object):
                                                                                  iteration_count))
         logger.info("Time for uniform refinement: {:2.4f} s".format(self.data_final_mesh["t_uniform"]))
         if self._smooth_geometry:
-            self.data_final_mesh["t_geometry"] = t_end_geometry - t_start_geometry
-            self.data_final_mesh["t_adaptive"] = t_start_geometry - end_time_uniform
             logger.info("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
             logger.info("Time for geometry refinement: {:2.4f} s".format(self.data_final_mesh["t_geometry"]))
         else:
@@ -485,44 +470,6 @@ class SamplingTree(object):
             logger.info("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
         logger.info("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
         logger.info(self)
-
-    def _search_for_constraint_violation(self):
-        # update all nb
-        for i in self._leaf_cells:
-            self._cells[i].parent.children = self._assign_neighbors(self._cells[i].parent,
-                                                                    children=self._cells[i].parent.children)
-
-        logger.info("\n")
-        # method for debugging will be removed once everything works as expected
-        fail, nb_no = set(), []
-        for i in self._leaf_cells:
-            cell = self._cells[i]
-            cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
-            tmp = []
-            for n, nb in enumerate(cell.nb):
-                if nb is not None and nb.leaf_cell() and abs(cell.level - nb.level) > 1:
-                    fail.add((cell.index, cell.level))
-                    tmp.append((n, nb.index, nb.level))
-
-            if tmp:
-                nb_no.append(tmp)
-
-        # resort
-        levels, indices, numbers = [], [], []
-        for i in nb_no:
-            n, idx, l = [], [], []
-            for j in i:
-                n.append(j[0])
-                idx.append(j[1])
-                l.append(j[2])
-            levels.append(min(l))
-            numbers.append(n)
-            indices.append(idx)  # same cell for all nb, so take the 1st one
-
-        logger.info(f"found {len(indices)} cells violating the delta level constraint:")
-        for cell, nb, i, l in zip(fail, numbers, indices, levels):
-            logger.info(f"cell idx. {cell[0]},\tlevel = {cell[1]},\tcenter: {self._cells[cell[0]].center},\tnb no. "
-                        f"{nb},  \tidx. {i},\tmin. level = {l}")
 
     def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False, _names: list = None) -> None or list:
         """
@@ -576,7 +523,7 @@ class SamplingTree(object):
         """
         _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
         _unique_idx = _all_idx.flatten().unique()
-        _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item()+1)
+        _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)
 
         # get all node indices that are not used by all cells anymore
         _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()
@@ -647,7 +594,7 @@ class SamplingTree(object):
         Check if the constraint is violated when a nb cell of the current cell is refined for nb's of the nb cell. For
         example, consider:
 
-            We want to refine a cell A with level i and the neu-cell B violates the constraint, because it has the level
+            We want to refine a cell A with level i and the neu-cell B violates the constraint because it has the level
             i-1. However, the nb cell C of cell B has the level i-2 (which is still a delta level of one, relative to
             the nb of B). If we now add B to to_refine (because we want to refine cell A), the constraint between B & C
             would be violated. So we need to check the constraint for cell C as well, and if the constraint is violated
@@ -659,15 +606,20 @@ class SamplingTree(object):
         """
         new_cells_to_check = True if nb_violating_constraint else False
         while new_cells_to_check:
-            # create an  empty set for each iteration check
+            # create an empty set for each iteration check
             tmp = set()
 
             # now go through all cells violating the constraint, which have been added so far and check their nb for
             # constraint violations
             for c in nb_violating_constraint:
+                # update nb
+                self._cells[c].parent.children = self._assign_neighbors(self._cells[c].parent,
+                                                                        children=self._cells[c].parent.children)
+
+                # check constraint
                 tmp.update(self._check_nb(c))
 
-            # check if we added new cells or if we checked this cell already, if yes then we are done, if not then we
+            # check if we added new cells or if we checked this cell already if yes then we are done, if not then we
             # need to check the nb cells of the newly added cells as well
             if not tmp or tmp.issubset(nb_violating_constraint):
                 new_cells_to_check = False
@@ -677,16 +629,11 @@ class SamplingTree(object):
 
     def _refine_geometry(self, _names: list = None) -> None:
         """
-        A stripped down version of the 'refine()' method for refinement of the final grid near geometry objects or domain
-        boundaries. The documentation of this method is equivalent to the 'refine()' method
+        A stripped down version of the 'refine()' method for refinement of the final grid near geometry objects or
+        domain boundaries.
+        The documentation of this method is equivalent to the 'refine()' method
         """
         logger.info("Starting geometry refinement.")
-
-        # add a warning message that the delta level constraint needs to be set to False, because there is still an
-        # issue somewhere when assigning the nodes
-        logger.warning("Delta level constraint was deactivated for geometry refinement since it may lead to wrong node "
-                       "assignments near the geometry. Will be fixed in the future...")
-        self._max_delta_level = False
 
         # To save some time, only go through all leaf cells at the beginning. For later iterations, we will use only the
         # newly created cells
@@ -719,9 +666,6 @@ class SamplingTree(object):
                 # but still check the constraint for the nb cells if specified
                 if self._max_delta_level:
                     # check if the nb cells have the same level
-                    # TODO: The constraint check sometimes messes up a node assignment near the geometry for some
-                    #  reason, independently of version / settings. Sorting of all_cells mitigates this issue, but
-                    #  doesn't solves it, so the delta level constraint is currently deactivated for geometry refinement
                     nb_to_refine_as_well = set(self._check_nb(i))
                     nb_to_refine_as_well.update(self._check_constraint(nb_to_refine_as_well))
                     to_refine.update(nb_to_refine_as_well)
@@ -732,7 +676,6 @@ class SamplingTree(object):
             for i in to_refine:
                 cell = self._cells[i]
                 loc_center = self._compute_cell_centers(i, keep_parent_center_=False)
-                cell.parent.children = self._assign_neighbors(cell.parent, children=cell.parent.children)
                 cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
                 self._assign_indices(cell.children)
                 new_cells.extend(cell.children)
@@ -759,7 +702,7 @@ class SamplingTree(object):
 
     def _compute_captured_metric(self) -> bool:
         """
-        compute the metric of the metric captured by the current grid, relative to the metric of the original grid
+        compute the metric at the cell centers captured by the current grid, relative to the metric of the original grid
 
         :return: bool, indicating if the current captured metric is larger than the min. metric defined as stopping
                  criteria
@@ -1098,14 +1041,14 @@ class SamplingTree(object):
             if self._n_dimensions == 2:
                 if i == 0:
                     # left nb
-                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["nwu"]] = cells[i].nb[NB["w"]].children[CH["seu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[1, :])
                         cells[i].node_idx[CH["nwu"]] = len(self.all_nodes) - 1
 
                     # lower nb
-                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                    if check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["s"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[3, :])
@@ -1117,7 +1060,7 @@ class SamplingTree(object):
 
                 elif i == 1:
                     # upper nb
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["neu"]] = cells[i].nb[NB["n"]].children[CH["swu"]].node_idx[CH["seu"]]
                     else:
                         self.all_nodes.append(nodes[2, :])
@@ -1127,7 +1070,7 @@ class SamplingTree(object):
 
                 elif i == 2:
                     # right nb
-                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["e"]].children[CH["nwu"]].node_idx[CH["swu"]]
                     else:
                         self.all_nodes.append(nodes[3, :])
@@ -1145,13 +1088,13 @@ class SamplingTree(object):
                 # child no. 0: new nodes 1, 2, 3, 4, 5, 6, 7 remain to add
                 if i == 0:
                     # check left nb (same plane) if node 1 is present
-                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["nwu"]] = cells[i].nb[NB["w"]].children[CH["seu"]].node_idx[CH["neu"]]
                     # check left nb (upper plane) if node 1 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["wu"]):
+                    elif check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["wu"]):
                         cells[i].node_idx[CH["nwu"]] = cells[i].nb[NB["wu"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # check nb above current cell (upper plane) if node 1 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                    elif check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
                         cells[i].node_idx[CH["nwu"]] = cells[i].nb[NB["cu"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1159,7 +1102,7 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["nwu"]] = len(self.all_nodes) - 1
 
                     # check nb above current cell (upper plane) if node 2 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                    if check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
                         cells[i].node_idx[CH["neu"]] = cells[i].nb[NB["cu"]].children[CH["swl"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1167,13 +1110,13 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 3 is present
-                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                    if check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["s"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # check lower nb (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["su"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["su"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["su"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # check nb above current cell (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
+                    elif check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["cu"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["cu"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1181,13 +1124,13 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
 
                     # check left nb (same plane) if node 4 is present
-                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["swl"]] = cells[i].nb[NB["w"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # check the lower left corner nb (same plane) if node 4 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["sw"]):
+                    elif check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["sw"]):
                         cells[i].node_idx[CH["swl"]] = cells[i].nb[NB["sw"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # check lower nb (same plane) if node 4 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["swl"]] = cells[i].nb[NB["s"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1195,7 +1138,7 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["swl"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["w"]].children[CH["seu"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1207,7 +1150,7 @@ class SamplingTree(object):
                     cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
+                    if check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["s"]].children[CH["nwu"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1217,13 +1160,13 @@ class SamplingTree(object):
                 elif i == 1:
                     # child no. 1: new nodes 2, 5, 6 remain to add
                     # check upper nb (same plane) if node 2 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["neu"]] = cells[i].nb[NB["n"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # check upper nb (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["nu"]):
+                    elif check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["nu"]):
                         cells[i].node_idx[CH["neu"]] = cells[i].nb[NB["nu"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # check nb above current cell (upper plane) if node 2 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["cu"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["cu"]):
                         cells[i].node_idx[CH["neu"]] = cells[i].nb[NB["cu"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1231,13 +1174,13 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["neu"]] = len(self.all_nodes) - 1
 
                     # check left nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["w"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # check the upper left corner nb (same plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["nw"]):
+                    elif check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["nw"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["nw"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # check upper nb (same plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["n"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1245,7 +1188,7 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["nwl"]] = len(self.all_nodes) - 1
 
                     # check upper nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["n"]].children[CH["swu"]].node_idx[CH["sel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1259,13 +1202,13 @@ class SamplingTree(object):
                 elif i == 2:
                     # child no. 2: new nodes 3, 6, 7 remain to add
                     # check right nb (same plane) if node 3 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["e"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # check right nb (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["eu"]):
+                    elif check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["eu"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["eu"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # check nb above current cell (upper plane) if node 3 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["cu"]):
+                    elif check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["cu"]):
                         cells[i].node_idx[CH["seu"]] = cells[i].nb[NB["cu"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1273,13 +1216,13 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["seu"]] = len(self.all_nodes) - 1
 
                     # check right nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["e"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # check the upper right corner nb (same plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["ne"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["ne"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["ne"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # check upper nb (same plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["n"]):
+                    elif check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["n"]].children[CH["seu"]].node_idx[CH["sel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1287,7 +1230,7 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["e"]].children[CH["swu"]].node_idx[CH["nwl"]]
                     else:
                         self.all_nodes.append(nodes[7, :])
@@ -1300,13 +1243,13 @@ class SamplingTree(object):
                 elif i == 3:
                     # child no. 3: new nodes 7 remain to add
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["e"]].children[CH["swu"]].node_idx[CH["swl"]]
                     # check the lower right corner nb (same plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["se"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["se"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["se"]].children[CH["nwu"]].node_idx[CH["nwl"]]
                     # check lower nb (same plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["s"]):
+                    elif check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["s"]].children[CH["neu"]].node_idx[CH["nel"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1322,13 +1265,13 @@ class SamplingTree(object):
                 elif i == 4:
                     # child no. 4: new nodes 5, 6, 7 remain to add
                     # check left nb (same plane) if node 5 is present
-                    if self.check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["w"]):
+                    if check_nb_node(cells[i], child_no=CH["sel"], nb_no=NB["w"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["w"]].children[CH["sel"]].node_idx[CH["nel"]]
                     # check left nb (lower plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["wl"]):
+                    elif check_nb_node(cells[i], child_no=CH["seu"], nb_no=NB["wl"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["wl"]].children[CH["seu"]].node_idx[CH["neu"]]
                     # check nb below current cell (lower plane) if node 5 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
                         cells[i].node_idx[CH["nwl"]] = cells[i].nb[NB["cl"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1336,20 +1279,20 @@ class SamplingTree(object):
                         cells[i].node_idx[CH["nwl"]] = len(self.all_nodes) - 1
 
                     # check nb below current cell (lower plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                    if check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["cl"]].children[CH["swu"]].node_idx[CH["neu"]]
                     else:
                         self.all_nodes.append(nodes[6, :])
                         cells[i].node_idx[CH["nel"]] = len(self.all_nodes) - 1
 
                     # check lower nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["s"]):
+                    if check_nb_node(cells[i], child_no=CH["nwl"], nb_no=NB["s"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["s"]].children[CH["nwl"]].node_idx[CH["nel"]]
                     # check lower corner nb (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["sl"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["sl"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["sl"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # check nb below current cell (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["cl"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["cl"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1363,13 +1306,13 @@ class SamplingTree(object):
                 elif i == 5:
                     # child no. 5: new nodes 6 remain to add
                     # check upper nb (same plane) if node 6 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["n"]):
+                    if check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["n"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["n"]].children[CH["swl"]].node_idx[CH["sel"]]
                     # check the upper corner nb (lower plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["nl"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["nl"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["nl"]].children[CH["swu"]].node_idx[CH["seu"]]
                     # check nb below current cell (lower plane) if node 6 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["cl"]):
+                    elif check_nb_node(cells[i], child_no=CH["nwu"], nb_no=NB["cl"]):
                         cells[i].node_idx[CH["nel"]] = cells[i].nb[NB["cl"]].children[CH["nwu"]].node_idx[CH["neu"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1385,13 +1328,13 @@ class SamplingTree(object):
                 elif i == 6:
                     # child no. 6: new nodes 7 to add
                     # check right nb (same plane) if node 7 is present
-                    if self.check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["e"]):
+                    if check_nb_node(cells[i], child_no=CH["swl"], nb_no=NB["e"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["e"]].children[CH["swl"]].node_idx[CH["nwl"]]
                     # check the right corner nb (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["el"]):
+                    elif check_nb_node(cells[i], child_no=CH["swu"], nb_no=NB["el"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["el"]].children[CH["swu"]].node_idx[CH["nwu"]]
                     # check nb below current cell (lower plane) if node 7 is present
-                    elif self.check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["cl"]):
+                    elif check_nb_node(cells[i], child_no=CH["neu"], nb_no=NB["cl"]):
                         cells[i].node_idx[CH["sel"]] = cells[i].nb[NB["cl"]].children[CH["neu"]].node_idx[CH["seu"]]
                     # otherwise, this node does not exist yet
                     else:
@@ -1414,12 +1357,14 @@ class SamplingTree(object):
                     cells[i].node_idx[CH["nwl"]] = cells[CH["swl"]].node_idx[CH["nel"]]
                     cells[i].node_idx[CH["nel"]] = cells[CH["nel"]].node_idx[CH["sel"]]
 
-    def check_nb_node(self, _cell, child_no, nb_no):
-        return _cell.nb[nb_no] is not None and \
-               _cell.nb[nb_no].children is not None and \
-               len(_cell.nb[nb_no].children) == pow(2, self._n_dimensions) and \
-               _cell.nb[nb_no].children[child_no] is not None and \
-               _cell.nb[nb_no].children[child_no].level == _cell.level
+
+def check_nb_node(_cell, child_no, nb_no):
+    return _cell.nb[nb_no] is not None and \
+        _cell.nb[nb_no].leaf_cell() and \
+        _cell.nb[nb_no].children is not None and \
+        _cell.nb[nb_no].children and \
+        _cell.nb[nb_no].children[child_no] is not None and \
+        _cell.nb[nb_no].children[child_no].level == _cell.level
 
 
 @njit(fastmath=True)
