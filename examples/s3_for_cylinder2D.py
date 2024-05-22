@@ -77,5 +77,8 @@ if __name__ == "__main__":
     export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name,
                                      "cylinder2D", _min_metric=min_metric)
 
+    # save information about the refinement and grid
+    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
+
     # export the data
     export_data(export, load_path_cylinder, bounds)

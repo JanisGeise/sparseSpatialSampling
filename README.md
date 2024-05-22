@@ -10,6 +10,10 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 - write unit tests for relevant methods and functions
 - complete documentation of repository
 
+### Current issues
+- for 3D cases, the nodes are not assigned correctly or not even displayed in paraview, although they are
+present in the HDF5 file. For 2D everything works fine, the assignment issue is just in the third dimension
+
 ## Potential features / Ideas
 - testing different metrics and combinations thereof -> we need a second metric for, e.g., shear stress to account
 for boundary layers, etc.

@@ -80,6 +80,7 @@ class DataWriter:
         _grid_data = _writer.create_group("grid")
         _grid_data.create_dataset("faces", data=self._face_id)
         _grid_data.create_dataset("vertices", data=self._vertices)
+        _grid_data.create_dataset("centers", data=self._centers)
 
         # create a group for each specified field, first add field for the cell levels
         _writer.create_dataset("levels", data=self._levels)

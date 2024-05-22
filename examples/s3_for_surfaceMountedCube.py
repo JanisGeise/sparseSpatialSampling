@@ -60,7 +60,7 @@ if __name__ == "__main__":
     save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "test")
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.25
+    min_metric = 0.75
     save_name = f"metric_{round(min_metric, 2)}_cube_full_domain"
 
     # load the CFD data in the given boundaries
@@ -81,6 +81,9 @@ if __name__ == "__main__":
     # execute the S^3 algorithm
     export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name, "cube",
                                      _min_metric=min_metric)
+
+    # save information about the refinement and grid
+    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
 
     # export the data
     export_data(export, load_path_cube, bounds)
