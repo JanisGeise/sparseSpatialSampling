@@ -11,8 +11,10 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 - complete documentation of repository
 
 ### Current issues
-- for 3D cases, the nodes are not assigned correctly or not even displayed in paraview, although they are
-present in the HDF5 file. For 2D everything works fine, the assignment issue is just in the third dimension
+- for 3D cases, the internal nodes are not displayed in Paraview, although they are present in the HDF5 file
+- the fields etc. are present, each node and each center has a value, which is displayed correctly
+
+-> seems to be a rendering issue in Paraview
 
 ## Potential features / Ideas
 - testing different metrics and combinations thereof -> we need a second metric for, e.g., shear stress to account

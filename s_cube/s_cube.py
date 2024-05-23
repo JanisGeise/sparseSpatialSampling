@@ -843,9 +843,9 @@ class SamplingTree(object):
             children[CH["nwl"]].nb[NB["nw"]] = parent_or_child(cell.nb, check[NB["nw"]], NB["nw"], CH["sel"])
             children[CH["nwl"]].nb[NB["n"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["swl"])
             children[CH["nwl"]].nb[NB["ne"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["sel"])
-            children[CH["nwl"]].nb[NB["e"]] = children[CH["neu"]]
-            children[CH["nwl"]].nb[NB["se"]] = children[CH["seu"]]
-            children[CH["nwl"]].nb[NB["s"]] = children[CH["swu"]]
+            children[CH["nwl"]].nb[NB["e"]] = children[CH["nel"]]
+            children[CH["nwl"]].nb[NB["se"]] = children[CH["sel"]]
+            children[CH["nwl"]].nb[NB["s"]] = children[CH["swl"]]
             children[CH["nwl"]].nb[NB["sw"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["sel"])
 
             children[CH["nwl"]].nb[NB["wl"]] = parent_or_child(cell.nb, check[NB["wl"]], NB["wl"], CH["neu"])
@@ -956,7 +956,7 @@ class SamplingTree(object):
             children[CH["nwu"]].nb[NB["nel"]] = parent_or_child(cell.nb, check[NB["n"]], NB["n"], CH["sel"])
             children[CH["nwu"]].nb[NB["el"]] = children[CH["nel"]]
             children[CH["nwu"]].nb[NB["sel"]] = children[CH["sel"]]
-            children[CH["nwu"]].nb[NB["sl"]] = children[CH["swu"]]
+            children[CH["nwu"]].nb[NB["sl"]] = children[CH["swl"]]
             children[CH["nwu"]].nb[NB["swl"]] = parent_or_child(cell.nb, check[NB["w"]], NB["w"], CH["sel"])
             children[CH["nwu"]].nb[NB["cl"]] = children[CH["nwl"]]
 
