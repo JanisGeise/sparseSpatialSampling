@@ -523,7 +523,12 @@ class SamplingTree(object):
         """
         _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
         _unique_idx = _all_idx.flatten().unique()
-        _all_available_idx = pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)
+
+        # the initial cell is not in the list, so add it manually
+        _idx_initial_cell = pt.arange(0, pow(2, self._n_dimensions))
+
+        # add the remaining indices to get all available indices present in the current grid
+        _all_available_idx = pt.cat([_idx_initial_cell, pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)])
 
         # get all node indices that are not used by all cells anymore
         _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()

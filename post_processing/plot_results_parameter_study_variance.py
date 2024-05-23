@@ -94,10 +94,8 @@ if __name__ == "__main__":
     plot_results_parameter_study(data, save_path_cube, n_cells_orig)
 
     # -------------------------------------------- OAT 15 airfoil --------------------------------------------
-    load_path_oat15 = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                           "results_metric_based_on_p_stl_small")
-    save_path_oat15 = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                           "plots_metric_based_on_p_stl_small")
+    load_path_oat15 = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15", "results")
+    save_path_oat15 = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15", "plots")
     n_cells_orig = 152257
 
     # load the data
@@ -105,5 +103,3 @@ if __name__ == "__main__":
 
     # plot the results
     plot_results_parameter_study(data, save_path_oat15, n_cells_orig)
-
-

@@ -33,13 +33,6 @@ for boundary layers, etc.
 -> if target metric is not met accurately, then the value for `self._cells_per_iter_start` needs to be decreased, e.g.,
 by one order of magnitude
 
-### Cell centered solution near geometries 
-If the option `max_delta_level = False` is set, the interpolated cell solution at the cell center is slightly off near 
-geometries, especially if the grid is coarse. These errors are typically small and constant over time, but it is best 
-to apply the `Points to Cell` filter in Paraview to compute an improved version of the cell centered solution if this 
-is an issue. Otherwise, the option `max_delta_level = True` fixes this issue, but this currently doesn't works for 
-geometry refinement
-
 ## Tests
 - tests can be executed with `pytest` inside the `tests` directory
 - `pytest` can be installed via: `pip install pytest`

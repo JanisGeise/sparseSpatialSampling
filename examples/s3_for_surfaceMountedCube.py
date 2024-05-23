@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path_cube = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "test")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "results")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
