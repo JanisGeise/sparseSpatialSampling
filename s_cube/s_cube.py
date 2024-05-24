@@ -141,8 +141,8 @@ class SamplingTree(object):
         self.all_centers = []
         self.face_ids = None
         self._metric = []
-        self.data_final_mesh = {}
         self._n_cells_orig = self._target.size()[0]
+        self.data_final_mesh = {"n_cells_orig": self._n_cells_orig}
 
         # set target value for min. metric
         if min_metric is not None:

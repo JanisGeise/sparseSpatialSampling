@@ -8,9 +8,9 @@ from os import path, makedirs
 from typing import Union
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.export_data import DataWriter
-from s_cube.geometry import GeometryObject
-from s_cube.s_cube import SamplingTree
+from .export_data import DataWriter
+from .geometry import GeometryObject
+from .s_cube import SamplingTree
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

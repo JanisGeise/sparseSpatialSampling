@@ -70,6 +70,12 @@ class DataWriter:
         :return: None
         """
         logger.info("Writing the data ...")
+
+        # additionally, write fields (only the cell centered solution) as pt files because reading of temporal grid
+        # structure in HDF5 file with python requires a ridiculous amount of time. For paraview, however, HDF5 files
+        # are much more convenient
+        self._save_values_at_center_as_pt()
+
         _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
                          f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Collection" CollectionType="temporal">\n'
         _grid_type = "Quadrilateral" if self.n_dimensions == 2 else "Hexahedron"
@@ -226,6 +232,11 @@ class DataWriter:
         self._interpolated_fields[_field_name].centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
         self._interpolated_fields[_field_name].vertices[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = vertices
         self._snapshot_counter += _nc
+
+    def _save_values_at_center_as_pt(self):
+        data = {k: self._interpolated_fields[k].centers.squeeze(1) for k in self._interpolated_fields.keys()}
+        data["coordinates"] = self._centers
+        pt.save(data, join(self._save_dir, f"{self._save_name}.pt"))
 
 
 if __name__ == "__main__":
