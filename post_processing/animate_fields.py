@@ -18,23 +18,24 @@ plt.rcParams['figure.dpi'] = 640
 def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_field: pt.Tensor,
                    interpolated_field: pt.Tensor, n_frames: int, geometry: list = None):
 
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 6), sharex="col")
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
     for a in range(2):
         ax[a].set_ylabel("$z$")
         ax[a].set_aspect("equal")
     ax[1].set_xlabel("$x$")
-    fig.text(0.85, 0.9, "$original$", ha="center", va="center", backgroundcolor="white")
-    fig.text(0.85, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
+    fig.text(0.8, 0.85, "$original$", ha="center", va="center", backgroundcolor="white")
+    fig.text(0.8, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
     fig.tight_layout()
     fig.subplots_adjust()
 
     # animate function adopted from @AndreWeiner
     def animate(i):
-        print("\r", f"Creating frame {i:03d} / {n_frames}", end="")
+        print("\r", f"Creating frame {i+1:03d} / {n_frames}", end="")
         ax[0].clear()
         ax[1].clear()
-        tcf1 = ax[0].tricontourf(orig_coord[:, 0], orig_coord[:, 1], orig_field[:, i])
-        tcf2 = ax[1].tricontourf(interpolated_coord[:, 0], interpolated_coord[:, 1], interpolated_field[:, i])
+        tcf1 = ax[0].tricontourf(orig_coord[:, 0], orig_coord[:, 1], orig_field[:, i], levels=25)
+        tcf2 = ax[1].tricontourf(interpolated_coord[:, 0], interpolated_coord[:, 1], interpolated_field[:, i],
+                                 levels=50)
 
         # add colorbar
         # fig.colorbar(tcf1, ax=ax[0], label=f"${name}$" + "$_{orig}$", shrink=0.5)
@@ -50,8 +51,6 @@ def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_fi
             ax[j].set_ylabel("$z$")
             ax[j].set_aspect("equal")
         ax[1].set_xlabel("$x$")
-        fig.text(0.85, 0.9, "$original$", ha="center", va="center", backgroundcolor="white")
-        fig.text(0.85, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
         fig.tight_layout()
         fig.subplots_adjust()
 
@@ -60,9 +59,9 @@ def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_fi
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
-    field_name = "p"
-    area = "small"
-    file_name = "OAT15_small_area_variance_0.95.pt"
+    field_name = "Ma"
+    area = "large"
+    file_name = f"OAT15_{area}_area_variance_0.95.pt"
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
@@ -74,10 +73,12 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     oat15 = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")
-    # naca = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"), dimensions="xz")
+    naca = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"), dimensions="xz")
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    field_orig = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    # field_orig = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+    field_orig = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
@@ -94,6 +95,6 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # create animation of fields
-    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry=[oat15])
+    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry=[oat15, naca])
     writer = FFMpegWriter(fps=40)
     ani.save(join(save_path_results, f"comparison_flow_fields_{field_name}.mp4"), writer=writer)
