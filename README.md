@@ -7,7 +7,6 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## TODO & current issues
 ### TODO
-- write unit tests for relevant methods and functions
 - complete documentation of repository
 
 ### Current issues

@@ -35,12 +35,15 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensio
 
 
 def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
-                              save_dir: str, geometry: list = None, field_: str = "p") -> None:
-    fig, ax = plt.subplots(figsize=(6, 2))
-    tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, vmin=0, vmax=0.6, levels=25)
-    fig.colorbar(tcf, shrink=0.75, label="$\sigma(" + str(field_) + ")$", ax=ax, norm=tcf.norm, ticks=pt.linspace(0, 0.6, 7))
-    if geometry is not None:
-        for g in geometry:
+                              save_dir: str, geometry_: list = None, field_: str = "p") -> None:
+    fig, ax = plt.subplots(figsize=(6, 3))
+    # tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, vmin=0, vmax=0.6, levels=25)
+    tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=25)
+    # fig.colorbar(tcf, shrink=0.75, label="$\sigma(" + str(field_) + ")$", ax=ax, norm=tcf.norm,
+    #              ticks=pt.linspace(0, 0.6, 7))
+    fig.colorbar(tcf, shrink=0.75, label="$\sigma(" + str(field_) + ") / " + str(field_) + "_{\infty}$")
+    if geometry_ is not None:
+        for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
 
     ax.set_xlabel("$x$")
@@ -53,7 +56,7 @@ def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, 
 
 
 def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
-                         save_name: str, save_dir: str, geometry: list = None) -> None:
+                         save_name: str, save_dir: str, geometry_: list = None) -> None:
     # we need to reconstruct the cells, because otherwise we can't plot it nicely
     vn = h5py.File(load_dir, "r")
 
@@ -66,8 +69,8 @@ def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: p
                 color="red", lw=0.5)
 
     ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, extend=True, alpha=0.75)
-    if geometry is not None:
-        for g in geometry:
+    if geometry_ is not None:
+        for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
 
     ax.set_xlabel("$x$")
@@ -80,14 +83,14 @@ def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: p
 
 
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: pt.Tensor, save_name: str, save_dir: str,
-                        geometry: list = None) -> None:
+                        geometry_: list = None) -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
     # TODO: colorbars limits are not affected by vmin / vmax
     tcf = ax.tricontourf(coord_x, coord_y, error_field)
     # tcf = ax.tricontourf(coord_x, coord_y, error_field, vmin=0.8, vmax=1.2)
-    fig.colorbar(tcf, label=r"$L_2 / L_{2, orig}$", shrink=0.5, ax=ax, norm=tcf.norm)
-    if geometry is not None:
-        for g in geometry:
+    fig.colorbar(tcf, label=r"$(L_2 - L_{2, orig}) / L_{2, orig}$", shrink=0.5)
+    if geometry_ is not None:
+        for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
     ax.set_xlabel("$x$")
     ax.set_ylabel("$z$")
@@ -103,9 +106,9 @@ def plot_error_in_time(time_steps: any, errors: list, metrics: list, save_name: 
                        field_: str = "p") -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     for e, m in zip(errors, metrics):
-        ax.plot(time_steps, e, label=rf"$\sigma(" + str(field_) + ") = {m}$")
+        ax.plot(time_steps, e, label=rf"$\sigma(" + str(field_) + f") = {m}$")
     ax.set_xlabel(r"$snapshot$ $no. \#$")
-    ax.set_ylabel(r"$L_2 / L_{2, orig}$")
+    ax.set_ylabel(r"$(L_2 - L_{2, orig}) / L_{2, orig}$")
     ax.set_xlim(min(time_steps), max(time_steps))
     fig.tight_layout()
     fig.legend(loc="upper right", framealpha=1.0, ncol=4)
@@ -118,10 +121,9 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(metrics, errors)
     ax.set_xlabel(r"$\sigma(" + str(field_) + ") / \sigma(" + str(field_) + "_{orig})$")
-    ax.set_ylabel(r"$L_2 / L_{2, orig}$")
-    ax.hlines(1, min(metrics), max(metrics), "red", ls="-.")
+    ax.set_ylabel(r"$(L_2 - L_{2, orig}) / L_{2, orig}$")
+    ax.hlines(0, min(metrics), max(metrics), "red", ls="-.")
     ax.set_xlim(min(metrics), max(metrics))
-    # ax.set_ylim(0.999, 1.001)
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
@@ -142,35 +144,40 @@ if __name__ == "__main__":
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # load the airfoil(s) as overlay for contourf plots
-    oat15 = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")
-    naca = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"), dimensions="xz")
+    geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
+    geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+                    dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
     # orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
-    # metric = pt.std(orig_field, dim=1)
     load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
     orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
     metric = pt.std(orig_field, dim=1)
 
+    # scale both fields with free stream quantities
+    # param_infinity = 75229.6        # free stream pressure
+    param_infinity = 0.72        # free stream mach number
+
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
 
+    # create directory for plots
+    if not path.exists(save_path_results):
+        makedirs(save_path_results)
+
     # plot the metric of the original grid
-    plot_metric_original_grid(xz[:, 0], xz[:, 1], metric, save_path_results,geometry=[oat15, naca], field_=field_name)
+    plot_metric_original_grid(xz[:, 0], xz[:, 1], metric / param_infinity, save_path_results, geometry_=geometry,
+                              field_=field_name)
 
     # compute the normalized L2-norms
     l2_total_orig = pt.linalg.norm(orig_field, ord=2)
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
     l2_space_orig = pt.linalg.norm(orig_field, ord=2, dim=1)
 
-    # create directory for plots
-    if not path.exists(save_path_results):
-        makedirs(save_path_results)
-
     # get all the generated grids in the directory
-    files = sorted(glob(join(load_path, "OAT15_*.pt")), key=lambda x: float(x.split("_")[-1].split(".pt")[0]))[-2:]
-    files_hdf = sorted(glob(join(load_path, "*.h5")), key=lambda x: float(x.split("_")[-1].split(".h5")[0]))[-2:]
-    variances = [f.split("_")[-1].split(".pt")[0] for f in files][-2:]
+    files = sorted(glob(join(load_path, "OAT15_*.pt")), key=lambda x: float(x.split("_")[-1].split(".pt")[0]))
+    files_hdf = sorted(glob(join(load_path, "*.h5")), key=lambda x: float(x.split("_")[-1].split(".h5")[0]))
+    variances = [f.split("_")[-1].split(".pt")[0] for f in files]
 
     # create empty lists for L2-errors vs. metrics
     error_time_vs_metric, error_total_vs_metric = [], []
@@ -181,7 +188,7 @@ if __name__ == "__main__":
     for v, grid, h in zip(variances, files, files_hdf):
         # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
         # plot_grid_and_metric(h, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}", save_path_results,
-        #                      geometry=[oat15, naca])
+        #                      geometry_=geometry)
 
         # load the generated grid and its values at the cell center
         data = pt.load(grid)
@@ -192,16 +199,16 @@ if __name__ == "__main__":
         fields_fitted = pt.from_numpy(knn.predict(xz))
 
         # compute the L2 error wrt time and normalize it with number of time steps
-        error_time_vs_metric.append(pt.linalg.norm(fields_fitted, ord=2, dim=0) / l2_time_orig)
+        error_time_vs_metric.append((pt.linalg.norm(fields_fitted, ord=2, dim=0) - l2_time_orig) / l2_time_orig)
         # compute the total L2-error and normalize it with l2 norm of the original field
-        error_total_vs_metric.append(pt.linalg.norm(fields_fitted, ord=2) / l2_total_orig)
+        error_total_vs_metric.append((pt.linalg.norm(fields_fitted, ord=2) - l2_total_orig) / l2_total_orig)
 
         # compute the L2-error of the metric for each cell (= wrt space) and normalize it with the number of cells
-        error_space_vs_metric = pt.linalg.norm(fields_fitted, ord=2, dim=1) / l2_space_orig
+        error_space_vs_metric = (pt.linalg.norm(fields_fitted, ord=2, dim=1) - l2_space_orig) / l2_space_orig
 
         # plot the L2-error wrt each cell
         plot_error_in_space(xz[:, 0], xz[:, 1], error_space_vs_metric, f"error_metric_{v}_{field_name}",
-                            save_path_results, geometry=[oat15, naca])
+                            save_path_results, geometry_=geometry)
 
     # plot L2 error vs. time (each variance is a different line)
     plot_error_in_time(range(orig_field.size(-1)), error_time_vs_metric, variances, f"error_vs_t_and_metric_{field_name}",

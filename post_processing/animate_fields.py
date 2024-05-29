@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 from os.path import join
 from os import path, makedirs
-from matplotlib.animation import FFMpegWriter, FuncAnimation
 from matplotlib.patches import Polygon
+from matplotlib.animation import FFMpegWriter, FuncAnimation
 
 from compute_error import load_airfoil_as_stl_file
 
@@ -72,13 +72,14 @@ if __name__ == "__main__":
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # load the airfoil(s) as overlay for contourf plots
-    oat15 = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")
-    naca = load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"), dimensions="xz")
+    geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
+    geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+                    dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
     # field_orig = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
-    load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-    field_orig = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    field_orig = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+                              f"ma_{area}_every10.pt"))
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
@@ -95,6 +96,6 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # create animation of fields
-    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry=[oat15, naca])
+    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry=geometry)
     writer = FFMpegWriter(fps=40)
     ani.save(join(save_path_results, f"comparison_flow_fields_{field_name}.mp4"), writer=writer)
