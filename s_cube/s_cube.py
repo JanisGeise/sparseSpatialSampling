@@ -93,7 +93,7 @@ class SamplingTree(object):
 
     def __init__(self, vertices, target, n_cells: int = None, level_bounds=(3, 25), smooth_geometry: bool = True,
                  min_metric: float = 0.75, min_refinement_geometry: int = None, which_geometries: list = None,
-                 max_delta_level: bool = False):
+                 max_delta_level: bool = False, n_cells_iter_start: int = None, n_cells_iter_end: int = None):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -110,7 +110,13 @@ class SamplingTree(object):
                             the max. number of cells will be used as stopping criteria
         :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
                                 difference of one
+        :param n_cells_iter_start: number of cells to refine per iteration at the beginning
+        :param n_cells_iter_end: number of cells to refine per iteration at the end
         """
+        # check if the metric is 1D
+        assert len(target.size()) == 1, (f"The size of the metric must be a 1D tensor of the length "
+                                         f"{vertices.size()[0]}. The size of the metric given is {target.size()}.")
+
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
         self._max_delta_level = max_delta_level
@@ -122,8 +128,10 @@ class SamplingTree(object):
         self._max_level = level_bounds[1]
         self._current_min_level = 0
         self._current_max_level = 0
-        self._cells_per_iter_start = int(0.01 * vertices.size()[0])  # starting value = 1% of original grid size
-        self._cells_per_iter_end = int(0.05 * self._cells_per_iter_start)  # end value = 5% of start value
+        # starting value = 1% of original grid size
+        self._cells_per_iter_start = int(0.01 * vertices.size(0)) if n_cells_iter_start is None else n_cells_iter_start
+        # end value = 5% of start value
+        self._cells_per_iter_end = int(0.0005 * vertices.size(0)) if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
@@ -141,7 +149,7 @@ class SamplingTree(object):
         self.all_centers = []
         self.face_ids = None
         self._metric = []
-        self._n_cells_orig = self._target.size()[0]
+        self._n_cells_orig = self._target.size(0)
         self.data_final_mesh = {"n_cells_orig": self._n_cells_orig}
 
         # set target value for min. metric

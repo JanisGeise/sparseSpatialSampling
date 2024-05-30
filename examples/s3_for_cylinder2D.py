@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
     load_path_cylinder = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "test")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75

@@ -57,18 +57,18 @@ def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, 
 
 def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
                          save_name: str, save_dir: str, geometry_: list = None) -> None:
-    # we need to reconstruct the cells, because otherwise we can't plot it nicely
+    # we need to reconstruct the cells, because otherwise we can't plot it nicely (since we have an unsorted node
+    # tensor, and we want to plot a non-uniform grid)
     vn = h5py.File(load_dir, "r")
 
-    # TODO: try meshgrid with node coord
     fig, ax = plt.subplots(figsize=(6, 3))
     for i in range(vn["grid"]["faces"].shape[0]):
         node_idx = vn["grid"]["faces"][i, :]
         ax.plot([vn["grid"]["vertices"][j, 0] for j in node_idx] + [vn["grid"]["vertices"][node_idx[0], 0]],
                 [vn["grid"]["vertices"][j, 1] for j in node_idx] + [vn["grid"]["vertices"][node_idx[0], 1]],
-                color="red", lw=0.5)
+                color="red", lw=0.25)
 
-    ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, extend=True, alpha=0.75)
+    ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=50, alpha=0.9)
     if geometry_ is not None:
         for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
@@ -85,10 +85,10 @@ def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: p
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: pt.Tensor, save_name: str, save_dir: str,
                         geometry_: list = None) -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
-    # TODO: colorbars limits are not affected by vmin / vmax
+    # TODO: colorbars limits are not affected by vmin / vmax (applies for other contourf plots as well)
     tcf = ax.tricontourf(coord_x, coord_y, error_field)
     # tcf = ax.tricontourf(coord_x, coord_y, error_field, vmin=0.8, vmax=1.2)
-    fig.colorbar(tcf, label=r"$(L_2 - L_{2, orig}) / L_{2, orig}$", shrink=0.5)
+    fig.colorbar(tcf, shrink=0.75, label=r"$\Delta L_2 / L_{2, orig}$")
     if geometry_ is not None:
         for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
@@ -108,7 +108,7 @@ def plot_error_in_time(time_steps: any, errors: list, metrics: list, save_name: 
     for e, m in zip(errors, metrics):
         ax.plot(time_steps, e, label=rf"$\sigma(" + str(field_) + f") = {m}$")
     ax.set_xlabel(r"$snapshot$ $no. \#$")
-    ax.set_ylabel(r"$(L_2 - L_{2, orig}) / L_{2, orig}$")
+    ax.set_ylabel(r"$\Delta L_2 / L_{2, orig}$")
     ax.set_xlim(min(time_steps), max(time_steps))
     fig.tight_layout()
     fig.legend(loc="upper right", framealpha=1.0, ncol=4)
@@ -121,8 +121,8 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(metrics, errors)
     ax.set_xlabel(r"$\sigma(" + str(field_) + ") / \sigma(" + str(field_) + "_{orig})$")
-    ax.set_ylabel(r"$(L_2 - L_{2, orig}) / L_{2, orig}$")
-    ax.hlines(0, min(metrics), max(metrics), "red", ls="-.")
+    ax.set_ylabel(r"$\Delta L_2 / L_{2, orig}$")
+    # ax.hlines(0, min(metrics), max(metrics), "red", ls="-.")
     ax.set_xlim(min(metrics), max(metrics))
     fig.tight_layout()
     fig.subplots_adjust()
@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     # scale both fields with free stream quantities
     # param_infinity = 75229.6        # free stream pressure
-    param_infinity = 0.72        # free stream mach number
+    param_infinity = 0.72         # free stream mach number
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -199,12 +199,12 @@ if __name__ == "__main__":
         fields_fitted = pt.from_numpy(knn.predict(xz))
 
         # compute the L2 error wrt time and normalize it with number of time steps
-        error_time_vs_metric.append((pt.linalg.norm(fields_fitted, ord=2, dim=0) - l2_time_orig) / l2_time_orig)
+        error_time_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=0) / l2_time_orig)
         # compute the total L2-error and normalize it with l2 norm of the original field
-        error_total_vs_metric.append((pt.linalg.norm(fields_fitted, ord=2) - l2_total_orig) / l2_total_orig)
+        error_total_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2) / l2_total_orig)
 
         # compute the L2-error of the metric for each cell (= wrt space) and normalize it with the number of cells
-        error_space_vs_metric = (pt.linalg.norm(fields_fitted, ord=2, dim=1) - l2_space_orig) / l2_space_orig
+        error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1) / l2_space_orig
 
         # plot the L2-error wrt each cell
         plot_error_in_space(xz[:, 0], xz[:, 1], error_space_vs_metric, f"error_metric_{v}_{field_name}",
