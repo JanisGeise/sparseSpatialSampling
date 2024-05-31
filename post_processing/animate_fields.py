@@ -18,28 +18,32 @@ plt.rcParams['figure.dpi'] = 640
 def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_field: pt.Tensor,
                    interpolated_field: pt.Tensor, n_frames: int, geometry: list = None):
 
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 6), sharex="col")
     for a in range(2):
         ax[a].set_ylabel("$z$")
         ax[a].set_aspect("equal")
     ax[1].set_xlabel("$x$")
-    fig.text(0.8, 0.85, "$original$", ha="center", va="center", backgroundcolor="white")
+    fig.text(0.8, 0.9, "$original$", ha="center", va="center", backgroundcolor="white")
     fig.text(0.8, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
     fig.tight_layout()
     fig.subplots_adjust()
+    vmin = min(orig_field.min().item(), interpolated_field.min().item())
+    vmax = max(orig_field.max().item(), interpolated_field.max().item())
+    levels = pt.linspace(vmin, vmax, 100)
 
     # animate function adopted from @AndreWeiner
     def animate(i):
         print("\r", f"Creating frame {i+1:03d} / {n_frames}", end="")
         ax[0].clear()
         ax[1].clear()
-        tcf1 = ax[0].tricontourf(orig_coord[:, 0], orig_coord[:, 1], orig_field[:, i], levels=25)
+        tcf1 = ax[0].tricontourf(orig_coord[:, 0], orig_coord[:, 1], orig_field[:, i], levels=levels, vmin=vmin,
+                                 vmax=vmax)
         tcf2 = ax[1].tricontourf(interpolated_coord[:, 0], interpolated_coord[:, 1], interpolated_field[:, i],
-                                 levels=50)
+                                 levels=levels, vmin=vmin, vmax=vmax)
 
         # add colorbar
-        # fig.colorbar(tcf1, ax=ax[0], label=f"${name}$" + "$_{orig}$", shrink=0.5)
-        # fig.colorbar(tcf2, ax=ax[1], label=f"${name}$" + "$_{interpolated}$", shrink=0.5)
+        # fig.colorbar(tcf1, ax=ax[0], label=f"${name}$" + "$_{orig}$", shrink=0.5, format="{x:.2f}")
+        # fig.colorbar(tcf2, ax=ax[1], label=f"${name}$" + "$_{interpolated}$", shrink=0.5, format="{x:.2f}")
 
         if geometry is not None:
             for g in geometry:
@@ -59,8 +63,8 @@ def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_fi
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
-    field_name = "Ma"
-    area = "large"
+    field_name = "p"
+    area = "small"
     file_name = f"OAT15_{area}_area_variance_0.95.pt"
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
@@ -73,13 +77,13 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
-    geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
-                    dimensions="xz"))
+    # geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+    #                 dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    # field_orig = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
-    field_orig = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-                              f"ma_{area}_every10.pt"))
+    field_orig = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    # field_orig = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+    #                           f"ma_{area}_every10.pt"))
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]

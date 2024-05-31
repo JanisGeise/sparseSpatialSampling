@@ -65,7 +65,8 @@ method of the `DataWriter` instance
 - the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately 
 (depending on the size of the snapshots and available RAM)
 
-**Note:** The RAM has to be large enough to hold at least a single snapshot (plus a little bit more for the generated grid, etc.).
+**Note:** The RAM has to be large enough to hold at least a single snapshot of the original grid and all snapshots of the
+generated grid for a single field. TODO: this will be fixed in the future
 
 ### Results & output files
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
@@ -87,7 +88,7 @@ instance called `mesh_info`, which can be saved with `pt.save(...)`
 
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
-so unless a high resolution of geometries is required, it is recommended to set `smooth_geometry = False`
+so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
 
 ## Unit tests
 - tests can be executed with `pytest` inside the `tests` directory

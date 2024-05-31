@@ -24,9 +24,9 @@ if __name__ == "__main__":
     field_name = "p"
     area = "small"
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+                     f"results_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+                             f"plots_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
     # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
@@ -87,14 +87,20 @@ if __name__ == "__main__":
     plt.close("all")
 
     # plot the first 4 POD modes (left singular vectors)
-    fig, ax = plt.subplots(4, 2, sharex="all", sharey="all")
-    for row in range(4):
-        ax[row][0].tricontourf(xz[:, 0], xz[:, 1], svd_orig.U[:, row])
+    nrows = 4
+    vmin = min(svd_orig.U[:, :nrows].min().item(), svd_inter.U[:, :nrows].min().item())
+    vmax = max(svd_orig.U[:, :nrows].max().item(), svd_inter.U[:, :nrows].max().item())
+    levels = pt.linspace(vmin, vmax, 100)
+
+    fig, ax = plt.subplots(nrows, 2, sharex="all", sharey="all")
+    for row in range(nrows):
+        ax[row][0].tricontourf(xz[:, 0], xz[:, 1], svd_orig.U[:, row], vmin=vmin, vmax=vmax, levels=levels,
+                               cmap="seismic")
         ax[row][1].tricontourf(interpolated_field["coordinates"][:, 0], interpolated_field["coordinates"][:, 1],
-                               svd_inter.U[:, row])
+                               svd_inter.U[:, row], vmin=vmin, vmax=vmax, levels=levels, cmap="seismic")
         for g in geometry:
-            ax[row][0].add_patch(Polygon(g, facecolor="white"))
-            ax[row][1].add_patch(Polygon(g, facecolor="white"))
+            ax[row][0].add_patch(Polygon(g, facecolor="black"))
+            ax[row][1].add_patch(Polygon(g, facecolor="black"))
     ax[0][0].set_title("$original$")
     ax[0][1].set_title("$interpolated$")
     fig.tight_layout()

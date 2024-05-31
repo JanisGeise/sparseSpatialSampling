@@ -37,11 +37,11 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensio
 def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
                               save_dir: str, geometry_: list = None, field_: str = "p") -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
-    # tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, vmin=0, vmax=0.6, levels=25)
-    tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=25)
-    # fig.colorbar(tcf, shrink=0.75, label="$\sigma(" + str(field_) + ")$", ax=ax, norm=tcf.norm,
-    #              ticks=pt.linspace(0, 0.6, 7))
-    fig.colorbar(tcf, shrink=0.75, label="$\sigma(" + str(field_) + ") / " + str(field_) + "_{\infty}$")
+    vmin, vmax = metric_orig.min(), metric_orig.max()
+    tcf = ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, vmin=vmin, vmax=vmax,
+                         levels=pt.linspace(vmin, vmax, 100))
+    fig.colorbar(tcf, shrink=0.75, label=r"$\sigma(" + str(field_) + ") / " + str(field_) + r"_{\infty}$",
+                 format="{x:.2f}")
     if geometry_ is not None:
         for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
@@ -68,7 +68,7 @@ def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: p
                 [vn["grid"]["vertices"][j, 1] for j in node_idx] + [vn["grid"]["vertices"][node_idx[0], 1]],
                 color="red", lw=0.25)
 
-    ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=50, alpha=0.9)
+    ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=100, alpha=0.9)
     if geometry_ is not None:
         for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
@@ -85,10 +85,9 @@ def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: p
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: pt.Tensor, save_name: str, save_dir: str,
                         geometry_: list = None) -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
-    # TODO: colorbars limits are not affected by vmin / vmax (applies for other contourf plots as well)
-    tcf = ax.tricontourf(coord_x, coord_y, error_field)
-    # tcf = ax.tricontourf(coord_x, coord_y, error_field, vmin=0.8, vmax=1.2)
-    fig.colorbar(tcf, shrink=0.75, label=r"$\Delta L_2 / L_{2, orig}$")
+    vmin, vmax = 1.2 * error_field.min().item(), 0.8 * error_field.max().item()
+    tcf = ax.tricontourf(coord_x, coord_y, error_field, vmin=vmin, vmax=vmax, levels=pt.linspace(vmin, vmax, 100))
+    fig.colorbar(tcf, shrink=0.75, label=r"$\Delta L_2 / L_{2, orig}$", format="{x:.2f}")
     if geometry_ is not None:
         for g in geometry_:
             ax.add_patch(Polygon(g, facecolor="white"))
@@ -98,7 +97,6 @@ def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: pt.
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
-    # plt.show()
     plt.close("all")
 
 
@@ -120,7 +118,7 @@ def plot_error_in_time(time_steps: any, errors: list, metrics: list, save_name: 
 def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str, field_: str = "p") -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(metrics, errors)
-    ax.set_xlabel(r"$\sigma(" + str(field_) + ") / \sigma(" + str(field_) + "_{orig})$")
+    ax.set_xlabel(r"$\sigma(" + str(field_) + r") / \sigma(" + str(field_) + "_{orig})$")
     ax.set_ylabel(r"$\Delta L_2 / L_{2, orig}$")
     # ax.hlines(0, min(metrics), max(metrics), "red", ls="-.")
     ax.set_xlim(min(metrics), max(metrics))
@@ -132,8 +130,8 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
-    field_name = "Ma"
-    area = "large"
+    field_name = "p"
+    area = "small"
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
@@ -145,18 +143,20 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
-    geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
-                    dimensions="xz"))
+    # geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+    #                 dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    # orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
-    load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-    orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+    # orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+
+    # compute the metric
     metric = pt.std(orig_field, dim=1)
 
     # scale both fields with free stream quantities
-    # param_infinity = 75229.6        # free stream pressure
-    param_infinity = 0.72         # free stream mach number
+    param_infinity = 75229.6        # free stream pressure
+    # param_infinity = 0.72         # free stream mach number
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
