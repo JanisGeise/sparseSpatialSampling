@@ -251,7 +251,7 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
 
         # in case the field is not available, the function will return None
         if data is not None:
-            datawriter.fit_data(coordinates, data, f, _n_snapshots_total=len(times))
+            datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
 
     """
     # alternatively subset of them or each snapshot can be passed separately (if data size too large)
@@ -260,11 +260,10 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
             coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, 
                                                           _field_names=f, _write_times=t)
 
-            # in case the field is not available the function will return None
+            # in case the field is not available, the function will return None
             if data is not None:
-                datawriter.fit_data(coordinates, data, f, _n_snapshots_total=len(times))
+                datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
     """
-    datawriter.write_data_to_file()
 
 
 if __name__ == "__main__":

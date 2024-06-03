@@ -72,9 +72,10 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: floa
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     load_path = join("..", "data", "2D", "OAT15")
+    field_name = "p"
     area = "small"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"results_metric_based_on_p_stl_{area}")
+                             f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
     # execute S^3 for range of variances (for parameter study)
     min_variance = pt.arange(0.25, 1.05, 0.05)
@@ -82,14 +83,13 @@ if __name__ == "__main__":
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join(load_path, "vertices_and_masks.pt"))
 
-    # load the pressure field of the original CFD data, small area around the leading airfoil
-    p = pt.load(join(load_path, "p_small_every10.pt"))
-    metric = pt.std(p, dim=1)
+    # load the pressure field of the original CFD data
+    field = pt.load(join(load_path, f"p_{area}_every10.pt"))
+    # field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+    #                 f"ma_{area}_every10.pt"))
 
-    # test on the large field with 245 568 cells
-    # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-    # ma = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
-    # metric = pt.std(ma, dim=1)
+    # compute the metric
+    metric = pt.std(field, dim=1)
 
     # load the airfoil geometry of the leading airfoil from STL file
     oat15 = load_airfoil_as_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
@@ -116,6 +116,4 @@ if __name__ == "__main__":
                                        "_area_variance_{:.2f}.pt".format(v)))
 
         # we need to add one dimension if we have a scalar field
-        export.fit_data(xz, p.unsqueeze(1), "p", _n_snapshots_total=None)
-        # export.fit_data(xz, ma.unsqueeze(1), "Ma", _n_snapshots_total=None)
-        export.write_data_to_file()
+        export.export_data(xz, field.unsqueeze(1), field_name, _n_snapshots_total=None)

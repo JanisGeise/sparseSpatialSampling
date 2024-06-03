@@ -15,15 +15,19 @@ from pydmd import DMD
 from os.path import join
 from os import path, makedirs
 
-from post_processing.compute_error import load_airfoil_as_stl_file
-
+from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     field_name = "p"
     area = "small"
+
+    # path to the HDF5 file
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
+    file_name = f"OAT15_{area}_area_variance_0.25_{field_name}.h5"
+
+    # path to the directory to which the plots should be saved to
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                              f"plots_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
 
@@ -37,7 +41,7 @@ if __name__ == "__main__":
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # field from generated grid
-    interpolated_field = pt.load(join(load_path, f"OAT15_{area}_area_variance_0.95.pt"))
+    interpolated_field = construct_data_matrix_from_hdf5(join(load_path, file_name), field_name)
 
     # scale both fields with free stream quantities
     param_infinity = 75229.6

@@ -62,24 +62,32 @@ method of the `DataWriter` instance
 - therefore, each field that should be interpolated has to be provided as tensor with the size `[n_cells, n_dimensions, n_snapshots]`.
 - a scalar field has to be of the size `[n_cells, 1, n_snapshots]`
 - a vector field has to be of the size `[n_cells, n_entries, n_snapshots]`
-- the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately 
-(depending on the size of the snapshots and available RAM)
-
-**Note:** The RAM has to be large enough to hold at least a single snapshot of the original grid and all snapshots of the
-generated grid for a single field. TODO: this will be fixed in the future
+- the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately
+depending on the size of the dataset and available RAM (refer to section memory requirements)
 
 ### Results & output files
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
-`write_data_to_file()` method
-- the data is saved in two ways:
-  1. As `.pt` file, this file contains the cell centers, cell nodes and all cell centered solutions as a single tensor 
-  with the size `[N_cells, N_snapshots]` for each field. This is done because reading the data from the HDMF file required
-  quite long
-  2. As temporal grid structure in an HDMF & XDMF file for analysis in ParaView
+`export_data()` method
+- the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
+- one HDMF & XDMF file is created for each field
 - additionally, a summary of the refinement process and mesh characteristics is stored as property in the `DataWriter`
 instance called `mesh_info`, which can be saved with `pt.save(...)`
 
 ## General notes
+### Memory requirements
+The RAM needs to be large enough to hold at least:
+- a single snapshot of the original grid
+- the original grid
+- the interpolated grid (size depends on the specified target metric)
+- the levels of the interpolated grid (size depends on the specified target metric)
+- a snapshot of the interpolated field (size depends on the specified target metric)
+
+The required memory can be estimated based on the original grid and the target metric. Consider the example of a single 
+snapshot having a size of 30 MB and the original grid of 10 MB. The target metric is set to *75%*, leading to an 
+approximate size of *7.5* MB for the generated grid and cell levels, and *22.5* MB for a single snapshot of the 
+interpolated field. Consequently, interpolation and export of a single snapshot requires at least *~80* MB of additional RAM.
+
+### Reaching the specified target metric
 - if the target metric is not reached with sufficient accuracy, the parameter `n_cells_iter_start` and
 `n_cells_iter_end` have to be decreased. If none provided, they are automatically set to:  
   

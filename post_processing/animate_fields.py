@@ -9,21 +9,21 @@ from os import path, makedirs
 from matplotlib.patches import Polygon
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
-from compute_error import load_airfoil_as_stl_file
+from compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
 
 # increase resolution
 plt.rcParams['figure.dpi'] = 640
 
 
 def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_field: pt.Tensor,
-                   interpolated_field: pt.Tensor, n_frames: int, geometry: list = None):
+                   interpolated_field: pt.Tensor, n_frames: int, geometry_: list = None):
 
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 6), sharex="col")
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
     for a in range(2):
         ax[a].set_ylabel("$z$")
         ax[a].set_aspect("equal")
     ax[1].set_xlabel("$x$")
-    fig.text(0.8, 0.9, "$original$", ha="center", va="center", backgroundcolor="white")
+    fig.text(0.8, 0.85, "$original$", ha="center", va="center", backgroundcolor="white")
     fig.text(0.8, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
     fig.tight_layout()
     fig.subplots_adjust()
@@ -45,8 +45,8 @@ def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_fi
         # fig.colorbar(tcf1, ax=ax[0], label=f"${name}$" + "$_{orig}$", shrink=0.5, format="{x:.2f}")
         # fig.colorbar(tcf2, ax=ax[1], label=f"${name}$" + "$_{interpolated}$", shrink=0.5, format="{x:.2f}")
 
-        if geometry is not None:
-            for g in geometry:
+        if geometry_ is not None:
+            for g in geometry_:
                 ax[0].add_patch(Polygon(g, facecolor="white"))
                 ax[1].add_patch(Polygon(g, facecolor="white"))
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     field_name = "p"
     area = "small"
-    file_name = f"OAT15_{area}_area_variance_0.95.pt"
+    file_name = f"OAT15_{area}_area_variance_0.95_{field_name}.h5"
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
     # load the field created by S^3. In case the data is not fitting into the RAM all at once, then the data has to be
     # loaded as it is done in the fit method of S^3's export routine
-    data = pt.load(join(load_path, file_name))
+    data = construct_data_matrix_from_hdf5(join(load_path, file_name), field_name)
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -100,6 +100,6 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # create animation of fields
-    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry=geometry)
+    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry_=geometry)
     writer = FFMpegWriter(fps=40)
     ani.save(join(save_path_results, f"comparison_flow_fields_{field_name}.mp4"), writer=writer)

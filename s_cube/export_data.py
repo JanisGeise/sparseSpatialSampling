@@ -54,129 +54,71 @@ class DataWriter:
         self.n_dimensions = self._centers.size()[1]
         self.times = times
         self.mesh_info = None
-
-        # empty dict which stores the interpolated fields, created when calling the '_load_and_fit_data' method, if no
-        # fields are specified, all available fields will be interpolated onto the coarser mesh
         self._boundaries = domain_boundaries
         self._knn = KNeighborsRegressor(n_neighbors=8 if self.n_dimensions == 2 else 26, weights="distance")
-        self._interpolated_fields = {}
+        self._interpolated_fields = Fields()
         self._snapshot_counter = 0
+        self._field_name = None
+        self._initialized = False
+        self._finished = False
+        self._n_snapshots_total = None
 
-    def write_data_to_file(self) -> None:
+    def _write_data_to_hdmf5(self) -> None:
         """
-        Write the sampled grid and the fields, interpolated at the cell centers and nodes, respectively, to an HDF5
-        file, the paths to the data and the structure of the grid for each time step is encoded in the XDMF file.
+        Write the generated grid and the fields, interpolated at the cell centers and nodes, respectively, to an HDF5
+        file for the given number of snapshots.
 
         :return: None
         """
-        logger.info("Writing the data ...")
+        # create a writer and datasets for the grid if on initial call
+        if not self._initialized:
+            logger.info(f"Writing HDF5 file for field {self._field_name}.")
+            _writer = h5py.File(join(self._save_dir, f"{self._save_name}_{self._field_name}.h5"), "w")
+            _grid_data = _writer.create_group("grid")
+            _grid_data.create_dataset("faces", data=self._face_id)
+            _grid_data.create_dataset("vertices", data=self._vertices)
+            _grid_data.create_dataset("centers", data=self._centers)
+            _vertices = _writer.create_group(f"{self._field_name}_vertices")
+            _center = _writer.create_group(f"{self._field_name}_center")
 
-        # additionally, write fields (only the cell centered solution) as pt files because reading of temporal grid
-        # structure in HDF5 file with python requires a ridiculous amount of time. For paraview, however, HDF5 files
-        # are much more convenient
-        self._save_values_at_center_as_pt()
+            # create a group for each specified field, first add field for the cell levels
+            _writer.create_dataset("levels", data=self._levels)
+            self._initialized = True
 
-        _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
-                         f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Collection" CollectionType="temporal">\n'
-        _grid_type = "Quadrilateral" if self.n_dimensions == 2 else "Hexahedron"
-        _dims = "XY" if self.n_dimensions == 2 else "XYZ"
+        else:
+            # once the grid is written, we can append the field data
+            _writer = h5py.File(join(self._save_dir, f"{self._save_name}_{self._field_name}.h5"), "a")
+            _vertices = _writer[f"{self._field_name}_vertices"]
+            _center = _writer[f"{self._field_name}_center"]
 
-        # create a writer and datasets for the grid
-        _writer = h5py.File(join(self._save_dir, f"{self._save_name}.h5"), "w")
-        _grid_data = _writer.create_group("grid")
-        _grid_data.create_dataset("faces", data=self._face_id)
-        _grid_data.create_dataset("vertices", data=self._vertices)
-        _grid_data.create_dataset("centers", data=self._centers)
+        # write the datasets for each given time step, we already updated the snapshot counter after fitting the
+        # field, so we need to subtract it to get the starting dt
+        t_start = self._snapshot_counter - self._interpolated_fields.centers.size(-1)
+        t_end = t_start + self._interpolated_fields.centers.size(-1)
 
-        # create a group for each specified field, first add field for the cell levels
-        _writer.create_dataset("levels", data=self._levels)
-
-        for key in self._interpolated_fields.keys():
-            _vertices = _writer.create_group(f"{key}_vertices")
-            _center = _writer.create_group(f"{key}_center")
-
-            # write the datasets for each time step
-            for i, t in enumerate(self.times):
-                # in case we have a scalar, we need to remove the additional dimension we created for fitting the data
-                if len(self._interpolated_fields[key].centers.squeeze().size()) == 2:
-                    _center.create_dataset(str(t.item()), data=self._interpolated_fields[key].centers.squeeze()[:, i])
-                    _vertices.create_dataset(str(t.item()), data=self._interpolated_fields[key].vertices.squeeze()[:, i])
-                # in case we have a vector
-                else:
-                    _center.create_dataset(str(t.item()), data=self._interpolated_fields[key].centers[:, :, i])
-                    _vertices.create_dataset(str(t.item()), data=self._interpolated_fields[key].vertices[:, :, i])
-
-        # write global header of XDMF file
-        with open(join(self._save_dir, f"{self._save_name}.xdmf"), "w") as f_out:
-            f_out.write(_global_header)
-
-        # loop over all available time steps and write all specified data to XDMF & HDF5 files
-        for i, t in enumerate(self.times):
-            with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
-                # write grid specific header
-                tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
-                      f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n' \
-                      f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
-                      f'{pow(2, self.n_dimensions)}">\n'
-                f_out.write(tmp)
-
-                # include the grid data from the HDF5 file
-                f_out.write(f"{self._save_name}.h5:/grid/faces\n")
-
-            # write geometry part
-            with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
-                # write header for geometry
-                f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
-                            f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
-                            f'NumberType="Float" Format="HDF">\n')
-
-                # write coordinates of vertices
-                f_out.write(f"{self._save_name}.h5:/grid/vertices\n")
-
-                # write end tags
-                f_out.write("</DataItem>\n</Geometry>\n")
-
-            # write the interpolated fields
-            with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
-                # write cell levels
-                f_out.write(f'<Attribute Name="cell level" Center="Cell">\n<DataItem Format="HDF" Dimensions='
-                            f'"{self._levels.size()[0]} {self._levels.size()[1]}">\n')
-                f_out.write(f"{self._save_name}.h5:/levels\n")
-                f_out.write("</DataItem>\n</Attribute>\n")
-
-                for key in self._interpolated_fields.keys():
-                    # determine 2nd dimension (scalar vs. vector)
-                    if len(self._interpolated_fields[key].centers.size()) == 2:
-                        _second_dim = 1
-                    else:
-                        _second_dim = self._interpolated_fields[key].centers.size()[1]
-
-                    # write header
-                    f_out.write(f'<Attribute Name="{key}" Center="Cell">\n<DataItem Format="HDF" Dimensions='
-                                f'"{self._interpolated_fields[key].centers.size()[0]} {_second_dim}">\n')
-
-                    # write interpolated field at the cell center
-                    f_out.write(f"{self._save_name}.h5:/{key}_center/{t}\n")
-                    f_out.write("</DataItem>\n</Attribute>\n")
-
-                    # then do the same for field at the vertices
-                    f_out.write(f'<Attribute Name="{key}" Center="Node">\n<DataItem Format="HDF" Dimensions='
-                                f'"{self._interpolated_fields[key].vertices.size()[0]} {_second_dim}">\n')
-                    f_out.write(f"{self._save_name}.h5:/{key}_vertices/{t}\n")
-                    f_out.write("</DataItem>\n</Attribute>\n")
-
-                # write end tag of the current grid
-                f_out.write('</Grid>\n')
-
-        # write rest of file
-        with open(join(self._save_dir, f"{self._save_name}.xdmf"), "a") as f_out:
-            f_out.write('</Grid>\n</Domain>\n</Xdmf>')
+        for i, t in enumerate(self.times[t_start:t_end]):
+            # in case we have a scalar, we need to remove the additional dimension we created for fitting the data
+            if len(self._interpolated_fields.centers.squeeze().size()) == 2:
+                _center.create_dataset(str(t.item()), data=self._interpolated_fields.centers.squeeze()[:, i])
+                _vertices.create_dataset(str(t.item()), data=self._interpolated_fields.vertices.squeeze()[:, i])
+            # in case we have a vector
+            else:
+                _center.create_dataset(str(t.item()), data=self._interpolated_fields.centers[:, :, i])
+                _vertices.create_dataset(str(t.item()), data=self._interpolated_fields.vertices[:, :, i])
 
         # close hdf file
         _writer.close()
-        logger.info("Finished export.")
 
-    def fit_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:
+        # check if we have written all snapshots, if yes, then write the XDMF file
+        if self._snapshot_counter == self._n_snapshots_total:
+            self._write_xdmf()
+
+            # reset properties for the next field
+            self._interpolated_fields = Fields()
+            self._initialized = False
+            logger.info(f"Finished export of field {self._field_name}.")
+
+    def _fit_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:
         """
         Interpolate the CFD data executed on the original grid onto the newly, coarser grid generated by the S^3
         algorithm. The original field is interpolated at the cell centers as well as at the cell nodes.
@@ -196,26 +138,26 @@ class DataWriter:
         assert len(_data.size()) == 3, "The provided field must have the shape '[N_cells, N_dimensions, N_snapshots]'" \
                                        "for a vector field and '[N_cells, 1, N_snapshots]' for a scalar field"
 
+        # save the provided field name for writing the HDF5 & XDMF files
+        self._field_name = _field_name
+
         # determine the required size of the data matrix
-        _n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
+        self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
 
         # currently loaded number of snapshots
         _nc = _data.size()[-1]
 
         # add the data to the current field or create a new field if not yet existing
-        if _field_name not in self._interpolated_fields:
+        if self._interpolated_fields.centers is None:
             # reset the snapshot counter, because apparently we create a new field
             self._snapshot_counter = 0
 
-            # instantiate field object
-            self._interpolated_fields[_field_name] = Fields()
-
             # create empty tensors for the field values at centers & vertices with dimensions:
             # [N_cells, N_dimensions, N_snapshots_total]
-            self._interpolated_fields[_field_name].centers = pt.zeros((self._centers.size()[0], _data.size()[1],
-                                                                       _n_snapshots_total))
-            self._interpolated_fields[_field_name].vertices = pt.zeros((self._vertices.size()[0], _data.size()[1],
-                                                                        _n_snapshots_total))
+            self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1],
+                                                          self._n_snapshots_total))
+            self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1],
+                                                           self._n_snapshots_total))
 
         # create empty tensors for the values of the field at the centers & vertices with dimensions:
         # [N_cells, N_dimensions, N_snapshots_currently]
@@ -229,14 +171,108 @@ class DataWriter:
             centers[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._centers))
 
         # update the fields, for which snapshots we already executed the interpolation
-        self._interpolated_fields[_field_name].centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
-        self._interpolated_fields[_field_name].vertices[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = vertices
+        self._interpolated_fields.centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
+        self._interpolated_fields.vertices[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = vertices
         self._snapshot_counter += _nc
 
-    def _save_values_at_center_as_pt(self):
-        data = {k: self._interpolated_fields[k].centers.squeeze(1) for k in self._interpolated_fields.keys()}
-        data["coordinates"] = self._centers
-        pt.save(data, join(self._save_dir, f"{self._save_name}.pt"))
+    def _write_xdmf(self) -> None:
+        """
+        Write the XDMF file corresponding to the HDF5 file. Can be used to import the data into Paraview.
+
+        :return: None
+        """
+        logger.info(f"Writing XDMF file for field {self._field_name}.")
+
+        _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
+                         f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Collection" CollectionType="temporal">\n'
+        _grid_type = "Quadrilateral" if self.n_dimensions == 2 else "Hexahedron"
+        _dims = "XY" if self.n_dimensions == 2 else "XYZ"
+
+        # write the corresponding XDMF file
+        # write global header
+        with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "w") as f_out:
+            f_out.write(_global_header)
+
+        # loop over all available time steps and write all specified data to XDMF & HDF5 files, since we have the HDMF5
+        # file written completely for al specified snapshots, we can now iterate over all time steps
+        for i, t in enumerate(self.times):
+            with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "a") as f_out:
+                # write grid specific header
+                tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
+                      f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n' \
+                      f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
+                      f'{pow(2, self.n_dimensions)}">\n'
+                f_out.write(tmp)
+
+                # include the grid data from the HDF5 file
+                f_out.write(f"{self._save_name}_{self._field_name}.h5:/grid/faces\n")
+
+            # write geometry part
+            with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "a") as f_out:
+                # write header for geometry
+                f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
+                            f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
+                            f'NumberType="Float" Format="HDF">\n')
+
+                # write coordinates of vertices
+                f_out.write(f"{self._save_name}_{self._field_name}.h5:/grid/vertices\n")
+
+                # write end tags
+                f_out.write("</DataItem>\n</Geometry>\n")
+
+            # write the interpolated fields
+            with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "a") as f_out:
+                # write cell levels
+                f_out.write(f'<Attribute Name="cell level" Center="Cell">\n<DataItem Format="HDF" Dimensions='
+                            f'"{self._levels.size()[0]} {self._levels.size()[1]}">\n')
+                f_out.write(f"{self._save_name}_{self._field_name}.h5:/levels\n")
+                f_out.write("</DataItem>\n</Attribute>\n")
+
+                # determine 2nd dimension (scalar vs. vector)
+                if len(self._interpolated_fields.centers.size()) == 2:
+                    _second_dim = 1
+                else:
+                    _second_dim = self._interpolated_fields.centers.size()[1]
+
+                    # write header
+                    f_out.write(f'<Attribute Name="{self._field_name}" Center="Cell">\n<DataItem Format="HDF" '
+                                f'Dimensions="{self._interpolated_fields.centers.size()[0]} {_second_dim}">\n')
+
+                    # write interpolated field at the cell center
+                    f_out.write(f"{self._save_name}_{self._field_name}.h5:/{self._field_name}_center/{t}\n")
+                    f_out.write("</DataItem>\n</Attribute>\n")
+
+                    # then do the same for field at the vertices
+                    f_out.write(f'<Attribute Name="{self._field_name}" Center="Node">\n<DataItem Format="HDF" '
+                                f'Dimensions="{self._interpolated_fields.vertices.size()[0]} {_second_dim}">\n')
+                    f_out.write(f"{self._save_name}_{self._field_name}.h5:/{self._field_name}_vertices/{t}\n")
+                    f_out.write("</DataItem>\n</Attribute>\n")
+
+                # write end tag of the current grid
+                f_out.write('</Grid>\n')
+
+        # write rest of file
+        with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "a") as f_out:
+            f_out.write('</Grid>\n</Domain>\n</Xdmf>')
+
+        logger.info(f"Finished export of field {self._field_name}.")
+
+    def export_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str,
+                    _n_snapshots_total: int = None) -> None:
+        """
+        Interpolate the provided (original) CFD data onto the generated grid by S^3 and write it to a HDF5 and XDMF
+        file for all given time steps.
+
+        :param _coord: the coordinates of the original grid used in CFD
+        :param _data: the original field data with dimension [N_cells, N_dimensions, N_snapshots].
+                      N_snapshots can either be all snapshots, a batch of snapshots or just a single snapshot
+        :param _field_name: name of the field, which should be exported, e.g. 'p' for pressure field
+        :param _n_snapshots_total: number of snapshots in total, which should be exported. If 'None', it is assumed
+                                   that the provided data are all available snapshots
+        :return: None
+        """
+        self._fit_data(_coord, _data, _field_name, _n_snapshots_total)
+        self._write_data_to_hdmf5()
 
 
 if __name__ == "__main__":

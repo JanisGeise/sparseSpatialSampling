@@ -34,6 +34,21 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensio
     return coord_af
 
 
+def construct_data_matrix_from_hdf5(_load_path: str, _field_name: str) -> dict:
+    hdf_file = h5py.File(_load_path, "r")
+
+    # assemble the data matrix
+    keys = list(hdf_file[f"{_field_name}_center"].keys())
+    data_out = pt.zeros((hdf_file[f"{_field_name}_center"][keys[0]].shape[0], len(keys)))
+    for i, k in enumerate(keys):
+        data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
+
+    return {"coordinates": pt.from_numpy(hdf_file.get("grid/centers")[()]),
+            "faces": pt.from_numpy(hdf_file.get("grid/faces")[()]),
+            "vertices": pt.from_numpy(hdf_file.get("grid/vertices")[()]),
+            _field_name: data_out}
+
+
 def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
                               save_dir: str, geometry_: list = None, field_: str = "p") -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
@@ -55,17 +70,14 @@ def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, 
     plt.close("all")
 
 
-def plot_grid_and_metric(load_dir: str, coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
+def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
                          save_name: str, save_dir: str, geometry_: list = None) -> None:
     # we need to reconstruct the cells, because otherwise we can't plot it nicely (since we have an unsorted node
     # tensor, and we want to plot a non-uniform grid)
-    vn = h5py.File(load_dir, "r")
-
     fig, ax = plt.subplots(figsize=(6, 3))
-    for i in range(vn["grid"]["faces"].shape[0]):
-        node_idx = vn["grid"]["faces"][i, :]
-        ax.plot([vn["grid"]["vertices"][j, 0] for j in node_idx] + [vn["grid"]["vertices"][node_idx[0], 0]],
-                [vn["grid"]["vertices"][j, 1] for j in node_idx] + [vn["grid"]["vertices"][node_idx[0], 1]],
+    for i in range(_faces.shape[0]):
+        ax.plot([_vertices[j, 0] for j in _faces[i, :]] + [_vertices[_faces[i, :][0], 0]],
+                [_vertices[j, 1] for j in _faces[i, :]] + [_vertices[_faces[i, :][0], 1]],
                 color="red", lw=0.25)
 
     ax.tricontourf(coord_x_orig, coord_y_orig, metric_orig, levels=100, alpha=0.9)
@@ -120,7 +132,6 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
     ax.plot(metrics, errors)
     ax.set_xlabel(r"$\sigma(" + str(field_) + r") / \sigma(" + str(field_) + "_{orig})$")
     ax.set_ylabel(r"$\Delta L_2 / L_{2, orig}$")
-    # ax.hlines(0, min(metrics), max(metrics), "red", ls="-.")
     ax.set_xlim(min(metrics), max(metrics))
     fig.tight_layout()
     fig.subplots_adjust()
@@ -175,9 +186,9 @@ if __name__ == "__main__":
     l2_space_orig = pt.linalg.norm(orig_field, ord=2, dim=1)
 
     # get all the generated grids in the directory
-    files = sorted(glob(join(load_path, "OAT15_*.pt")), key=lambda x: float(x.split("_")[-1].split(".pt")[0]))
-    files_hdf = sorted(glob(join(load_path, "*.h5")), key=lambda x: float(x.split("_")[-1].split(".h5")[0]))
-    variances = [f.split("_")[-1].split(".pt")[0] for f in files]
+    files_hdf = sorted(glob(join(load_path, f"*_{field_name}.h5")),
+                       key=lambda x: float(x.split("_")[-2].split(".h5")[0]))
+    variances = [f.split("_")[-2].split(".pt")[0] for f in files_hdf]
 
     # create empty lists for L2-errors vs. metrics
     error_time_vs_metric, error_total_vs_metric = [], []
@@ -185,13 +196,13 @@ if __name__ == "__main__":
     # create KNN for interpolating the generated field back to the original one
     knn = KNeighborsRegressor(n_neighbors=8 if xz.size(-1) == 2 else 26, weights="distance")
 
-    for v, grid, h in zip(variances, files, files_hdf):
-        # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
-        # plot_grid_and_metric(h, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}", save_path_results,
-        #                      geometry_=geometry)
+    for v, h in zip(variances, files_hdf):
+        # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix
+        data = construct_data_matrix_from_hdf5(h, field_name)
 
-        # load the generated grid and its values at the cell center
-        data = pt.load(grid)
+        # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
+        plot_grid_and_metric(data["faces"], data["vertices"], xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
+                             save_path_results, geometry_=geometry)
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine

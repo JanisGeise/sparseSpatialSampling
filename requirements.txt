@@ -7,3 +7,5 @@ shapely
 h5py
 matplotlib
 pyvista
+pytest
+pydmd
