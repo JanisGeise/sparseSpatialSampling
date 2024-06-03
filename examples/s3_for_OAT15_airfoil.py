@@ -70,7 +70,7 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: floa
 
 
 if __name__ == "__main__":
-    # path to the CFD data and path to directory the results should be saved to
+    # path to the CFD data and settings
     load_path = join("..", "data", "2D", "OAT15")
     field_name = "p"
     area = "small"
@@ -116,4 +116,7 @@ if __name__ == "__main__":
                                        "_area_variance_{:.2f}.pt".format(v)))
 
         # we need to add one dimension if we have a scalar field
-        export.export_data(xz, field.unsqueeze(1), field_name, _n_snapshots_total=None)
+        if len(field.size()) == 2:
+            export.export_data(xz, field.unsqueeze(1), field_name, _n_snapshots_total=None)
+        else:
+            export.export_data(xz, field, field_name, _n_snapshots_total=None)

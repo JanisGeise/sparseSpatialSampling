@@ -67,7 +67,9 @@ depending on the size of the dataset and available RAM (refer to section memory 
 
 ### Results & output files
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
-`export_data()` method
+`export_data()` method of the `DataWriter` class
+- for data from `OpenFoam`, the function `export_openfoam_fields` in `execute_grid_generation` can be used to either 
+export all snapshots at once or snapshot-by-snapshot
 - the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
 - one HDMF & XDMF file is created for each field
 - additionally, a summary of the refinement process and mesh characteristics is stored as property in the `DataWriter`

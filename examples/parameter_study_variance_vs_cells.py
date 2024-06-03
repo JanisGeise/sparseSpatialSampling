@@ -5,9 +5,8 @@
 import torch as pt
 from os.path import join
 
-from s3_for_cylinder2D import load_cylinder_data
-from s3_for_surfaceMountedCube import load_cube_data
-from s_cube.execute_grid_generation import execute_grid_generation, export_data
+from s3_for_cylinder2D import load_cfd_data
+from s_cube.execute_grid_generation import execute_grid_generation, export_openfoam_fields
 
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
@@ -32,7 +31,7 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
                                          "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
                                          _min_metric=v.item())
         pt.save(export.mesh_info, join(save_path, "mesh_info_variance_{:.2f}.pt".format(v.item())))
-        export_data(export, load_path, boundaries)
+        export_openfoam_fields(export, load_path, boundaries)
 
 
 if __name__ == "__main__":
@@ -45,7 +44,7 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], [0.05]]  # [[x, y], [r]]
 
     # load the CFD data
-    pressure, coord, _ = load_cylinder_data(load_path_cylinder, bounds)
+    pressure, coord, _ = load_cfd_data(load_path_cylinder, bounds)
 
     # generate the grid, export the data
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
@@ -65,7 +64,7 @@ if __name__ == "__main__":
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
 
     # load the CFD data
-    pressure, coord, _ = load_cube_data(load_path_cube, bounds)
+    pressure, coord, _ = load_cfd_data(load_path_cube, bounds, n_dims=3)
 
     # either define the cube with its dimensions...
     cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -77,4 +76,4 @@ if __name__ == "__main__":
 
     # execute the parameter study for the cylinder
     execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cube, load_path_cube,
-                            "cube")
+                            "cube", variances_to_run=pt.arange(0.4, 1.05, 0.05))

@@ -46,6 +46,7 @@ def construct_data_matrix_from_hdf5(_load_path: str, _field_name: str) -> dict:
     return {"coordinates": pt.from_numpy(hdf_file.get("grid/centers")[()]),
             "faces": pt.from_numpy(hdf_file.get("grid/faces")[()]),
             "vertices": pt.from_numpy(hdf_file.get("grid/vertices")[()]),
+            "levels": pt.from_numpy(hdf_file.get("levels")[()]),
             _field_name: data_out}
 
 

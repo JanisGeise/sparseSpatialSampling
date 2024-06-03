@@ -160,11 +160,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
         # the coordinates are independent of the field
         # stack the coordinates to tuples
-        if _n_dimensions == 2:
-            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask)], dim=1)
-        else:
-            coord = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
-                              pt.masked_select(vertices[:, 2], mask)], dim=1)
+        coord = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(_n_dimensions)], dim=1)
 
         # get all available time steps, skip the zero folder
         if _write_times is None:
@@ -191,9 +187,8 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             if len(_field_size) == 1:
                 data = pt.zeros((mask.sum().item(), len(_write_times)), dtype=pt.float32)
             else:
-                data = pt.zeros((mask.sum().item(), _field_size[1], len(_write_times)), dtype=pt.float32)
-                mask_vec = mask.unsqueeze(-1).expand(list(_field_size))
-                out = list(data.size()[:-1])
+                data = pt.zeros((mask.sum().item(), _n_dimensions, len(_write_times)), dtype=pt.float32)
+                mask = mask.unsqueeze(-1).expand(_field_size)
 
             try:
                 for i, t in enumerate(_write_times):
@@ -201,7 +196,8 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                     if len(_field_size) == 1:
                         data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
                     else:
-                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask_vec).reshape(out)
+                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t),
+                                                         mask).reshape(coord.size())[:, :_n_dimensions]
 
             # if fields are written out only for specific parts of the domain, this leads to dimension mismatch between
             # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
@@ -226,7 +222,8 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             return _fields_out[0]
 
 
-def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> None:
+def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: list,
+                           snapshot_wise: bool = False) -> None:
     """
     Wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
     S^3 algorithm. If the data was not generated with OpenFoam, the 'fit()' method of the DataWriter class needs to be
@@ -236,6 +233,8 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
     :param datawriter: Datawriter object resulting from the refinement with S^3
     :param load_path: path to the original CFD data
     :param boundaries: boundaries used for generating the mesh
+    :param snapshot_wise: flag if the data should be interpolated and written snapshot-by-snapshot (recommended for
+                          large datasets, which are not fitting into the RAM all at once)
     :return: None
     """
     # export the data
@@ -246,24 +245,25 @@ def export_data(datawriter: DataWriter, load_path: str, boundaries: list) -> Non
     datawriter.times = pt.tensor(list(map(float, times)))
 
     # interpolate and export the specified fields
-    for f in fields:
-        coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, _field_names=f)
+    if not snapshot_wise:
+        for f in fields:
+            coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
+                                                          _field_names=f)
 
-        # in case the field is not available, the function will return None
-        if data is not None:
-            datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
-
-    """
-    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    for f in fields:
-        for t in times:
-            coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries, 
-                                                          _field_names=f, _write_times=t)
-
-            # in case the field is not available, the function will return None
+            # in case the field is not available, the export()-method will return None
             if data is not None:
                 datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
-    """
+
+    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
+    else:
+        for f in fields:
+            for t in times:
+                coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
+                                                              _field_names=f, _write_times=t)
+
+                # in case the field is not available, the export()-method will return None
+                if data is not None:
+                    datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
 
 
 if __name__ == "__main__":

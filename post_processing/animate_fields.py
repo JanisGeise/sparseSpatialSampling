@@ -18,12 +18,12 @@ plt.rcParams['figure.dpi'] = 640
 def compare_fields(orig_coord: pt.Tensor, interpolated_coord: pt.Tensor, orig_field: pt.Tensor,
                    interpolated_field: pt.Tensor, n_frames: int, geometry_: list = None):
 
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 6), sharex="col")
     for a in range(2):
         ax[a].set_ylabel("$z$")
         ax[a].set_aspect("equal")
     ax[1].set_xlabel("$x$")
-    fig.text(0.8, 0.85, "$original$", ha="center", va="center", backgroundcolor="white")
+    fig.text(0.8, 0.9, "$original$", ha="center", va="center", backgroundcolor="white")
     fig.text(0.8, 0.45, "$interpolated$", ha="center", va="center", backgroundcolor="white")
     fig.tight_layout()
     fig.subplots_adjust()

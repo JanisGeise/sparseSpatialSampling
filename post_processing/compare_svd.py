@@ -19,23 +19,24 @@ from matplotlib.patches import Polygon
 from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
 
 if __name__ == "__main__":
-    # path to the CFD data and path to directory the results should be saved to
+    # which fields and settings to use
     field_name = "p"
     area = "small"
+    metric = "0.95"
 
     # path to the HDF5 file
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
+                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
     # path to the directory to which the plots should be saved to
-    file_name = f"OAT15_{area}_area_variance_0.25_{field_name}.h5"
+    file_name = f"OAT15_{area}_area_variance_{metric}_{field_name}.h5"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"plots_metric_based_on_{field_name}_stl_{area}_with_dl_constraint")
+                             f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
-    # load the pressure field of the original CFD data, small area around the leading airfoil
-    # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-    #                           f"ma_{area}_every10.pt"))
-    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    # load the field of the original CFD data
+    orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+                              f"ma_{area}_every10.pt"))
+    # orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
@@ -51,7 +52,6 @@ if __name__ == "__main__":
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
-    dt = (times[1] - times[0]).item()
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     ax[0].legend(loc="upper right", framealpha=1.0, ncols=2)
     fig.tight_layout()
     fig.subplots_adjust()
-    plt.savefig(join(save_path_results, "comparison_singular_values.png"), dpi=340)
+    plt.savefig(join(save_path_results, f"comparison_singular_values_metric_{metric}.png"), dpi=340)
     plt.close("all")
 
     # plot the first 4 POD modes (left singular vectors)
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     ax[0][1].set_title("$interpolated$")
     fig.tight_layout()
     fig.subplots_adjust()
-    plt.savefig(join(save_path_results, f"comparison_pod_modes.png"), dpi=340)
+    plt.savefig(join(save_path_results, f"comparison_pod_modes_metric_{metric}.png"), dpi=340)
     plt.close("all")
 
     # plot POD mode coefficients (right singular vectors)
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     ax[-1].set_xlabel("$t$ $[s]$")
     fig.tight_layout()
     fig.subplots_adjust(top=0.9)
-    plt.savefig(join(save_path_results, f"comparison_pod_mode_coefficients.png"), dpi=340)
+    plt.savefig(join(save_path_results, f"comparison_pod_mode_coefficients_metric_{metric}.png"), dpi=340)
     plt.close("all")
 
     # plot frequency spectrum

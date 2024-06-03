@@ -255,8 +255,6 @@ class DataWriter:
         with open(join(self._save_dir, f"{self._save_name}_{self._field_name}.xdmf"), "a") as f_out:
             f_out.write('</Grid>\n</Domain>\n</Xdmf>')
 
-        logger.info(f"Finished export of field {self._field_name}.")
-
     def export_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str,
                     _n_snapshots_total: int = None) -> None:
         """
