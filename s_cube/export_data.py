@@ -94,17 +94,17 @@ class DataWriter:
         # write the datasets for each given time step, we already updated the snapshot counter after fitting the
         # field, so we need to subtract it to get the starting dt
         t_start = self._snapshot_counter - self._interpolated_fields.centers.size(-1)
-        t_end = t_start + self._interpolated_fields.centers.size(-1)
+        t_end = self._snapshot_counter
 
         for i, t in enumerate(self.times[t_start:t_end]):
             # in case we have a scalar, we need to remove the additional dimension we created for fitting the data
             if len(self._interpolated_fields.centers.squeeze().size()) == 2:
-                _center.create_dataset(str(t.item()), data=self._interpolated_fields.centers.squeeze()[:, i])
-                _vertices.create_dataset(str(t.item()), data=self._interpolated_fields.vertices.squeeze()[:, i])
+                _center.create_dataset(str(t), data=self._interpolated_fields.centers.squeeze()[:, i])
+                _vertices.create_dataset(str(t), data=self._interpolated_fields.vertices.squeeze()[:, i])
             # in case we have a vector
             else:
-                _center.create_dataset(str(t.item()), data=self._interpolated_fields.centers[:, :, i])
-                _vertices.create_dataset(str(t.item()), data=self._interpolated_fields.vertices[:, :, i])
+                _center.create_dataset(str(t), data=self._interpolated_fields.centers[:, :, i])
+                _vertices.create_dataset(str(t), data=self._interpolated_fields.vertices[:, :, i])
 
         # close hdf file
         _writer.close()
@@ -152,12 +152,10 @@ class DataWriter:
             # reset the snapshot counter, because apparently we create a new field
             self._snapshot_counter = 0
 
-            # create empty tensors for the field values at centers & vertices with dimensions:
-            # [N_cells, N_dimensions, N_snapshots_total]
-            self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1],
-                                                          self._n_snapshots_total))
-            self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1],
-                                                           self._n_snapshots_total))
+        # create empty tensors for the field values at centers & vertices with dimensions [N_cells, N_dimensions,
+        # N_snapshots_currently] each call to allow variable batch sizes
+        self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1], _data.size()[2]))
+        self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1], _data.size()[2]))
 
         # create empty tensors for the values of the field at the centers & vertices with dimensions:
         # [N_cells, N_dimensions, N_snapshots_currently]
@@ -167,12 +165,10 @@ class DataWriter:
         # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
         for dimension in range(_data.size()[1]):
             self._knn.fit(_coord, _data[:, dimension, :])
-            vertices[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._vertices))
-            centers[:, dimension, :_nc] = pt.from_numpy(self._knn.predict(self._centers))
+            self._interpolated_fields.vertices[:, dimension, :] = pt.from_numpy(self._knn.predict(self._vertices))
+            self._interpolated_fields.centers[:, dimension, :] = pt.from_numpy(self._knn.predict(self._centers))
 
-        # update the fields, for which snapshots we already executed the interpolation
-        self._interpolated_fields.centers[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = centers
-        self._interpolated_fields.vertices[:, :, self._snapshot_counter:self._snapshot_counter + _nc] = vertices
+        # update the number of snapshots we already interpolated
         self._snapshot_counter += _nc
 
     def _write_xdmf(self) -> None:

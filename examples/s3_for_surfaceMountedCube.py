@@ -1,5 +1,7 @@
 """
-    Execute the sparse spatial sampling algorithm on 2D CFD data, export the resulting mesh as XDMF and HDF5 files.
+    Execute the sparse spatial sampling algorithm on 3D CFD data, export the resulting mesh and fields as XDMF and HDF5
+    files.
+
     The test case here is the OpenFoam tutorial
 
         - surfaceMountedCube, located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/LES/
@@ -24,7 +26,6 @@ from s_cube.execute_grid_generation import execute_grid_generation, export_openf
 
 
 if __name__ == "__main__":
-    # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
     save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "results")
@@ -34,13 +35,13 @@ if __name__ == "__main__":
     save_name = "metric_{:.2f}".format(min_metric) + "_cube_full_domain"
 
     # load the CFD data in the given boundaries
-    bounds = [[0, 0, 0], [9, 14.5, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    pressure, coord, _ = load_cfd_data(load_path, bounds, n_dims=3)
+    bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    field, coord, write_times = load_cfd_data(load_path, bounds, n_dims=3)
 
     # create a setup for geometry objects for the domain
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
 
-    # either define the cube with its dimensions...
+    # either define the cube by its dimensions...
     cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
     geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
 
@@ -49,11 +50,15 @@ if __name__ == "__main__":
     # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
 
     # execute the S^3 algorithm
-    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name, "cube",
-                                     _min_metric=min_metric)
+    export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",
+                                     _min_metric=min_metric, _write_times=write_times)
 
     # save information about the refinement and grid
     pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
 
-    # export the data
+    # export the fields available in all time steps
     export_openfoam_fields(export, load_path, bounds)
+
+    # alternatively, we can export data available at only certain time steps as
+    # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]         # replace with actual time steps
+    # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)

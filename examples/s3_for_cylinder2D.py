@@ -1,5 +1,7 @@
 """
-    Execute the sparse spatial sampling algorithm on 2D CFD data, export the resulting mesh as XDMF and HDF5 files.
+    Execute the sparse spatial sampling algorithm on 2D CFD data, export the resulting mesh and fields as XDMF and HDF5
+    files.
+
     The test case here is an OpenFoam tutorial with some adjustments to the number of cells and Reynolds number,
     currently:
 
@@ -27,7 +29,10 @@ from s_cube.execute_grid_generation import execute_grid_generation, export_openf
 def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
                   scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, list]:
     """
-    load the pressure field of the cylinder2D case, mask out an area.
+    load the specified field, mask out the defined area.
+
+    Note: vectors are always loaded with all three components (even if the case is 3D) because we don't know in which
+          plane the flow problem is defined.
 
     :param load_dir: path to the simulation data
     :param boundaries: list with list containing the upper and lower boundaries of the mask
@@ -35,7 +40,8 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
     :param n_dims: number of physical dimensions
     :param t_start: starting point in time, all snapshots for which t >= t_start will be loaded
     :param scalar: flag if the field that should be loaded is a scalar- or a vector field
-    :return: pressure fields at each write time, x- & y-coordinates of the cells as tuples and all write times
+    :return: the field at each write time, x- & y- and z- coordinates (depending on 2D or 3D) of the vertices and all
+             write times as list[str]
     """
     # create foam loader object
     loader = FOAMDataloader(load_dir)
@@ -63,19 +69,18 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
         if scalar:
             data[:, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask)
         else:
-            data[:, :, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask).reshape(mask.size())[:, :n_dims]
+            data[:, :, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask).reshape(mask.size())
 
     # stack the coordinates to tuples
     xy = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
 
-    return data, xy, list(map(float, write_time))
+    return data, xy, write_time
 
 
 if __name__ == "__main__":
-    # -----------------------------------------   execute for cylinder   -----------------------------------------
     # load paths to the CFD data
-    load_path_cylinder = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
+    load_path = join("..", "data", "2D", "cylinder2D_re1000")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results_TEST")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
@@ -86,18 +91,26 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], [0.05]]         # [[x, y], [r]]
 
     # load the CFD data
-    pressure, coord, write_times = load_cfd_data(load_path_cylinder, bounds)
+    field, coord, write_times = load_cfd_data(load_path, bounds)
 
     # create a setup for geometry objects for the domain and the cylinder, we don't use any STL files
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
     # generate the grid
-    export = execute_grid_generation(coord, pt.std(pressure, 1), [domain, geometry], save_path, save_name,
-                                     "cylinder2D", _min_metric=min_metric)
+    export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
+                                     "cylinder2D", _min_metric=min_metric, _write_times=write_times)
 
     # save information about the refinement and grid
     pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
 
-    # export the data
-    export_openfoam_fields(export, load_path_cylinder, bounds)
+    # we used the time steps t = 0.4 ... t_end for computing the metric, but we want to export all time steps, so reset
+    # the 'times' property
+    export.times = None
+
+    # export the fields available in all time steps
+    export_openfoam_fields(export, load_path, bounds)
+
+    # alternatively, we can export data available at only certain time steps as
+    # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]          # replace with actual time steps
+    # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)

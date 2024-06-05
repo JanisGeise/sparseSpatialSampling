@@ -105,7 +105,9 @@ if __name__ == "__main__":
         naca = load_airfoil_as_stl_file(join(load_path, "naca_airfoil_no_TE.stl"), dimensions="xz")
         geometry.append({"name": "NACA", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": naca})
 
-    # load the corresponding write times and stack the coordinates
+    # load the corresponding write times and stack the coordinates, the field is available for all time steps sow can
+    # pass it to execute_grid_generation directly. If the field to export is only available at certain time steps, we
+    # would have to set them after calling execute_grid_generation, e.g., as export.times = times
     times = pt.load(join(load_path, "oat15_tandem_times.pt"))[::10]
 
     # execute the S^3 algorithm and export the pressure field for the generated grid

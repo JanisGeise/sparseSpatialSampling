@@ -63,7 +63,8 @@ method of the `DataWriter` instance
 - a scalar field has to be of the size `[n_cells, 1, n_snapshots]`
 - a vector field has to be of the size `[n_cells, n_entries, n_snapshots]`
 - the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately
-depending on the size of the dataset and available RAM (refer to section memory requirements)
+depending on the size of the dataset and available RAM (refer to section memory requirements). 
+An example for exporting the fields snapshot-by-snapshot or in batches can be found in `examples/s3_for_surfaceMountedCube_large.py`
 
 ### Results & output files
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
@@ -99,6 +100,10 @@ interpolated field. Consequently, interpolation and export of a single snapshot 
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
 so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
+
+### Projection of the coordinates for 2D in x-y-plane
+- for 2D cases, the coordinates of the generated grid are always exported in the *x-y-*plane, independently of the 
+orientation of the original CFD data 
 
 ## Unit tests
 - tests can be executed with `pytest` inside the `tests` directory

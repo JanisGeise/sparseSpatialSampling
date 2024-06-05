@@ -56,7 +56,8 @@ def check_geometry_objects(_geometries: list) -> bool:
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25), _n_cells_max: int = None,
                             _refine_geometry: bool = True, _min_metric: float = 0.9, _to_refine: list = None,
-                            _max_delta_level: bool = False, _write_times: pt.Tensor = None) -> DataWriter:
+                            _max_delta_level: bool = False, _write_times: list = None,
+                            _n_cells_iter_start: int = None, _n_cells_iter_end: int = None) -> DataWriter:
     """
     Wrapper function for executing the S^3 algorithm.
 
@@ -84,7 +85,12 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _to_refine: which geometries should be refined, if None all except the domain will be refined
     :param _max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
                              difference of one
-    :param _write_times: numerical time steps of the simulation
+    :param _write_times: numerical time steps of the simulation, needs to be provided as list[str]. If 'None', the
+                         write times need to be provided after refinement (before exporting the fields)
+    :param _n_cells_iter_start: number of cells to refine per iteration at the beginning. If 'None' then the value is
+                                set to 1% of the number of vertices in the original grid
+    :param _n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is
+                                set to 5% of _n_cells_iter_start
     :return: None
     """
     # check if the dicts for the geometry objects are correct
@@ -99,7 +105,8 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     # coarsen the cube mesh based on the std. deviation of the pressure
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
                             smooth_geometry=_refine_geometry, min_metric=_min_metric, which_geometries=_to_refine,
-                            max_delta_level=_max_delta_level)
+                            max_delta_level=_max_delta_level, n_cells_iter_end=_n_cells_iter_end,
+                            n_cells_iter_start=_n_cells_iter_start)
 
     # add the cube and the domain
     for g in _geometry_objects:
@@ -130,7 +137,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
 
 def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: list,
-                              _field_names: Union[list, str] = None, _write_times: list = None,
+                              _field_names: Union[list, str] = None, _write_times: Union[list, str] = None,
                               _get_field_names_and_times: bool = False):
     """
     function for loading fields from OpenFoam either for a single field, multiple fields at once, single time steps
@@ -140,7 +147,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
     :param _n_dimensions: number of physical dimensions
     :param _boundaries: boundaries of the numerical domain, need to be the same as used for the execution of the S^3
     :param _field_names: names of the fields which should be exported
-    :param _write_times: numerical time steps which should be exported
+    :param _write_times: numerical time steps which should be exported, can be either a str or a list of str
     :param _get_field_names_and_times: returns available field names at first available time steps and write times
     :return: if _get_field_names_and_times = True: available field names at first available time steps and write times
              if False: the specified field, if field can't be found, 'None' is returned
@@ -187,7 +194,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             if len(_field_size) == 1:
                 data = pt.zeros((mask.sum().item(), len(_write_times)), dtype=pt.float32)
             else:
-                data = pt.zeros((mask.sum().item(), _n_dimensions, len(_write_times)), dtype=pt.float32)
+                data = pt.zeros((mask.sum().item(), _field_size[1], len(_write_times)), dtype=pt.float32)
                 mask = mask.unsqueeze(-1).expand(_field_size)
 
             try:
@@ -196,8 +203,10 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                     if len(_field_size) == 1:
                         data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
                     else:
-                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t),
-                                                         mask).reshape(coord.size())[:, :_n_dimensions]
+                        # we always need to export all dimensions of a vector, because for 2D we don't know in which
+                        # plane the flow problem is defined
+                        data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask).reshape([coord.size(0),
+                                                                                                        _field_size[1]])
 
             # if fields are written out only for specific parts of the domain, this leads to dimension mismatch between
             # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
@@ -223,47 +232,57 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
 
 def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: list,
-                           snapshot_wise: bool = False) -> None:
+                           batch_size: int = None) -> None:
     """
     Wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
-    S^3 algorithm. If the data was not generated with OpenFoam, the 'fit()' method of the DataWriter class needs to be
-    called directly with the CFD data and coordinates of the original grid as, e.g., implemented in
-    'post_processing/s3_for_OAT15_airfoil.py'
+    S^3 algorithm. If the data was not generated with OpenFoam, the 'export_data()' method of the DataWriter class needs
+    to be called directly with the CFD data and coordinates of the original grid as, e.g., implemented in
+    'examples/s3_for_OAT15_airfoil.py'
+
+    Important Note: this wrapper function only exports fields that are available in all time steps based on the
+                    available fields in the first time step. If fields that are only present at every Nth time step
+                    should be exported, this function cannot be used. Instead, the time steps and field name have to
+                    be given directly to the export_data method as it is done in 'examples/s3_for_OAT15_airfoil.py'
+
+                    E.g.:
+                            times = [0.1, 0.2, 0.3] \n
+                            export = execute_grid_generation(...) \n
+                            export.times = times    # times needs to be a list of str\n
+                            export.export_data(...) \n
 
     :param datawriter: Datawriter object resulting from the refinement with S^3
     :param load_path: path to the original CFD data
     :param boundaries: boundaries used for generating the mesh
-    :param snapshot_wise: flag if the data should be interpolated and written snapshot-by-snapshot (recommended for
-                          large datasets, which are not fitting into the RAM all at once)
+    :param batch_size: batch size, number of snapshots which should be interpolated and exported at once. If 'None',
+                       then all available snapshots will be exported at once
     :return: None
     """
-    # export the data
+    # get the available time steps and field names based on the fields available in the first time step
     times, fields = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
                                               _get_field_names_and_times=True)
 
-    # save time steps of all snapshots, which will be exported to HDF5 & XDMF
-    datawriter.times = pt.tensor(list(map(float, times)))
+    # save time steps of all snapshots if not already provided when starting the refinement, needs to be list[str]
+    if datawriter.times is None:
+        datawriter.times = times
+    batch_size = batch_size if batch_size is not None else len(datawriter.times)
 
     # interpolate and export the specified fields
-    if not snapshot_wise:
-        for f in fields:
+    for f in fields:
+        counter = 1
+        if not len(datawriter.times) % batch_size:
+            n_batches = int(len(datawriter.times) / batch_size)
+        else:
+            n_batches = int(len(datawriter.times) / batch_size) + 1
+
+        for t in pt.arange(0, len(datawriter.times), step=batch_size).tolist():
+            logger.info(f"Exporting batch {counter} / {n_batches}")
             coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
-                                                          _field_names=f)
+                                                          _field_names=f, _write_times=datawriter.times[t:t+batch_size])
 
             # in case the field is not available, the export()-method will return None
             if data is not None:
-                datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
-
-    # alternatively subset of them or each snapshot can be passed separately (if data size too large)
-    else:
-        for f in fields:
-            for t in times:
-                coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
-                                                              _field_names=f, _write_times=t)
-
-                # in case the field is not available, the export()-method will return None
-                if data is not None:
-                    datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(times))
+                datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(datawriter.times))
+            counter += 1
 
 
 if __name__ == "__main__":
