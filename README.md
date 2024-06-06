@@ -7,11 +7,6 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## Getting started
 
-### Current issues & TODOs
-- in paraview for 3D grids, the connections of the nodes seem to be messed up in the x-y-plane
-- occurs only in certain areas of the grid  
--> needs to be investigated & fixed
-
 ### Overview
 The repository contains the following directories:
 
@@ -119,13 +114,18 @@ If you have any questions or something is not working as expected, fell free to 
 [issue](https://github.com/JanisGeise/sparseSpatialSampling/issues).
 
 ### Known issues
-**Visibility of internal nodes in ParaView**
+#### Visibility of internal nodes in ParaView
 - for 3D cases, the internal nodes are not or only partially displayed in Paraview, although they are present in the 
 HDF5 file
 - the fields and all points are present, each node and each center has a value, which is displayed correctly
 
 This seems to be a rendering issue in Paraview resulting from the sorting of the nodes. However, this issue
 should not be affecting any computations or operations done in ParaView or with the interpolated data in general.
+
+#### Messed up grid nodes in Paraview
+When using single precision, the grid nodes may be messed up in the x-y-plane when imported into Paraview in some parts of the domain. 
+This issue was fixed by exporting everything in double precision, so it is recommended to use double precision 
+throughout all computations in Paraview. Why this happens only in the x-y-plane is unknown.
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 

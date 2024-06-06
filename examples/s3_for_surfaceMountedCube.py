@@ -28,11 +28,12 @@ from s_cube.execute_grid_generation import execute_grid_generation, export_openf
 if __name__ == "__main__":
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube", "results")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
+                     "TEST_sorting_nodes")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
-    save_name = "metric_{:.2f}".format(min_metric) + "_cube_full_domain"
+    save_name = "metric_{:.2f}".format(min_metric) + "DP_vs_SP_grid_issue_paraview"
 
     # load the CFD data in the given boundaries
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -51,13 +52,14 @@ if __name__ == "__main__":
 
     # execute the S^3 algorithm
     export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",
-                                     _min_metric=min_metric, _write_times=write_times)
+                                     _min_metric=min_metric, _write_times=write_times, _refine_geometry=False,
+                                     _n_cells_iter_start=int(0.001 * coord.size(0)))
 
     # save information about the refinement and grid
     pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
 
     # export the fields available in all time steps
-    export_openfoam_fields(export, load_path, bounds)
+    export_openfoam_fields(export, load_path, bounds, fields="p")
 
     # alternatively, we can export data available at only certain time steps as
     # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]         # replace with actual time steps

@@ -12,6 +12,8 @@ from sklearn.neighbors import KNeighborsRegressor
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+pt.set_default_dtype(pt.float64)
+
 
 class Fields:
     """

@@ -13,6 +13,8 @@ from sklearn.neighbors import KNeighborsRegressor
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+pt.set_default_dtype(pt.float64)
+
 """
 Note:
         each cell has 8 neighbors (nb) in 2D case: 1 at each side, 1 at each corner of the cell. In 3D, there
