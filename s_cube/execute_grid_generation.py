@@ -232,7 +232,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
 
 def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: list,
-                           batch_size: int = None) -> None:
+                           batch_size: int = None, fields: Union[list, str] = None) -> None:
     """
     Wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
     S^3 algorithm. If the data was not generated with OpenFoam, the 'export_data()' method of the DataWriter class needs
@@ -255,16 +255,24 @@ def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: l
     :param boundaries: boundaries used for generating the mesh
     :param batch_size: batch size, number of snapshots which should be interpolated and exported at once. If 'None',
                        then all available snapshots will be exported at once
+    :param fields: fields to export, either str or list[str]. If 'None' then all available fields at the first time
+                   step will be exported
     :return: None
     """
     # get the available time steps and field names based on the fields available in the first time step
-    times, fields = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
+    if fields is None:
+        _, fields = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
                                               _get_field_names_and_times=True)
 
     # save time steps of all snapshots if not already provided when starting the refinement, needs to be list[str]
     if datawriter.times is None:
-        datawriter.times = times
+        times, _ = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
+                                             _get_field_names_and_times=True)
+
     batch_size = batch_size if batch_size is not None else len(datawriter.times)
+
+    if type(fields) is str:
+        fields = [fields]
 
     # interpolate and export the specified fields
     for f in fields:

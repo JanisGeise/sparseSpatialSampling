@@ -108,7 +108,9 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: DataWriter, field_nam
     """
     for f in field_names:
         # in our setup, the write times differ for the p & U field and the prime2Mean fields
-        if f.endswith("Mean"):
+        if f.endswith("Prime2Mean"):
+            datawriter.times = [str(i.item()) for i in pt.arange(40, 140, 10).int()]
+        elif f.endswith("Mean"):
             # int, because in OpenFoam only significant decimal points are written, e.g., t = 30 is not written as 30.0
             # tolist, because otherwise we would have to call _write_times=t.item()
             datawriter.times = [str(i.item()) for i in pt.arange(30, 140, 10).int()]
@@ -120,12 +122,14 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: DataWriter, field_nam
             n_batches = int(len(datawriter.times) / batch_size)
         else:
             n_batches = int(len(datawriter.times) / batch_size) + 1
-
         for i in pt.arange(0, len(datawriter.times), step=batch_size).tolist():
             logger.info(f"Exporting batch {counter} / {n_batches}")
             coordinates, data = load_original_Foam_fields(load_dir, datawriter.n_dimensions, boundaries, _field_names=f,
                                                           _write_times=datawriter.times[i:i+batch_size])
-            datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(datawriter.times))
+
+            # in case the field is not available, the export()-method will return None
+            if data is not None:
+                datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(datawriter.times))
             counter += 1
 
 
@@ -135,18 +139,17 @@ if __name__ == "__main__":
     load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
     save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
 
-    # fields, which should be exported, the write times for the fields can be adjusted in the function
-    # export_fields_snapshot_wise()
-    # fields = ["p", "U", "pMean", "UMean", "UPrime2Mean", "pPrime2Mean"]
-    fields = ["pMean"]
+    # fields which should be exported, the write times for the fields can be adjusted in the function
+    # export_fields_snapshot_wise
+    fields = ["p", "U", "pMean", "UMean", "pPrime2Mean"]
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.4
+    min_metric = 0.95
 
     # compute the metric or load an existing one
     compute_metric = False
     save_name_metric = "metric_std_pressure"
-    save_name = "surfaceMountedCube_metric_std_pressure=_{:.2f}_no_geometry_refinement".format(min_metric)
+    save_name = "surfaceMountedCube_metric_std_pressure={:.2f}_no_geometry_refinement".format(min_metric)
 
     # load the CFD data in the given boundaries (full domain) and compute the metric (std(p)) snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -170,10 +173,10 @@ if __name__ == "__main__":
 
     # execute the S^3 algorithm
     export = execute_grid_generation(coord, metric, geometry, save_path, save_name, "cube", _min_metric=min_metric,
-                                     _refine_geometry=False, _n_cells_iter_start=int(0.001 * coord.size(0)))
+                                     _refine_geometry=False)
 
     # save information about the refinement and grid
-    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_metric_std_pressure_{:.2f}.pt".format(min_metric)))
+    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_metric_std_pressure={:.2f}.pt".format(min_metric)))
 
     # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
     export_fields_snapshot_wise(load_path, export, fields, bounds, times)

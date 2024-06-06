@@ -7,6 +7,11 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## Getting started
 
+### Current issues & TODOs
+- in paraview for 3D grids, the connections of the nodes seem to be messed up in the x-y-plane
+- occurs only in certain areas of the grid  
+-> needs to be investigated & fixed
+
 ### Overview
 The repository contains the following directories:
 

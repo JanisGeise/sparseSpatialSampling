@@ -12,11 +12,116 @@ import matplotlib.pyplot as plt
 
 from os.path import join
 from os import path, makedirs
+from scipy.signal import welch
 from flowtorch.analysis import SVD
 from matplotlib.patches import Polygon
-# from scipy.signal import welch
 
 from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
+
+
+def get_cell_area(_load_path: str, _file_name: str, _n_dims: int, levels: pt.Tensor) -> pt.Tensor:
+    file_name_mesh_info = f"mesh_info_{'_'.join(_file_name.split('_')[:-1])}.pt"
+    width_initial_cell = pt.load(join(_load_path, file_name_mesh_info))["size_initial_cell"]
+
+    # A = (1 / 2^N_dimensions) * (initial_width / 2^level)^N_dimensions
+    return 1 / pow(2, _n_dims) * pow(width_initial_cell / pow(2, levels), _n_dims)
+
+
+def plot_singular_values(s_orig, s_inter, _save_path: str, _save_name: str, n_values: int = 100) -> None:
+    # singular values original field
+    s_var_orig = s_orig * (100 / s_orig.sum())
+    s_cum_orig = pt.cumsum(s_var_orig, dim=0)
+
+    # singular values interpolated field
+    s_var_inter = s_inter * (100 / s_inter.sum())
+    s_cum_inter = pt.cumsum(s_var_orig, dim=0)
+
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
+    ax[0].plot(s_var_orig[:n_values], label="$original$")
+    ax[0].plot(s_var_inter[:n_values], label="$interpolated$")
+    ax[1].plot(s_cum_orig)
+    ax[1].plot(s_cum_inter)
+    ax[1].set_xlabel(r"$no. \#$")
+    ax[0].set_ylabel(r"$\%$ $\sqrt{\sigma_i^2}$")
+    ax[1].set_ylabel(r"$cumulative$ $\%$")
+    ax[1].set_xlim([0, n_values])
+    ax[0].set_ylim([0, max([s_var_orig[:n_values].max(), s_var_inter[:n_values].max()])])
+    ax[1].set_ylim([0, max([s_cum_orig[:n_values].max(), s_cum_inter[:n_values].max()])])
+    ax[0].legend(loc="upper right", framealpha=1.0, ncols=2)
+    fig.tight_layout()
+    fig.subplots_adjust()
+    plt.savefig(join(_save_path, f"{_save_path}.png"), dpi=340)
+    plt.close("all")
+
+
+def plot_psd(V_orig, V_inter, dt, n_samples, _save_path, _save_name: str, chord: float = 0.15,
+             u_inf: float = 238.59) -> None:
+    # adapted from @AndreWeiner
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # use default color cycle
+    color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+
+    for m in range(len(color) - 1):
+        freq_orig, amp_orig = welch(V_orig[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
+        freq_inter, amp_inter = welch(V_inter[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
+        ax.plot(freq_orig * chord / u_inf, amp_orig, color=color[m], label=f"$mode$ ${m + 1}$")
+        ax.plot(freq_inter * chord / u_inf, amp_inter, color=color[m], ls="--")
+    ax.set_xlabel(r"$Sr$")
+    ax.set_ylabel("$PSD$")
+    ax.set_xlim(0, 1)
+    ax.legend()
+    fig.tight_layout()
+    fig.subplots_adjust()
+    plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
+    plt.close("all")
+
+
+def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str, _save_name: str, n_modes: int = 4,
+                   _geometry: list = None) -> None:
+    vmin = min(U_orig[:, :n_modes].min().item(), U_inter[:, :n_modes].min().item())
+    vmax = max(U_orig[:, :n_modes].max().item(), U_inter[:, :n_modes].max().item())
+    levels = pt.linspace(vmin, vmax, 100)
+
+    fig, ax = plt.subplots(n_modes, 2, sharex="all", sharey="all")
+    for row in range(n_modes):
+        ax[row][0].tricontourf(coord_original[:, 0], coord_original[:, 1], U_orig[:, row], vmin=vmin, vmax=vmax,
+                               levels=levels, cmap="seismic")
+        ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row], vmin=vmin, vmax=vmax,
+                               levels=levels, cmap="seismic")
+        if _geometry is not None:
+            for g in _geometry:
+                ax[row][0].add_patch(Polygon(g, facecolor="black"))
+                ax[row][1].add_patch(Polygon(g, facecolor="black"))
+    ax[0][0].set_title("$original$")
+    ax[0][1].set_title("$interpolated$")
+    fig.tight_layout()
+    fig.subplots_adjust()
+    plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
+    plt.close("all")
+
+
+def plot_mode_coefficients(write_times, V_orig, V_inter, _save_path: str, _save_name: str, n_modes: int = 4) -> None:
+    color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+
+    fig, ax = plt.subplots(nrows=n_modes, figsize=(6, 4), sharex="all", sharey="all")
+    for row in range(n_modes):
+        if row == 0:
+            ax[row].plot(write_times, V_orig[:, row], color=color[row], label="$original$")
+            ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--", label="$interpolated$")
+        else:
+            ax[row].plot(write_times, V_orig[:, row], color=color[row])
+            ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--")
+        ax[row].text(write_times.max() + 1e-3, 0, f"$mode$ ${row}$", va="center")
+        ax[row].set_xlim(write_times.min(), write_times.max())
+    fig.legend(loc="upper center", framealpha=1.0, ncols=2)
+    ax[-1].set_xlabel("$t$ $[s]$")
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
+    plt.savefig(join(_save_path, f"{_save_name}.png"),
+                dpi=340)
+    plt.close("all")
+
 
 if __name__ == "__main__":
     # which fields and settings to use
@@ -34,12 +139,13 @@ if __name__ == "__main__":
                              f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
     # load the field of the original CFD data
-    orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-                              f"ma_{area}_every10.pt"))
-    # orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+    #                           f"ma_{area}_every10.pt"))
+    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
+    cell_area_orig = xz[f"area_{area}"].unsqueeze(-1).sqrt()
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # field from generated grid
@@ -53,6 +159,23 @@ if __name__ == "__main__":
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
 
+    # compute the cell areas (2D) / volumes (3D) for the interpolated field
+    cell_area_inter = get_cell_area(load_path, file_name, xz.size(-1), interpolated_field["levels"]).sqrt()
+
+    # multiply by the sqrt of the cell areas to weight their contribution
+    orig_field *= cell_area_orig
+    interpolated_field[field_name] *= cell_area_inter
+
+    # make SVD of original flow field data
+    orig_field -= pt.mean(orig_field, dim=1).unsqueeze(-1)
+    svd_orig = SVD(orig_field, rank=orig_field.size(-1))
+
+    # make SVD of interpolated flow field data
+    interpolated_field[field_name] -= pt.mean(interpolated_field[field_name], dim=1).unsqueeze(-1)
+    svd_inter = SVD(interpolated_field[field_name], rank=orig_field.size(-1))
+
+    # TODO correct for phase shifting
+
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
 
@@ -60,80 +183,18 @@ if __name__ == "__main__":
     if not path.exists(save_path_results):
         makedirs(save_path_results)
 
-    # make SVD of original flow field data and compute singular values
-    orig_field -= pt.mean(orig_field, dim=1).unsqueeze(-1)
-    svd_orig = SVD(orig_field, rank=orig_field.size(-1))
-    s_var_orig = svd_orig.s * (100 / svd_orig.s.sum())
-    s_cum_orig = pt.cumsum(s_var_orig, dim=0)
-
-    # make SVD of interpolated flow field data and compute singular values
-    interpolated_field[field_name] -= pt.mean(interpolated_field[field_name], dim=1).unsqueeze(-1)
-    svd_inter = SVD(interpolated_field[field_name], rank=orig_field.size(-1))
-    s_var_inter = svd_inter.s * (100 / svd_inter.s.sum())
-    s_cum_inter = pt.cumsum(s_var_inter, dim=0)
+    # plot frequency spectrum
+    plot_psd(svd_orig.V.numpy(), svd_inter.V.numpy(), (times[1] - times[0]).item(), len(times),
+             save_path_results, f"comparison_psd_metric_{metric}_weighted")
 
     # plot singular values
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
-    ax[0].plot(s_var_orig, label="$original$")
-    ax[0].plot(s_var_inter, label="$interpolated$")
-    ax[1].plot(s_cum_orig)
-    ax[1].plot(s_cum_inter)
-    ax[1].set_xlabel(r"$no. \#$")
-    ax[0].set_ylabel(r"$\%$ $\sqrt{\sigma_i^2}$")
-    ax[1].set_ylabel(r"$cumulative$ $\%$")
-    ax[0].set_xlim([0, s_var_orig.size(0)])
-    ax[0].set_ylim([0, max([s_var_orig.max(), s_var_inter.max()])])
-    ax[1].set_ylim([0, max([s_cum_orig.max(), s_cum_inter.max()])])
-    ax[0].legend(loc="upper right", framealpha=1.0, ncols=2)
-    fig.tight_layout()
-    fig.subplots_adjust()
-    plt.savefig(join(save_path_results, f"comparison_singular_values_metric_{metric}.png"), dpi=340)
-    plt.close("all")
+    plot_singular_values(svd_orig.s, svd_inter.s, save_path_results,
+                         f"comparison_singular_values_metric_{metric}_weighted")
 
-    # plot the first 4 POD modes (left singular vectors)
-    nrows = 4
-    vmin = min(svd_orig.U[:, :nrows].min().item(), svd_inter.U[:, :nrows].min().item())
-    vmax = max(svd_orig.U[:, :nrows].max().item(), svd_inter.U[:, :nrows].max().item())
-    levels = pt.linspace(vmin, vmax, 100)
-
-    fig, ax = plt.subplots(nrows, 2, sharex="all", sharey="all")
-    for row in range(nrows):
-        ax[row][0].tricontourf(xz[:, 0], xz[:, 1], svd_orig.U[:, row], vmin=vmin, vmax=vmax, levels=levels,
-                               cmap="seismic")
-        ax[row][1].tricontourf(interpolated_field["coordinates"][:, 0], interpolated_field["coordinates"][:, 1],
-                               svd_inter.U[:, row], vmin=vmin, vmax=vmax, levels=levels, cmap="seismic")
-        for g in geometry:
-            ax[row][0].add_patch(Polygon(g, facecolor="black"))
-            ax[row][1].add_patch(Polygon(g, facecolor="black"))
-    ax[0][0].set_title("$original$")
-    ax[0][1].set_title("$interpolated$")
-    fig.tight_layout()
-    fig.subplots_adjust()
-    plt.savefig(join(save_path_results, f"comparison_pod_modes_metric_{metric}.png"), dpi=340)
-    plt.close("all")
+    # plot the first N POD modes (left singular vectors)
+    plot_pod_modes(xz, interpolated_field["coordinates"], svd_orig.U / cell_area_orig, svd_inter.U / cell_area_inter,
+                   save_path_results, f"comparison_pod_modes_metric_{metric}_weighted", _geometry=geometry)
 
     # plot POD mode coefficients (right singular vectors)
-    # use default color cycle
-    color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-    fig, ax = plt.subplots(nrows=4, figsize=(6, 4), sharex="all", sharey="all")
-    for row in range(4):
-        if row == 0:
-            ax[row].plot(times, svd_orig.V[:, row] * svd_orig.s[row], color=color[row], label="$original$")
-            ax[row].plot(times, svd_inter.V[:, row] * svd_inter.s[row], color=color[row], ls="--",
-                         label="$interpolated$")
-        else:
-            ax[row].plot(times, svd_orig.V[:, row] * svd_orig.s[row], color=color[row])
-            ax[row].plot(times, svd_inter.V[:, row] * svd_inter.s[row], color=color[row], ls="--")
-        ax[row].text(times.max() + 1e-3, 0, f"$mode$ ${row}$", va="center")
-        ax[row].set_xlim(times.min(), times.max())
-    fig.legend(loc="upper center", framealpha=1.0, ncols=2)
-    ax[-1].set_xlabel("$t$ $[s]$")
-    fig.tight_layout()
-    fig.subplots_adjust(top=0.9)
-    plt.savefig(join(save_path_results, f"comparison_pod_mode_coefficients_metric_{metric}.png"), dpi=340)
-    plt.close("all")
-
-    # plot frequency spectrum
-    # freq_orig, amp_orig = welch(svd_orig.V.numpy(), fs=1/dt)
-    # plt.plot(freq_orig, amp_orig[0, :])
-    # plt.show()
+    plot_mode_coefficients(times, svd_orig.V, svd_inter.V, save_path_results,
+                           f"comparison_pod_mode_coefficients_metric_{metric}_weighted")
