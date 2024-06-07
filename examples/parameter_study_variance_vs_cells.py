@@ -11,7 +11,7 @@ from s_cube.execute_grid_generation import execute_grid_generation, export_openf
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
                             save_path: str, load_path: str, grid_name: str,
-                            variances_to_run: pt.Tensor = pt.arange(0.25, 1.05, 0.05)) -> None:
+                            variances_to_run: pt.Tensor = pt.arange(0.25, 1.05, 0.05), fields: list = None) -> None:
     """
     wrapper function for executing the parameter study captured variance of original grid vs. number of cells final
     grid and required execution times of S^3
@@ -24,6 +24,8 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
     :param load_path: path to the original CFD data
     :param grid_name: name of the grid, only used internally in XDMF and HDF5 files
     :param variances_to_run: for which target variances the S^3 should be executed
+    :param fields: fields to export, either str or list[str]. If 'None' then all available fields at the first time
+                   step will be exported
     :return: None
     """
     for v in variances_to_run:
@@ -31,7 +33,7 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
                                          "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
                                          _min_metric=v.item())
         pt.save(export.mesh_info, join(save_path, "mesh_info_variance_{:.2f}.pt".format(v.item())))
-        export_openfoam_fields(export, load_path, boundaries)
+        export_openfoam_fields(export, load_path, boundaries, fields=fields)
 
 
 if __name__ == "__main__":
@@ -76,4 +78,4 @@ if __name__ == "__main__":
 
     # execute the parameter study for the cylinder
     execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cube, load_path_cube,
-                            "cube", variances_to_run=pt.arange(0.4, 1.05, 0.05))
+                            "cube", variances_to_run=pt.arange(0.4, 1.05, 0.05), fields=["p", "U"])

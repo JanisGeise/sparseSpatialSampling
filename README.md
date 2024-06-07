@@ -111,7 +111,7 @@ orientation of the original CFD data
 
 ## Issues
 If you have any questions or something is not working as expected, fell free to open up a new 
-[issue](https://github.com/JanisGeise/sparseSpatialSampling/issues).
+[issue](https://github.com/JanisGeise/sparseSpatialSampling/issues). There are some known issues, which are listed below.
 
 ### Known issues
 #### Visibility of internal nodes in ParaView
@@ -126,6 +126,9 @@ should not be affecting any computations or operations done in ParaView or with 
 When using single precision, the grid nodes may be messed up in the x-y-plane when imported into Paraview in some parts of the domain. 
 This issue was fixed by exporting everything in double precision, so it is recommended to use double precision 
 throughout all computations in Paraview. Why this happens only in the x-y-plane is unknown.
+
+Although it wasn't observed so far, for very fine grids this may even be happening with double precision. 
+However, the cell centered values should not be affected by this (in case this happens).
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 

@@ -29,7 +29,7 @@ if __name__ == "__main__":
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
     save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
-                     "TEST_sorting_nodes")
+                     "results")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
@@ -52,8 +52,7 @@ if __name__ == "__main__":
 
     # execute the S^3 algorithm
     export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",
-                                     _min_metric=min_metric, _write_times=write_times, _refine_geometry=False,
-                                     _n_cells_iter_start=int(0.001 * coord.size(0)))
+                                     _min_metric=min_metric, _write_times=write_times)
 
     # save information about the refinement and grid
     pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))

@@ -83,7 +83,7 @@ class DataWriter:
             _vertices = _writer.create_group(f"{self._field_name}_vertices")
             _center = _writer.create_group(f"{self._field_name}_center")
 
-            # create a group for each specified field, first add field for the cell levels
+            # add field for the cell levels
             _writer.create_dataset("levels", data=self._levels)
             self._initialized = True
 
@@ -98,11 +98,12 @@ class DataWriter:
         t_start = self._snapshot_counter - self._interpolated_fields.centers.size(-1)
         t_end = self._snapshot_counter
 
+        # create a group for each specified field
         for i, t in enumerate(self.times[t_start:t_end]):
             # in case we have a scalar, we need to remove the additional dimension we created for fitting the data
-            if len(self._interpolated_fields.centers.squeeze(1).size()) == 2:
-                _center.create_dataset(str(t), data=self._interpolated_fields.centers.squeeze()[:, i])
-                _vertices.create_dataset(str(t), data=self._interpolated_fields.vertices.squeeze()[:, i])
+            if self._interpolated_fields.centers.size(1) == 1:
+                _center.create_dataset(str(t), data=self._interpolated_fields.centers.squeeze(1)[:, i])
+                _vertices.create_dataset(str(t), data=self._interpolated_fields.vertices.squeeze(1)[:, i])
             # in case we have a vector
             else:
                 _center.create_dataset(str(t), data=self._interpolated_fields.centers[:, :, i])

@@ -268,6 +268,7 @@ def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: l
     if datawriter.times is None:
         times, _ = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
                                              _get_field_names_and_times=True)
+        datawriter.times = times
 
     batch_size = batch_size if batch_size is not None else len(datawriter.times)
 
