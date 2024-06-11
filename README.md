@@ -44,8 +44,8 @@ the standard deviation of the velocity field with respect to time can be used as
   - for 3D, it has to be loaded using `pyVista`, e.g., as `cube = pv.PolyData(join("..", "tests", "cube.stl"))`
 - otherwise, the domain is approximated by either a circle (2D), rectangle (2D), cube (3D), sphere (3D)
 - for more information it is referred to `s_cube/execute_grid_generation.py` and `s_cube/geometry.py`
-- an example input may look like 
 
+An example input may look like:
 
     # 2D box
     domain = {"name": "example domain", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": False}
@@ -83,9 +83,8 @@ method of the `DataWriter` instance
 - the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately
 depending on the size of the dataset and available RAM (refer to section memory requirements). 
 
-example for interpolating and exporting a field:  
+example for interpolating and exporting a field:
 
-  
     # times are the time steps of the simulation, need to be either a str or a list[str]
     export.times = times
     export.export_data(cooridnates, snapshots_original_field, field_name)
