@@ -91,7 +91,7 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
 
 def export_fields_snapshot_wise(load_dir: str, datawriter: DataWriter, field_names: list, boundaries: list,
-                                write_times: list, batch_size=25) -> None:
+                                write_times: list, batch_size: int = 25) -> None:
     """
     For each field specified, interpolate all snapshots onto the generated grid and export it to HDF5 & XDMF. The
     interpolation and export of the data is performed snapshot-by-snapshot (batch_size = 1) or in batches to avoid out
@@ -180,3 +180,7 @@ if __name__ == "__main__":
 
     # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
     export_fields_snapshot_wise(load_path, export, fields, bounds, times)
+
+    # perform an SVD for the pressure and velocity field
+    for f in ["p", "U"]:
+        export.compute_svd(f)

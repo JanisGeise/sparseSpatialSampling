@@ -14,7 +14,7 @@ from scipy.ndimage import gaussian_filter1d
 
 if __name__ == "__main__":
     # paths to the data & save directory
-    load_path = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase", "postProcessing")
+    load_path = join("..", "data", "3D", "surfaceMountedCube_s_cube_Janis", "postProcessing")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
                              "plots_surfaceMountedCube_s_cube_Janis")
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     # load the coefficients
     columns = ["t", "cx", "cy", "cz"]
-    coeffs = read_csv(join(load_path, "probes", "30", "coefficients.dat"), sep=r"\s+", comment="#", names=columns)
+    coeffs = read_csv(join(load_path, "forces", "0", "coefficient.dat"), sep=r"\s+", comment="#", names=columns)
 
     # time step between samples
     dt = coeffs.t.values[1] - coeffs.t.values[0]
@@ -44,8 +44,8 @@ if __name__ == "__main__":
             ax.plot(coeffs.t, gaussian_filter1d(c[0], 20), c="k", label="smoothed")
         else:
             ax.plot(coeffs.t, gaussian_filter1d(c[0], 20), c="k")
-    ax.set_xlim(coeffs.t.min()-1, coeffs.t.max())
-    # ax.ylim(-2, 3)
+    ax.set_xlim(coeffs.t.min(), coeffs.t.max())
+    ax.set_ylim(-2, 2)
     ax.set_xlabel(r"$t$ in $s$")
     ax.set_ylabel(r"$c_i$")
     fig.legend(ncol=4, loc="upper center")
@@ -70,4 +70,3 @@ if __name__ == "__main__":
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(save_path_results, f"psd_force_coefficients_metric_{metric}.png"), dpi=340)
     plt.close("all")
-

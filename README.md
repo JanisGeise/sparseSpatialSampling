@@ -17,11 +17,12 @@ The repository contains the following directories:
 
 For executing $S^3$, the following things have to be provided:
 
-1. the simulation data as point cloud and main dimensions of the numerical domain
-2. a metric for each point 
-3. geometries within the domain (optional)
+1. the simulation data as point cloud
+2. either the main dimensions of the numerical domain or the numerical domain as STL file
+3. a metric for each point 
+4. geometries within the domain (optional)
 
-The general workflow will be explained in more detail below.
+The general workflow will be explained more detailed below.
 
 ### 1. Providing the original CFD data
 - the coordinates of the original grid have to be provided as tensor with a shape of `[N_cells, N_dimensions]`
@@ -38,16 +39,33 @@ the standard deviation of the velocity field with respect to time can be used as
 
 #### Domain:
 - the main dimensions of the numerical domain must be provided as dict
+- if the geometry or domain is given by coordinates (e.g. an STL file):
+  - for 2D, the coordinates of an enclosed area need to be provided
+  - for 3D, it has to be loaded using `pyVista`, e.g., as `cube = pv.PolyData(join("..", "tests", "cube.stl"))`
+- otherwise, the domain is approximated by either a circle (2D), rectangle (2D), cube (3D), sphere (3D)
 - for more information it is referred to `s_cube/execute_grid_generation.py` and `s_cube/geometry.py`
-- an example input for a 2D box may look like 
+- an example input may look like 
 
 
-    `domain = {"name": "example domain", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": False}`
+    # 2D box
+    domain = {"name": "example domain", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": False}
+    
+    # alternatively, if the domain is provided as STL file for a 3D box
+    cube = pv.PolyData(join("..", "tests", "cube.stl"))
+    domain_3d = {"name": "example domain STL", "bounds": None, "type": "stl", "is_geometry": False, "coordinates": cube}
+
+    # if we have geomtries inside the domain, we can add the same way as we did for the domain
+    geometry = {"name": "example geometry 2D", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": True}
+
+    # execute S^3, the coordinates are the corrdinates of the cell centers in the original grid while metric is the 
+    # metric based on which the grid is created
+    export = execute_grid_generation(coordinates, metric, [domain, geometry], save_path, save_name, grid_name,
+                                     _min_metric=min_metric)
 
 **Note:** in case no more geometries are present, the dict for the domain has to be wrapped into a list prior passing it to 
 the `execute_grid_generation` function, since this functions expects a list of geometries
 
-#### More geometries:
+#### Adding more geometries:
 - there can be added as many further geometries as required to avoid generating a grid in these areas
 - for simple geometries (cube, rectangle, sphere or circle), only the main dimensions and positions need to be passed
 - if coordinates of the geometries should be used, they have to be provided either as an enclosed area (for 2D case) or 
@@ -64,7 +82,20 @@ method of the `DataWriter` instance
 - a vector field has to be of the size `[n_cells, n_entries, n_snapshots]`
 - the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately
 depending on the size of the dataset and available RAM (refer to section memory requirements). 
-An example for exporting the fields snapshot-by-snapshot or in batches can be found in `examples/s3_for_surfaceMountedCube_large.py`
+
+example for interpolating and exporting a field:  
+
+  
+    # times are the time steps of the simulation, need to be either a str or a list[str]
+    export.times = times
+    export.export_data(cooridnates, snapshots_original_field, field_name)
+
+    # save inforamtion about the refinement and timings
+    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
+
+
+An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
+`examples/s3_for_surfaceMountedCube_large.py` (for large datasets, which are not fitting into the RAM all at once).
 
 ### Results & output files
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
@@ -76,6 +107,15 @@ export all snapshots at once or snapshot-by-snapshot
 - additionally, a summary of the refinement process and mesh characteristics is stored as property in the `DataWriter`
 instance called `mesh_info`, which can be saved with `pt.save(...)`
 
+### Performing an SVD
+Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
+
+    # compute SVD of the interpolated velocity field
+    export.compute_svd("U")
+
+The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
+coefficients are not referenced in the XDMF file.
+
 ## General notes
 ### Memory requirements
 The RAM needs to be large enough to hold at least:
@@ -86,9 +126,14 @@ The RAM needs to be large enough to hold at least:
 - a snapshot of the interpolated field (size depends on the specified target metric)
 
 The required memory can be estimated based on the original grid and the target metric. Consider the example of a single 
-snapshot having a size of 30 MB and the original grid of 10 MB. The target metric is set to *75%*, leading to an 
-approximate size of *7.5* MB for the generated grid and cell levels, and *22.5* MB for a single snapshot of the 
-interpolated field. Consequently, interpolation and export of a single snapshot requires at least *~80* MB of additional RAM.
+snapshot having a size of 30 MB (double precision) and the original grid of 10 MB. The target metric is set to *75%*, 
+leading to an approximate max. size of *7.5* MB for the generated grid and cell levels, and *22.5* MB for a single 
+snapshot of the interpolated field. Consequently, interpolation and export of a single snapshot requires at least *~80* 
+MB of additional RAM. 
+
+**Note:** When performing an SVD, the complete data matrix (all snapshots) of the interpolated field need to be loaded. 
+The available RAM has to be large enough to hold all snapshots of the interpolated field as well as additional memory to
+perform the SVD.
 
 ### Reaching the specified target metric
 - if the target metric is not reached with sufficient accuracy, the parameter `n_cells_iter_start` and
@@ -102,7 +147,7 @@ interpolated field. Consequently, interpolation and export of a single snapshot 
 so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
 
 ### Projection of the coordinates for 2D in x-y-plane
-- for 2D cases, the coordinates of the generated grid are always exported in the *x-y-*plane, independently of the 
+- for 2D cases, the coordinates of the generated grid are always exported in the *x-y-* plane, independently of the 
 orientation of the original CFD data 
 
 ## Unit tests
@@ -132,6 +177,6 @@ However, the cell centered values should not be affected by this (in case this h
 
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 
-  - **D. Fernex, A. Weine, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
+  - **D. Fernex, A. Weiner, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
   processing of big simulation data*, DOI: https://doi.org/10.2514/6.2021-1484 (January, 2021).
 - Idea & 1D implementation of the current version taken from [Andre Weiner](https://github.com/AndreWeiner)

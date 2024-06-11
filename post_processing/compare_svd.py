@@ -44,13 +44,13 @@ def plot_singular_values(s_orig, s_inter, _save_path: str, _save_name: str, n_va
     ax[1].set_xlabel(r"$no. \#$")
     ax[0].set_ylabel(r"$\%$ $\sqrt{\sigma_i^2}$")
     ax[1].set_ylabel(r"$cumulative$ $\%$")
-    ax[1].set_xlim([0, n_values])
-    ax[0].set_ylim([0, max([s_var_orig[:n_values].max(), s_var_inter[:n_values].max()])])
-    ax[1].set_ylim([0, max([s_cum_orig[:n_values].max(), s_cum_inter[:n_values].max()])])
+    ax[1].set_xlim(0, n_values)
+    ax[0].set_ylim(0, max([s_var_orig[:n_values].max(), s_var_inter[:n_values].max()]))
+    ax[1].set_ylim(0, max([s_cum_orig[:n_values].max(), s_cum_inter[:n_values].max()]))
     ax[0].legend(loc="upper right", framealpha=1.0, ncols=2)
     fig.tight_layout()
     fig.subplots_adjust()
-    plt.savefig(join(_save_path, f"{_save_path}.png"), dpi=340)
+    plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
     plt.close("all")
 
 
@@ -86,9 +86,13 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
     fig, ax = plt.subplots(n_modes, 2, sharex="all", sharey="all")
     for row in range(n_modes):
         ax[row][0].tricontourf(coord_original[:, 0], coord_original[:, 1], U_orig[:, row], vmin=vmin, vmax=vmax,
-                               levels=levels, cmap="seismic")
-        ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row], vmin=vmin, vmax=vmax,
-                               levels=levels, cmap="seismic")
+                               levels=levels, cmap="seismic", extend="both")
+        if row == 2:
+            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row], vmin=vmin, vmax=vmax,
+                                   levels=levels, cmap="seismic", extend="both")
+        else:
+            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row] * -1, vmin=vmin, vmax=vmax,
+                                   levels=levels, cmap="seismic", extend="both")
         if _geometry is not None:
             for g in _geometry:
                 ax[row][0].add_patch(Polygon(g, facecolor="black"))
@@ -111,7 +115,10 @@ def plot_mode_coefficients(write_times, V_orig, V_inter, _save_path: str, _save_
             ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--", label="$interpolated$")
         else:
             ax[row].plot(write_times, V_orig[:, row], color=color[row])
-            ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--")
+            if row == 2:
+                ax[row].plot(write_times, V_inter[:, row], color=color[row], ls="--")
+            else:
+                ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--")
         ax[row].text(write_times.max() + 1e-3, 0, f"$mode$ ${row}$", va="center")
         ax[row].set_xlim(write_times.min(), write_times.max())
     fig.legend(loc="upper center", framealpha=1.0, ncols=2)
@@ -173,8 +180,6 @@ if __name__ == "__main__":
     # make SVD of interpolated flow field data
     interpolated_field[field_name] -= pt.mean(interpolated_field[field_name], dim=1).unsqueeze(-1)
     svd_inter = SVD(interpolated_field[field_name], rank=orig_field.size(-1))
-
-    # TODO correct for phase shifting
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})

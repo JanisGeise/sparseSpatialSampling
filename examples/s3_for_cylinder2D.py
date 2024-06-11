@@ -80,10 +80,10 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
 if __name__ == "__main__":
     # load paths to the CFD data
     load_path = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results_TEST")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "Test_SVD")
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.75
+    min_metric = 0.95
     save_name = "metric_{:.2f}".format(min_metric) + "_cylinder_full_domain"
 
     # boundaries of the masked domain for the cylinder
@@ -114,3 +114,7 @@ if __name__ == "__main__":
     # alternatively, we can export data available at only certain time steps as
     # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]          # replace with actual time steps
     # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
+
+    # perform an SVD for the pressure and velocity field
+    for f in ["p", "U"]:
+        export.compute_svd(f)

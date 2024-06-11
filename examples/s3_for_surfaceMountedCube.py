@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
-    save_name = "metric_{:.2f}".format(min_metric) + "DP_vs_SP_grid_issue_paraview"
+    save_name = "metric_{:.2f}".format(min_metric)
 
     # load the CFD data in the given boundaries
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -58,8 +58,12 @@ if __name__ == "__main__":
     pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
 
     # export the fields available in all time steps
-    export_openfoam_fields(export, load_path, bounds, fields="p")
+    export_openfoam_fields(export, load_path, bounds, fields=["U", "p"])
 
     # alternatively, we can export data available at only certain time steps as
     # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]         # replace with actual time steps
     # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
+
+    # perform an SVD for the pressure and velocity field
+    for f in ["p", "U"]:
+        export.compute_svd(f)

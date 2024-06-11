@@ -39,9 +39,16 @@ def construct_data_matrix_from_hdf5(_load_path: str, _field_name: str) -> dict:
 
     # assemble the data matrix
     keys = list(hdf_file[f"{_field_name}_center"].keys())
-    data_out = pt.zeros((hdf_file[f"{_field_name}_center"][keys[0]].shape[0], len(keys)))
+    shape = hdf_file[f"{_field_name}_center"][keys[0]].shape
+    if len(shape) == 1:
+        data_out = pt.zeros((shape[0], len(keys)))
+    else:
+        data_out = pt.zeros((shape[0], shape[1], len(keys)))
     for i, k in enumerate(keys):
-        data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
+        if len(shape) == 1:
+            data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
+        else:
+            data_out[:, :, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
 
     return {"coordinates": pt.from_numpy(hdf_file.get("grid/centers")[()]),
             "faces": pt.from_numpy(hdf_file.get("grid/faces")[()]),
