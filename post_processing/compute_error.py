@@ -14,6 +14,14 @@ from matplotlib.patches import Polygon
 from sklearn.neighbors import KNeighborsRegressor
 
 
+def get_cell_area(_load_path: str, _file_name: str, _n_dims: int, levels: pt.Tensor) -> pt.Tensor:
+    file_name_mesh_info = f"mesh_info_{'_'.join(_file_name.split('_')[:-1])}.pt"
+    width_initial_cell = pt.load(join(_load_path, file_name_mesh_info))["size_initial_cell"]
+
+    # A = (1 / 2^N_dimensions) * (initial_width / 2^level)^N_dimensions
+    return 1 / pow(2, _n_dims) * pow(width_initial_cell / pow(2, levels), _n_dims)
+
+
 def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensions: str = "xy"):
     """
     same as in "examples/s3_for_OAT15_airfoil", but relative import not working, so for now just copy the function into
@@ -158,6 +166,7 @@ if __name__ == "__main__":
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
+    cell_area_orig = xz[f"area_{area}"].unsqueeze(-1).sqrt()
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # load the airfoil(s) as overlay for contourf plots
@@ -188,6 +197,9 @@ if __name__ == "__main__":
     plot_metric_original_grid(xz[:, 0], xz[:, 1], metric / param_infinity, save_path_results, geometry_=geometry,
                               field_=field_name)
 
+    # weigh the field with its cell area
+    orig_field *= cell_area_orig
+
     # compute the normalized L2-norms
     l2_total_orig = pt.linalg.norm(orig_field, ord=2)
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
@@ -208,14 +220,18 @@ if __name__ == "__main__":
         # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix
         data = construct_data_matrix_from_hdf5(h, field_name)
 
+        # compute the cell areas (2D) / volumes (3D) for the interpolated field
+        cell_area_inter = get_cell_area(load_path, f"OAT15_{area}_area_variance_{v}_{field_name}", xz.size(-1),
+                                        data["levels"]).sqrt()
+
         # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
-        plot_grid_and_metric(data["faces"], data["vertices"], xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
-                             save_path_results, geometry_=geometry)
+        # plot_grid_and_metric(data["faces"], data["vertices"], xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
+        #                      save_path_results, geometry_=geometry)
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine
         knn.fit(data["coordinates"], data[f"{field_name}"])
-        fields_fitted = pt.from_numpy(knn.predict(xz))
+        fields_fitted = pt.from_numpy(knn.predict(xz)) * cell_area_orig
 
         # compute the L2 error wrt time and normalize it with number of time steps
         error_time_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=0) / l2_time_orig)

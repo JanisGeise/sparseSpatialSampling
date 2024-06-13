@@ -16,15 +16,7 @@ from scipy.signal import welch
 from flowtorch.analysis import SVD
 from matplotlib.patches import Polygon
 
-from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
-
-
-def get_cell_area(_load_path: str, _file_name: str, _n_dims: int, levels: pt.Tensor) -> pt.Tensor:
-    file_name_mesh_info = f"mesh_info_{'_'.join(_file_name.split('_')[:-1])}.pt"
-    width_initial_cell = pt.load(join(_load_path, file_name_mesh_info))["size_initial_cell"]
-
-    # A = (1 / 2^N_dimensions) * (initial_width / 2^level)^N_dimensions
-    return 1 / pow(2, _n_dims) * pow(width_initial_cell / pow(2, levels), _n_dims)
+from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5, get_cell_area
 
 
 def plot_singular_values(s_orig, s_inter, _save_path: str, _save_name: str, n_values: int = 100) -> None:

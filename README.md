@@ -113,7 +113,8 @@ Once the grid is generated and a field is interpolated, an SVD from this field c
     export.compute_svd("U")
 
 The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
-coefficients are not referenced in the XDMF file.
+coefficients are not referenced in the XDMF file. The singular values as well as the mode coefficients are saved in full
+whereas the modes are only saved up to the optimal rank.
 
 ## General notes
 ### Memory requirements
