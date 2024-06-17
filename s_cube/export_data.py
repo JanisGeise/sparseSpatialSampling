@@ -163,8 +163,10 @@ class DataWriter:
 
         # create empty tensors for the field values at centers & vertices with dimensions
         # [N_cells, N_dimensions, N_snapshots_currently] each call to allow variable batch sizes
-        self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1], _data.size()[2]))
-        self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1], _data.size()[2]))
+        self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1], _data.size()[2]),
+                                                     dtype=pt.float32)
+        self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1], _data.size()[2]),
+                                                      dtype=pt.float32)
 
         # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
         for dimension in range(_data.size()[1]):
@@ -335,9 +337,9 @@ class DataWriter:
         keys = list(hdf_file[f"{_field_name}_center"].keys())
         shape = hdf_file[f"{_field_name}_center"][keys[0]].shape
         if len(shape) == 1:
-            data_out = pt.zeros((shape[0], len(keys)))
+            data_out = pt.zeros((shape[0], len(keys)), dtype=pt.float32)
         else:
-            data_out = pt.zeros((shape[0], shape[1], len(keys)))
+            data_out = pt.zeros((shape[0], shape[1], len(keys)), dtype=pt.float32)
         for i, k in enumerate(keys):
             if len(shape) == 1:
                 data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])

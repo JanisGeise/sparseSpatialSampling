@@ -72,15 +72,15 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
             data[:, :, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask).reshape(mask.size())
 
     # stack the coordinates to tuples
-    xy = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
+    xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
 
-    return data, xy, write_time
+    return data, xyz, write_time
 
 
 if __name__ == "__main__":
     # load paths to the CFD data
     load_path = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "Test_SVD")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.95

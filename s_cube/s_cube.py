@@ -378,7 +378,7 @@ class SamplingTree(object):
 
         while self._check_stopping_criteria():
             logger.info(f"\r\tStarting iteration no. {iteration_count}, captured metric: "
-                        f"{round(self._metric[-1] * 100, 2)} %")
+                        f"{round(self._metric[-1] * 100, 2)} %, N_cells = {len(self._leaf_cells)}")
 
             # update _n_cells_per_iter based on the difference wrt metric or N_cells
             if len(self._metric) >= 2:

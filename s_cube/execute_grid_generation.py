@@ -91,7 +91,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
                                 set to 1% of the number of vertices in the original grid
     :param _n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is
                                 set to 5% of _n_cells_iter_start
-    :return: None
+    :return: instance of the Datawriter class containing the generated grid along with additional information & data.
     """
     # check if the dicts for the geometry objects are correct
     if not check_geometry_objects(_geometry_objects):

@@ -27,11 +27,13 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
     Load the vertices within the given boundaries and write times of the original simulation. If specified, compute the
     metric as standard deviation wrt time of the loaded field as:
 
-        std. = sqrt(1/N sum(x_i - mu)^2)
+        std = sqrt(1/N sum(x_i - mu)^2)
+
+    If the loaded field is a vector field, the standard deviation of its magnitude will be computed.
 
     :param load_dir: path to the simulation data
     :param boundaries: list with list containing the upper and lower boundaries of the mask
-    :param scalar: flag if the field is a scalr field or a vector field
+    :param scalar: flag if the field is a scalar field or a vector field
     :param _compute_metric: flag if the metric should be computed
     :param field_name: name of the field, which should be loaded
     :return: x-, y- & z-coordinates of the cells, all write times and the metric if specified
@@ -50,6 +52,9 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
     xyz = pt.stack([pt.masked_select(vertices[:, 0], mask), pt.masked_select(vertices[:, 1], mask),
                     pt.masked_select(vertices[:, 2], mask)], dim=1)
 
+    # free up some memory
+    del vertices
+
     if _compute_metric:
         # allocate empty tensors for avg. and std.
         avg_field = pt.zeros((xyz.size(0),))
@@ -57,9 +62,7 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
         if not scalar:
             # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
-            mask = mask.unsqueeze(-1).expand([vertices.size(0), 3])
-            avg_field = pt.zeros((vertices.size(0), 3))
-            std_field = pt.zeros((vertices.size(0), 3))
+            mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
 
         # compute the avg. wrt time
         for t_i in write_times:
@@ -69,7 +72,9 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
             if scalar:
                 avg_field += pt.masked_select(loader.load_snapshot(field_name, t_i), mask)
             else:
-                avg_field += pt.masked_select(loader.load_snapshot(field_name, t_i), mask).reshape(mask.size())
+                # for vector fields, we use the magnitude
+                avg_field += pt.masked_select(loader.load_snapshot(field_name, t_i),
+                                              mask).reshape(mask.size()).pow(2).sum(1).sqrt()
         avg_field /= len(write_times)
 
         # compute the standard deviation wrt time
@@ -80,8 +85,9 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
             if scalar:
                 std_field += (pt.masked_select(loader.load_snapshot(field_name, t_i), mask) - avg_field).pow(2)
             else:
-                std_field += (pt.masked_select(loader.load_snapshot(field_name, t_i), mask).reshape(mask.size())
-                              - avg_field).pow(2)
+                _mag_field = pt.masked_select(loader.load_snapshot(field_name, t_i),
+                                              mask).reshape(mask.size()).pow(2).sum(1).sqrt()
+                std_field += (_mag_field - avg_field).pow(2)
         std_field /= len(write_times)
 
         return xyz, std_field.sqrt(), write_times
@@ -149,7 +155,7 @@ if __name__ == "__main__":
     # compute the metric or load an existing one
     compute_metric = False
     save_name_metric = "metric_std_pressure"
-    save_name = "surfaceMountedCube_metric_std_pressure={:.2f}_no_geometry_refinement".format(min_metric)
+    save_name = "surfaceMountedCube_metric_std_pressure_{:.2f}_no_geometry_refinement".format(min_metric)
 
     # load the CFD data in the given boundaries (full domain) and compute the metric (std(p)) snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]

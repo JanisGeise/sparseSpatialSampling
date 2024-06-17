@@ -175,6 +175,8 @@ throughout all computations in Paraview. Why this happens only in the x-y-plane 
 Although it wasn't observed so far, for very fine grids this may even be happening with double precision. 
 However, the cell centered values should not be affected by this (in case this happens).
 
+The fields as well as the SVD are still performed in single precision to reduce the memory requirements.
+
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 
   - **D. Fernex, A. Weiner, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
