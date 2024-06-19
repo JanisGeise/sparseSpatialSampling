@@ -178,7 +178,7 @@ class SamplingTree(object):
         del self._vertices
 
         # overwrite the metric with its L2-Norm, because the metric itself is not needed anymore
-        self._target = pt.linalg.norm(self._target).item()
+        self._target_norm = pt.linalg.norm(self._target).item()
 
     def _create_first_cell(self) -> None:
         """
@@ -445,7 +445,7 @@ class SamplingTree(object):
             if self._which_geometries is None:
                 obj_to_refine = [g.obj_name for g in self._geometry if g.inside]
             else:
-                obj_to_refine = self._which_geometries
+                obj_to_refine = [g.obj_name for g in self._which_geometries]
             self._refine_geometry(_names=obj_to_refine)
             self.data_final_mesh["t_geometry"] = time() - t_start_geometry
             self.data_final_mesh["t_adaptive"] = t_start_geometry - end_time_uniform
@@ -729,7 +729,7 @@ class SamplingTree(object):
         # N_leaf_cells != N_cells_orig, so we need to use a norm. Target is saved as L2-Norm once the KNN is fitted, so
         # we don't need to compute it every iteration, since we have a vector, the Frobenius norm (used as default) is
         # the same as L2-norm
-        _ratio = pt.linalg.norm(_current_metric) / self._target
+        _ratio = pt.linalg.norm(_current_metric) / self._target_norm
 
         self._metric.append(_ratio.item())
         return _ratio.item() < self._min_metric
@@ -1372,6 +1372,10 @@ class SamplingTree(object):
                     cells[i].node_idx[CH["swl"]] = cells[CH["swl"]].node_idx[CH["sel"]]
                     cells[i].node_idx[CH["nwl"]] = cells[CH["swl"]].node_idx[CH["nel"]]
                     cells[i].node_idx[CH["nel"]] = cells[CH["nel"]].node_idx[CH["sel"]]
+
+    @property
+    def target(self):
+        return self._target
 
 
 def check_nb_node(_cell, nb_no) -> bool:

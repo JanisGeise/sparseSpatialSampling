@@ -30,7 +30,7 @@ The general workflow will be explained more detailed below.
 can be used for loading the cell centers
 
 ### 2. Computing a metric
-- a metric for each cell has to be computed, the itself metric depends on the goal. For example, to capture variances over time,
+- a metric for each cell has to be computed, the metric itself depends on the goal. For example, to capture variances over time,
 the standard deviation of the velocity field with respect to time can be used as a metric (refer to examples in the 
 `examples` directory).
 - the metric has to be a 1D tensor in the shape of `[N_cells, ]`
@@ -54,7 +54,7 @@ An example input may look like:
     cube = pv.PolyData(join("..", "tests", "cube.stl"))
     domain_3d = {"name": "example domain STL", "bounds": None, "type": "stl", "is_geometry": False, "coordinates": cube}
 
-    # if we have geomtries inside the domain, we can add the same way as we did for the domain
+    # if we have geometries inside the domain, we can add the same way as we did for the domain
     geometry = {"name": "example geometry 2D", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": True}
 
     # execute S^3, the coordinates are the corrdinates of the cell centers in the original grid while metric is the 
@@ -114,7 +114,7 @@ Once the grid is generated and a field is interpolated, an SVD from this field c
 
 The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
 coefficients are not referenced in the XDMF file. The singular values as well as the mode coefficients are saved in full
-whereas the modes are only saved up to the optimal rank.
+whereas the modes are only saved up to the optimal rank (if not specified otherwise).
 
 ## General notes
 ### Memory requirements
@@ -129,7 +129,8 @@ The required memory can be estimated based on the original grid and the target m
 snapshot having a size of 30 MB (double precision) and the original grid of 10 MB. The target metric is set to *75%*, 
 leading to an approximate max. size of *7.5* MB for the generated grid and cell levels, and *22.5* MB for a single 
 snapshot of the interpolated field. Consequently, interpolation and export of a single snapshot requires at least *~80* 
-MB of additional RAM. 
+MB of additional RAM. Note that this is just an estimation, the actual grid size and consequently required RAM size 
+highly depends on the chosen metric. In most cases, the number of cells will scale much more favorable.
 
 **Note:** When performing an SVD, the complete data matrix (all snapshots) of the interpolated field need to be loaded. 
 The available RAM has to be large enough to hold all snapshots of the interpolated field as well as additional memory to
@@ -166,6 +167,9 @@ HDF5 file
 
 This seems to be a rendering issue in Paraview resulting from the sorting of the nodes. However, this issue
 should not be affecting any computations or operations done in ParaView or with the interpolated data in general.
+
+When exporting a grid from OpenFoam to HDF5 using the `flowtorch.data.FOAM2HDF5` converter, 
+the internal nodes are also not displayed in Paraview. This supports the assumption that this is just a rendering issue.
 
 #### Messed up grid nodes in Paraview
 When using single precision, the grid nodes may be messed up in the x-y-plane when imported into Paraview in some parts of the domain. 

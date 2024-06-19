@@ -56,7 +56,7 @@ def check_geometry_objects(_geometries: list) -> bool:
 def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry_objects: list, _save_path: str,
                             _save_name: str, _grid_name: str, _level_bounds: tuple = (3, 25), _n_cells_max: int = None,
                             _refine_geometry: bool = True, _min_metric: float = 0.9, _to_refine: list = None,
-                            _max_delta_level: bool = False, _write_times: list = None,
+                            _max_delta_level: bool = False, _write_times: list = None, _min_level_geometry: int = None,
                             _n_cells_iter_start: int = None, _n_cells_iter_end: int = None) -> DataWriter:
     """
     Wrapper function for executing the S^3 algorithm.
@@ -82,11 +82,15 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     :param _refine_geometry: flag for final refinement of the mesh around geometries to ensure same cell level
     :param _min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
                           grid), if 'None' the max. number of cells will be used as stopping criteria
-    :param _to_refine: which geometries should be refined, if None all except the domain will be refined
+    :param _to_refine: names of the geometries which should be refined, if None all except the domain will be refined
     :param _max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
                              difference of one
     :param _write_times: numerical time steps of the simulation, needs to be provided as list[str]. If 'None', the
                          write times need to be provided after refinement (before exporting the fields)
+    :param _min_level_geometry: flag if the geometries should be resolved with a min. refinement level.
+                                If 'None' and 'smooth_geometry = True', the geometries are resolved with the
+                                max. refinement level encountered at the geometry. If a min. level is specified,
+                                all defined geometries will be refined with this level.
     :param _n_cells_iter_start: number of cells to refine per iteration at the beginning. If 'None' then the value is
                                 set to 1% of the number of vertices in the original grid
     :param _n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is
@@ -106,7 +110,7 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
     sampling = SamplingTree(coordinates, metric, n_cells=_n_cells_max, level_bounds=_level_bounds,
                             smooth_geometry=_refine_geometry, min_metric=_min_metric, which_geometries=_to_refine,
                             max_delta_level=_max_delta_level, n_cells_iter_end=_n_cells_iter_end,
-                            n_cells_iter_start=_n_cells_iter_start)
+                            n_cells_iter_start=_n_cells_iter_start, min_refinement_geometry=_min_level_geometry)
 
     # add the cube and the domain
     for g in _geometry_objects:
@@ -132,6 +136,9 @@ def execute_grid_generation(coordinates: pt.Tensor, metric: pt.Tensor, _geometry
 
     # add the final data of mesh and refinement
     _export_data.mesh_info = sampling.data_final_mesh
+
+    # add the metric
+    _export_data._metric = sampling.target
 
     return _export_data
 

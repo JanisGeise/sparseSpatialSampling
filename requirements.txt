@@ -1,8 +1,8 @@
-numpy
+numpy>=1.22
 torch
 numba
 scikit-learn
-flowTorch
+git+https://github.com/FlowModelingControl/flowtorch
 shapely
 h5py
 matplotlib

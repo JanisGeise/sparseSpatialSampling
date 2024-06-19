@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     # load the CFD data in the given boundaries
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    field, coord, write_times = load_cfd_data(load_path, bounds, n_dims=3)
+    field, coord, _, write_times = load_cfd_data(load_path, bounds, n_dims=3)
 
     # create a setup for geometry objects for the domain
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}

@@ -51,6 +51,7 @@ class DataWriter:
         self._centers = centers
         self._vertices = nodes
         self._levels = levels
+        self._metric = None
 
         # face_id = node idx making up a face, e.g. [0, 1, 2, 3] make up a face of node no. 0-3
         self._face_id = face_ids
@@ -93,6 +94,7 @@ class DataWriter:
 
             # add field for the cell levels
             _writer.create_dataset("levels", data=self._levels)
+            _writer.create_dataset("metric", data=self._metric)
             self._initialized = True
 
         else:
@@ -158,6 +160,14 @@ class DataWriter:
         if not self._initialized:
             logger.info(f"Starting interpolation and export of field {self._field_name}.")
 
+        # fit the metric at some point. If the number of coordinates is still the same as the CFD grid, then we haven't
+        # fitted it yet.
+        if self._metric.size(0) == _coord.size(0):
+            self._knn.fit(_coord, self._metric)
+
+            # overwrite the metric with the interpolated one
+            self._metric = pt.from_numpy(self._knn.predict(self._centers))
+
         # determine the required size of the data matrix
         self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
 
@@ -213,7 +223,7 @@ class DataWriter:
                 # write geometry part
                 f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
                             f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
-                            f'NumberType="Float" Format="HDF">\n')
+                            f'NumberType="Float" Precision="8" Format="HDF">\n')
 
                 # write coordinates of vertices
                 f_out.write(f"{_file_name}.h5:/grid/vertices\n</DataItem>\n</Geometry>\n")
@@ -225,21 +235,28 @@ class DataWriter:
                 else:
                     _second_dim = self._interpolated_fields.centers.size()[1]
 
-                # write the levels into the first time step
+                # write the levels and metric into the first time step
                 if i == 0:
-                    f_out.write(f'<Attribute Name="levels" Center="Cell">\n<DataItem Format="HDF" '
+                    f_out.write(f'<Attribute Name="levels" AttributeType="Vector" Center="Cell">\n<DataItem '
+                                f'NumberType="Float" Precision="8" Format="HDF" '
                                 f'Dimensions="{self._levels.size()[0]} {1}">\n')
                     f_out.write(f"{_file_name}.h5:/levels\n</DataItem>\n</Attribute>\n")
+                    f_out.write(f'<Attribute Name="metric" AttributeType="Vector" Center="Cell">\n<DataItem '
+                                f'NumberType="Float" Precision="8" Format="HDF" '
+                                f'Dimensions="{self._metric.size()[0]} {1}">\n')
+                    f_out.write(f"{_file_name}.h5:/metric\n</DataItem>\n</Attribute>\n")
 
                 # write header for field
-                f_out.write(f'<Attribute Name="{self._field_name}" Center="Cell">\n<DataItem Format="HDF" '
+                f_out.write(f'<Attribute Name="{self._field_name}" AttributeType="Vector" Center="Cell">\n<DataItem '
+                            f'NumberType="Float" Precision="8" Format="HDF" '
                             f'Dimensions="{self._interpolated_fields.centers.size()[0]} {_second_dim}">\n')
 
                 # write interpolated field at the cell center
                 f_out.write(f"{_file_name}.h5:/{self._field_name}_center/{t}\n</DataItem>\n</Attribute>\n")
 
                 # then do the same for field at the vertices
-                f_out.write(f'<Attribute Name="{self._field_name}" Center="Node">\n<DataItem Format="HDF" '
+                f_out.write(f'<Attribute Name="{self._field_name}" AttributeType="Vector" Center="Node">\n<DataItem '
+                            f'NumberType="Float" Precision="8" Format="HDF" '
                             f'Dimensions="{self._interpolated_fields.vertices.size()[0]} {_second_dim}">\n')
                 f_out.write(f"{_file_name}.h5:/{self._field_name}_vertices/{t}\n</DataItem>\n</Attribute>\n")
 
@@ -266,7 +283,7 @@ class DataWriter:
         self._fit_data(_coord, _data, _field_name, _n_snapshots_total)
         self._write_data_to_hdmf5()
 
-    def compute_svd(self, field_name: str) -> None:
+    def compute_svd(self, field_name: str, save_rank: int = None) -> None:
         """
         Computes an SVd of the interpolated field.
         It is assumed that the field was already interpolated and exported completely (all snapshots) to HDF5 file.
@@ -278,6 +295,8 @@ class DataWriter:
         https://flowmodelingcontrol.github.io/flowtorch-docs/1.2/flowtorch.analysis.html#flowtorch.analysis.svd.SVD.opt_rank
 
         :param field_name: name of the field for which the SVD should be computed
+        :param save_rank: number of modes which should be saved to HDF5, if 'None' then all modes up the optimal rank
+                          are saved
         :return: None
         """
         logger.info(f"Computing SVD for field {field_name}.")
@@ -297,7 +316,11 @@ class DataWriter:
             # multiply by the sqrt of the cell areas to weight their contribution
             _field *= self._sqrt_cell_area
             svd = SVD(_field, rank=_field.size(-1))
-            self._modes = svd.U[:, :svd.opt_rank] / self._sqrt_cell_area
+
+            # save either everything until the optimal rank or up to a user specified rank
+            save_rank = save_rank if save_rank is not None else svd.opt_rank
+
+            self._modes = svd.U[:, :save_rank] / self._sqrt_cell_area
         else:
             _field *= self._sqrt_cell_area.unsqueeze(-1)
 
@@ -306,9 +329,12 @@ class DataWriter:
             _field = _field.reshape((orig_shape[1] * orig_shape[0], orig_shape[-1]))
             svd = SVD(_field, rank=_field.size(-1))
 
+            # save either everything until the optimal rank or up to a user specified rank
+            save_rank = save_rank if save_rank is not None else svd.opt_rank
+
             # reshape the data back to ux, uy, uz
             new_shape = (orig_shape[0], orig_shape[1], svd.rank)
-            self._modes = svd.U.reshape(new_shape)[:, :, :svd.opt_rank] / self._sqrt_cell_area.unsqueeze(-1)
+            self._modes = svd.U.reshape(new_shape)[:, :, :save_rank] / self._sqrt_cell_area.unsqueeze(-1)
 
         # write HDF5 file
         self._mode_coefficients = svd.V
@@ -406,7 +432,7 @@ class DataWriter:
             # write geometry part
             f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
                         f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
-                        f'NumberType="Float" Format="HDF">\n')
+                        f'NumberType="Float" Precision="8" Format="HDF">\n')
 
             # write coordinates of vertices
             f_out.write(f"{_file_name}.h5:/grid/vertices\n")
@@ -416,17 +442,20 @@ class DataWriter:
 
             # write POD modes to the last time step
             if len(self._modes.size()) == 2:
-                f_out.write(f'<Attribute Name="mode" Center="Cell">\n<DataItem Format="HDF" Dimensions='
-                            f'"{self._modes.size(0)} {self._modes.size(-1)}">\n')
+                f_out.write(f'<Attribute Name="mode" AttributeType="Vector" Center="Cell">\n<DataItem '
+                            f'NumberType="Float" Precision="8" Format="HDF" '
+                            f'Dimensions="{self._modes.size(0)} {self._modes.size(-1)}">\n')
                 f_out.write(f"{_file_name}.h5:/mode\n</DataItem>\n</Attribute>\n")
             else:
                 for d in ["x", "y", "z"]:
-                    f_out.write(f'<Attribute Name="mode_{d}" Center="Cell">\n<DataItem Format="HDF" Dimensions='
+                    f_out.write(f'<Attribute Name="mode_{d}" AttributeType="Vector" Center="Cell">\n<DataItem '
+                                f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
                                 f'"{self._modes.size(0)} {self._modes.size(-1)}">\n')
                     f_out.write(f"{_file_name}.h5:/mode_{d}\n</DataItem>\n</Attribute>\n")
 
             # write the sqrt cell area
-            f_out.write(f'<Attribute Name="sqrt_cell_area" Center="Cell">\n<DataItem Format="HDF" Dimensions='
+            f_out.write(f'<Attribute Name="sqrt_cell_area" AttributeType="Vector" Center="Cell">\n<DataItem '
+                        f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
                         f'"{self._sqrt_cell_area.size(0)} {self._sqrt_cell_area.size(-1)}">\n')
             f_out.write(f"{_file_name}.h5:/sqrt_cell_area\n</DataItem>\n</Attribute>\n</Grid>\n</Domain>\n</Xdmf>")
 

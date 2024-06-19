@@ -27,11 +27,11 @@ from s_cube.execute_grid_generation import execute_grid_generation, export_openf
 
 
 def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
-                  scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, list]:
+                  scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
     """
     load the specified field, mask out the defined area.
 
-    Note: vectors are always loaded with all three components (even if the case is 3D) because we don't know in which
+    Note: vectors are always loaded with all three components (even if the case is 3D) because we don't know on which
           plane the flow problem is defined.
 
     :param load_dir: path to the simulation data
@@ -46,7 +46,7 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
     # create foam loader object
     loader = FOAMDataloader(load_dir)
 
-    # load vertices and discard z-coordinate
+    # load vertices and discard z-coordinate (if 2D)
     vertices = loader.vertices[:, :n_dims]
 
     # create a mask
@@ -55,6 +55,10 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
     # assemble data matrix
     write_time = [t for t in loader.write_times[1:] if float(t) >= t_start]
 
+    # stack the coordinates to tuples and free up some space
+    xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
+    del vertices
+
     # allocate empty data matrix
     if scalar:
         data = pt.zeros((mask.sum().item(), len(write_time)), dtype=pt.float32)
@@ -62,7 +66,7 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
         data = pt.zeros((mask.sum().item(), n_dims, len(write_time)), dtype=pt.float32)
 
         # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
-        mask = mask.unsqueeze(-1).expand([vertices.size(0), 3])
+        mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
 
     for i, t in enumerate(write_time):
         # load the specified field
@@ -71,10 +75,10 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
         else:
             data[:, :, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask).reshape(mask.size())
 
-    # stack the coordinates to tuples
-    xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
+    # get the cell area
+    _cell_area = loader.weights.sqrt().unsqueeze(-1)
 
-    return data, xyz, write_time
+    return data, xyz, _cell_area, write_time
 
 
 if __name__ == "__main__":
@@ -91,7 +95,7 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], [0.05]]         # [[x, y], [r]]
 
     # load the CFD data
-    field, coord, write_times = load_cfd_data(load_path, bounds)
+    field, coord, _, write_times = load_cfd_data(load_path, bounds)
 
     # create a setup for geometry objects for the domain and the cylinder, we don't use any STL files
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}

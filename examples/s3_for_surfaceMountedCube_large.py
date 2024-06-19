@@ -145,24 +145,28 @@ if __name__ == "__main__":
     load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
     save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
 
+    # for which field should we compute the metric?
+    field_name = "U"
+    scalar_field = False
+
     # fields which should be exported, the write times for the fields can be adjusted in the function
     # export_fields_snapshot_wise
     fields = ["p", "U", "pMean", "UMean", "pPrime2Mean"]
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.95
+    min_metric = pt.arange(0.25, 1.05, 0.05)
 
-    # compute the metric or load an existing one
+    # compute the metric or load an existing one (we only have the velocity and pressure fields for this simulation)
     compute_metric = False
-    save_name_metric = "metric_std_pressure"
-    save_name = "surfaceMountedCube_metric_std_pressure_{:.2f}_no_geometry_refinement".format(min_metric)
+    save_name_metric = "metric_std_mag_velocity" if field_name == "U" else "metric_std_pressure"
 
     # load the CFD data in the given boundaries (full domain) and compute the metric (std(p)) snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
 
     # load the vertices and write times, compute / load the metric
     if compute_metric:
-        coord, metric, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=True)
+        coord, metric, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=True,
+                                                               field_name=field_name, scalar=scalar_field)
 
         # save the metric, so we don't need to compute it again
         if not path.exists(save_path):
@@ -178,15 +182,18 @@ if __name__ == "__main__":
                 {"name": "cube", "bounds": [[3.5, 4, -1], [4.5, 5, 1]], "type": "cube", "is_geometry": True}]
 
     # execute the S^3 algorithm
-    export = execute_grid_generation(coord, metric, geometry, save_path, save_name, "cube", _min_metric=min_metric,
-                                     _refine_geometry=False)
+    for m in min_metric:
+        # overwrite save name
+        save_name = f"surfaceMountedCube_{save_name_metric}" + "_{:.2f}".format(m)
+        export = execute_grid_generation(coord, metric, geometry, save_path, save_name, "cube",
+                                         _min_metric=m, _refine_geometry=False)
 
-    # save information about the refinement and grid
-    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_metric_std_pressure={:.2f}.pt".format(min_metric)))
+        # save information about the refinement and grid
+        pt.save(export.mesh_info, join(save_path, f"mesh_info_{save_name}.pt"))
 
-    # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
-    export_fields_snapshot_wise(load_path, export, fields, bounds, times)
+        # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
+        export_fields_snapshot_wise(load_path, export, fields, bounds, times)
 
-    # perform an SVD for the pressure and velocity field
-    for f in ["p", "U"]:
-        export.compute_svd(f)
+        # perform an SVD for the pressure and velocity field
+        for f in ["p", "U"]:
+            export.compute_svd(f)
