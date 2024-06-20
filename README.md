@@ -106,6 +106,69 @@ export all snapshots at once or snapshot-by-snapshot
 - additionally, a summary of the refinement process and mesh characteristics is stored as property in the `DataWriter`
 instance called `mesh_info`, which can be saved with `pt.save(...)`
 
+### Executing $S^3$
+#### Local machine
+For executing $S^3$, it is recommended to create a virtual environment. Otherwise, it need to be ensured that the Numpy 
+version is $>= 1.22$ (requirement for numba).
+
+    # install venv
+    sudo apt update && sudo apt install python3.8-venv
+
+    # clone the S^3 repository 
+    git clone https://github.com/JanisGeise/sparseSpatialSampling.git
+
+    # create a virtual environment inside the repository
+    python3 -m venv s_cube_venv
+
+    # activate the environment and install all dependencies
+    source s_cube_venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+
+    # once everything is installed, leave the environment
+    deactivate
+
+For executing the example scripts in `examples/`, the CFD data must be provided. Further the paths to the data as well
+as the setup needs to be adjusted accordingly. A script can then be executed as
+    
+    # start the virtual environment
+    source s_cube_venv/bin/activate
+
+    # add the path to the repository
+    . source_path
+
+    # execute a script
+    cd examples/
+    python3 s3_for_cylinder2D.py
+
+#### HPC
+The setup for executing $S^3$ on an HPC cluster is the same as for the local machine. 
+An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation may look like:
+
+    #!/bin/bash
+    #SBATCH --nodes=1
+    #SBATCH --ntasks-per-node=72
+    #SBATCH --time=08:00:00
+    #SBATCH --job-name=s_cube
+    
+    # load python
+    module load release/23.04  GCCcore/10.2.0
+    module load Python/3.8.6
+    
+    # activate venv
+    source s_cube_venv/bin/activate
+    
+    # add the path to s_cube
+    . source_path
+    
+    # path to the python script
+    cd examples/
+    
+    python3 s3_for_surfaceMountedCube_large_hpc.py &> "log.main"
+
+An [example jobscript](https://github.com/JanisGeise/sparseSpatialSampling/blob/main/example_jobscript) for the
+[Barnard](https://compendium.hpc.tu-dresden.de/jobs_and_resources/barnard/) HPC of TU Dresden is provided.
+
 ### Performing an SVD
 Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
 
@@ -146,6 +209,8 @@ perform the SVD.
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
 so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
+
+TODO: kurz darauf eingehen wie man die Genauigkeit erhöhen kann, falls in geometrie nähe iwas nicht gut approximiert wird
 
 ### Projection of the coordinates for 2D in x-y-plane
 - for 2D cases, the coordinates of the generated grid are always exported in the *x-y-* plane, independently of the 

@@ -165,6 +165,7 @@ if __name__ == "__main__":
 
     # load the vertices and write times, compute / load the metric
     if compute_metric:
+        logger.info("Loading coordinates and computing metric.")
         coord, metric, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=True,
                                                                field_name=field_name, scalar=scalar_field)
 
@@ -174,6 +175,7 @@ if __name__ == "__main__":
 
         pt.save(metric, join(save_path, f"{save_name_metric}.pt"))
     else:
+        logger.info("Loading coordinates and metric.")
         coord, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=False)
         metric = pt.load(join(save_path, f"{save_name_metric}.pt"))
 

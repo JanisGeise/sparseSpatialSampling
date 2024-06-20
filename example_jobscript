@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=72
+#SBATCH --time=08:00:00
+#SBATCH --job-name=s_cube
+
+# load python
+module load release/23.04  GCCcore/10.2.0
+module load Python/3.8.6
+
+# activate venv
+source s_cube_venv/bin/activate
+
+# add the path to s_cube
+. source_path
+
+# path to the python script
+cd examples/
+
+python3 s3_for_surfaceMountedCube_large_hpc.py &> "log.main"
