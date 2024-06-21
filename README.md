@@ -209,8 +209,13 @@ perform the SVD.
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
 so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
-
-TODO: kurz darauf eingehen wie man die Genauigkeit erhöhen kann, falls in geometrie nähe iwas nicht gut approximiert wird
+- if the error between the original fields and the interpolated ones is still too large (despite `_refine_geometry = True`), 
+the following steps can be performed for improvement:
+  - the refinement level of the geometries can be increased by setting `_min_level_geometry` to a larger value. By default,
+all geometries are refined with the max. cell level present at the geometry after the adaptive refinement. When providing a
+value for the refinement level, all geometry objects will be refined with this level
+  - additionally, a second metric can be added, increasing the weight of areas near geometries (e.g., adding the influence
+  of the shear stress to the existing metric)
 
 ### Projection of the coordinates for 2D in x-y-plane
 - for 2D cases, the coordinates of the generated grid are always exported in the *x-y-* plane, independently of the 

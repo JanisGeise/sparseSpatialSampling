@@ -29,7 +29,7 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
         std = sqrt(1/N sum(x_i - mu)^2)
 
-    If the loaded field is a vector field, the standard deviation of its magnitude will be computed.
+    If the loaded field is a vector field, the standard deviation of its L2-norm (wrt to dimensions) will be computed.
 
     :param load_dir: path to the simulation data
     :param boundaries: list with list containing the upper and lower boundaries of the mask

@@ -4,7 +4,6 @@
 import torch as pt
 import matplotlib.pyplot as plt
 
-from glob import glob
 from os.path import join
 from os import path, makedirs
 
@@ -38,7 +37,8 @@ def plot_execution_times(_data: list, _save_path: str, case: list, save_name: st
         ax[1].plot(d["final_metric"], pt.tensor(d["t_adaptive"]), marker="x", color=color[1], ls=ls[i])
         ax[1].plot(d["final_metric"], pt.tensor(d["t_renumbering"]), marker="x", color=color[2], ls=ls[i])
 
-        if d["t_geometry"]:
+        # only plot execution time of geometry refinement if available for all cases
+        if d["t_geometry"][0] is not None:
             ax[0].plot(d["final_metric"], pt.tensor(d["t_geometry"]) / t_tot, marker="x",
                        label=r"$t_{geometry}$" + f" $({case[i]})$", color=color[3], ls=ls[i])
             ax[1].plot(d["final_metric"], pt.tensor(d["t_geometry"]), marker="x", color=color[3], ls=ls[i])
@@ -79,14 +79,16 @@ def plot_n_cells(_data: list, _save_path: str, case: list, save_name: str = "n_c
 
 if __name__ == "__main__":
     # -------------------------------------------- cylinder --------------------------------------------
-    load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "plots_comparison_execution_times")
-    cases = [join("OAT15", "results_metric_based_on_Ma_stl_large_no_dl_constraint"),
-             join("surfaceMountedCube", "results_2000_snapshots_no_dl_constraint_metric_based_on_std_p_with_geometry_refinement")]
+    load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
+                     "parameter_study_metric")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
+                     "plots_surfaceMountedCube_s_cube_2000_snapshots")
+    cases = ["metric_std_pressure_hpc", "metric_std_mag_U_hpc"]
+    legend = [r"\sigma(p)", r"\sigma(L_2(U))"]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]
 
     # plot the results
-    plot_execution_times(data, save_path, ["OAT", "cube"])
-    plot_n_cells(data, save_path, ["OAT", "cube"])
+    plot_execution_times(data, save_path, legend)
+    plot_n_cells(data, save_path, legend)
