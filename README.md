@@ -177,7 +177,8 @@ Once the grid is generated and a field is interpolated, an SVD from this field c
 
 The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
 coefficients are not referenced in the XDMF file. The singular values as well as the mode coefficients are saved in full
-whereas the modes are only saved up to the optimal rank (if not specified otherwise).
+whereas the modes are only saved up to the optimal rank (if not specified otherwise). Prior to performing the SVD,
+the fields are weighted with the cell areas to improve the accuracy and comparability.
 
 ## General notes
 ### Memory requirements
@@ -214,6 +215,7 @@ the following steps can be performed for improvement:
   - the refinement level of the geometries can be increased by setting `_min_level_geometry` to a larger value. By default,
 all geometries are refined with the max. cell level present at the geometry after the adaptive refinement. When providing a
 value for the refinement level, all geometry objects will be refined with this level
+  - activate the delta level constraint by setting `_max_delta_level = True`
   - additionally, a second metric can be added, increasing the weight of areas near geometries (e.g., adding the influence
   of the shear stress to the existing metric)
 

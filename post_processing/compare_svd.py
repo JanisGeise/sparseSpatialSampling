@@ -7,38 +7,35 @@
 
     For more information, it is referred to the flowtorch documentation
 """
+
 import torch as pt
 import matplotlib.pyplot as plt
 
 from os.path import join
 from os import path, makedirs
 from scipy.signal import welch
+from typing import Tuple, Union
 from flowtorch.analysis import SVD
 from matplotlib.patches import Polygon
 
 from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5, get_cell_area
 
 
-def plot_singular_values(s_orig, s_inter, _save_path: str, _save_name: str, n_values: int = 100) -> None:
+def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: list, n_values: int = 100) -> None:
     # singular values original field
-    s_var_orig = s_orig * (100 / s_orig.sum())
-    s_cum_orig = pt.cumsum(s_var_orig, dim=0)
-
-    # singular values interpolated field
-    s_var_inter = s_inter * (100 / s_inter.sum())
-    s_cum_inter = pt.cumsum(s_var_orig, dim=0)
+    s_var = [s * (100 / s.sum()) for s in sv]
+    s_cum = [pt.cumsum(s, dim=0) for s in s_var]
 
     fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
-    ax[0].plot(s_var_orig[:n_values], label="$original$")
-    ax[0].plot(s_var_inter[:n_values], label="$interpolated$")
-    ax[1].plot(s_cum_orig)
-    ax[1].plot(s_cum_inter)
+    for i, s in enumerate(zip(s_var, s_cum)):
+        ax[0].plot(s[0][:n_values], label=legend[i])
+        ax[1].plot(s[1])
     ax[1].set_xlabel(r"$no. \#$")
     ax[0].set_ylabel(r"$\%$ $\sqrt{\sigma_i^2}$")
     ax[1].set_ylabel(r"$cumulative$ $\%$")
     ax[1].set_xlim(0, n_values)
-    ax[0].set_ylim(0, max([s_var_orig[:n_values].max(), s_var_inter[:n_values].max()]))
-    ax[1].set_ylim(0, max([s_cum_orig[:n_values].max(), s_cum_inter[:n_values].max()]))
+    ax[0].set_ylim(0, max([s[:n_values].max() for s in s_var]))
+    # ax[1].set_ylim(0, max([s.max() for s in s_cum]))
     ax[0].legend(loc="upper right", framealpha=1.0, ncols=2)
     fig.tight_layout()
     fig.subplots_adjust()
@@ -46,25 +43,29 @@ def plot_singular_values(s_orig, s_inter, _save_path: str, _save_name: str, n_va
     plt.close("all")
 
 
-def plot_psd(V_orig, V_inter, dt, n_samples, _save_path, _save_name: str, chord: float = 0.15,
-             u_inf: float = 238.59) -> None:
+def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: str, legend: list, chord: float = 0.15,
+             u_inf: float = 238.59, xlim: Union[Tuple, list] = (0, 1)) -> None:
     # adapted from @AndreWeiner
     fig, ax = plt.subplots(figsize=(6, 4))
 
     # use default color cycle
     color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+    ls = 10 * ["-", "--", "-.", ":"]
 
     for m in range(len(color) - 1):
-        freq_orig, amp_orig = welch(V_orig[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
-        freq_inter, amp_inter = welch(V_inter[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
-        ax.plot(freq_orig * chord / u_inf, amp_orig, color=color[m], label=f"$mode$ ${m + 1}$")
-        ax.plot(freq_inter * chord / u_inf, amp_inter, color=color[m], ls="--")
+        for i, v in enumerate(V):
+            freq, amp = welch(v[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
+            if i == 0:
+                ax.plot(freq * chord / u_inf, amp, color=color[m], label=f"$mode$ ${m + 1}$", ls=ls[i])
+            else:
+                ax.plot(freq * chord / u_inf, amp, color=color[m], ls=ls[i])
     ax.set_xlabel(r"$Sr$")
     ax.set_ylabel("$PSD$")
-    ax.set_xlim(0, 1)
+    ax.set_xlim(xlim)
     ax.legend()
+    fig.legend(legend, loc="upper center", ncols=4)
     fig.tight_layout()
-    fig.subplots_adjust()
+    fig.subplots_adjust(top=0.9)
     plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
     plt.close("all")
 
@@ -97,20 +98,18 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
     plt.close("all")
 
 
-def plot_mode_coefficients(write_times, V_orig, V_inter, _save_path: str, _save_name: str, n_modes: int = 4) -> None:
+def plot_mode_coefficients(write_times, V: list, _save_path: str, _save_name: str, legend: list,
+                           n_modes: int = 4) -> None:
     color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+    ls = 10 * ["-", "--", "-.", ":"]
 
     fig, ax = plt.subplots(nrows=n_modes, figsize=(6, 4), sharex="all", sharey="all")
     for row in range(n_modes):
-        if row == 0:
-            ax[row].plot(write_times, V_orig[:, row], color=color[row], label="$original$")
-            ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--", label="$interpolated$")
-        else:
-            ax[row].plot(write_times, V_orig[:, row], color=color[row])
-            if row == 2:
-                ax[row].plot(write_times, V_inter[:, row], color=color[row], ls="--")
+        for i, v in enumerate(V):
+            if row == 0:
+                ax[row].plot(write_times, v[:, row], color=color[row], label=legend[i], ls=ls[i])
             else:
-                ax[row].plot(write_times, V_inter[:, row] * -1, color=color[row], ls="--")
+                ax[row].plot(write_times, v[:, row], color=color[row], ls=ls[i])
         ax[row].text(write_times.max() + 1e-3, 0, f"$mode$ ${row}$", va="center")
         ax[row].set_xlim(write_times.min(), write_times.max())
     fig.legend(loc="upper center", framealpha=1.0, ncols=2)
@@ -181,17 +180,19 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # plot frequency spectrum
-    plot_psd(svd_orig.V.numpy(), svd_inter.V.numpy(), (times[1] - times[0]).item(), len(times),
-             save_path_results, f"comparison_psd_metric_{metric}_weighted")
+    plot_psd([svd_orig.V.numpy(), svd_inter.V.numpy()], (times[1] - times[0]).item(), len(times),
+             save_path_results, f"comparison_psd_metric_{metric}_weighted", legend=["$original$", "$interpolated$"])
 
     # plot singular values
-    plot_singular_values(svd_orig.s, svd_inter.s, save_path_results,
-                         f"comparison_singular_values_metric_{metric}_weighted")
+    plot_singular_values([svd_orig.s, svd_inter.s], save_path_results,
+                         f"comparison_singular_values_metric_{metric}_weighted",
+                         legend=["$original$", "$interpolated$"])
 
     # plot the first N POD modes (left singular vectors)
     plot_pod_modes(xz, interpolated_field["coordinates"], svd_orig.U / cell_area_orig, svd_inter.U / cell_area_inter,
                    save_path_results, f"comparison_pod_modes_metric_{metric}_weighted", _geometry=geometry)
 
     # plot POD mode coefficients (right singular vectors)
-    plot_mode_coefficients(times, svd_orig.V, svd_inter.V, save_path_results,
-                           f"comparison_pod_mode_coefficients_metric_{metric}_weighted")
+    plot_mode_coefficients(times, [svd_orig.V, svd_inter.V], save_path_results,
+                           f"comparison_pod_mode_coefficients_metric_{metric}_weighted",
+                           legend=["$original$", "$interpolated$"])
