@@ -30,6 +30,7 @@ class DataLoader:
         self.U = None
         self.V = None
         self.s = None
+        self._field_name = None
 
     def load_data(self, load_path: str, file_name: str, field_name: str, write_times: list = None) -> None:
         """
@@ -44,16 +45,17 @@ class DataLoader:
         :param write_times: write times which should be loaded. If 'None', all available write times will be loaded
         :return: None
         """
+        self._field_name = field_name
         try:
             hdf_file = h5py.File(join(load_path, f"{file_name}.h5"), "r")
         except FileNotFoundError:
-            logger.error(f"HDF5 file with the interpolated field {field_name} not found. Make sure the specified "
+            logger.error(f"HDF5 file with the interpolated field {self._field_name} not found. Make sure the specified "
                          f"field exists.")
             exit(0)
 
         # assemble the data matrix
-        keys = list(hdf_file[f"{field_name}_center"].keys()) if write_times is None else write_times
-        shape = hdf_file[f"{field_name}_center"][keys[0]].shape
+        keys = list(hdf_file[f"{self._field_name}_center"].keys()) if write_times is None else write_times
+        shape = hdf_file[f"{self._field_name}_center"][keys[0]].shape
 
         # assign the grid
         self._centers = pt.from_numpy(hdf_file.get("grid/centers")[()])
@@ -96,6 +98,8 @@ class DataLoader:
                           are stored
         :return: None
         """
+        logger.info(f"Computing SVD for field {self._field_name}.")
+
         # subtract the temporal mean
         _field = self.data_matrix - pt.mean(self.data_matrix, dim=-1).unsqueeze(-1)
 
@@ -126,7 +130,7 @@ class DataLoader:
         self.s = svd.s
 
     def write_data(self, save_path: str, file_name: str, U: pt.Tensor = None, V: pt.Tensor = None,
-                   s: pt.Tensor = None) -> None:
+                   s: pt.Tensor = None, n_modes: int = None) -> None:
         """
         Write the HDF5 and corresponding XDMF file storing the results of the SVD. If the results of the SVD are not
         passed as arguments, it is assumed that the SVD using the 'compute_svd()' method was already executed.
@@ -136,6 +140,7 @@ class DataLoader:
         :param U: left singular vektors (optional)
         :param V: right singular vectors (optional)
         :param s: singular values (optional)
+        :param n_modes: number of modes to be written into the HDF5 file, if 'None' all available modes will be written
         :return: None
         """
         # assign the results of the SVD
@@ -156,14 +161,13 @@ class DataLoader:
         _grid_data.create_dataset("vertices", data=self._vertices)
         _grid_data.create_dataset("centers", data=self._centers)
 
-        # if all snapshots of the interpolated fields are available, perform an SVD for each component of the
-        # field (will be extended to arbitrary batch sizes once this is working)
-        if len(self.U.size()) == 2:
-            _writer.create_dataset("mode", data=self.U)
-        else:
-            dims = ["x", "y", "z"]
-            for i in range(self.U.size(1)):
-                _writer.create_dataset(f"mode_{dims[i]}", data=self.U[:, i, :].squeeze())
+        # write the modes as vectors, where each mode is treated as an independent vector.
+        n_modes = self.U.size(-1) if n_modes is None else n_modes
+        for i in range(n_modes):
+            if len(self.U.size()) == 2:
+                _writer.create_dataset(f"mode_{i}", data=self.U[:, i].squeeze())
+            else:
+                _writer.create_dataset(f"mode_{i}", data=self.U[:, :, i].squeeze())
 
         # write the mode coefficients and singular values only to the HDF5 file (not XDMF)
         _writer.create_dataset("mode_coefficients", data=self.V)
@@ -188,8 +192,8 @@ class DataLoader:
 
         _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
                          f'<Domain>\n<Grid Name="{grid_name}" GridType="Uniform">\n' \
-                         f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n'\
-                         f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} '\
+                         f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n' \
+                         f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
                          f'{pow(2, self.n_dimensions)}">\n'
 
         # write the corresponding XDMF file
@@ -211,18 +215,12 @@ class DataLoader:
             # write end tags
             f_out.write("</DataItem>\n</Geometry>\n")
 
-            # write POD modes to the last time step
-            if len(self.U.size()) == 2:
-                f_out.write(f'<Attribute Name="mode" AttributeType="Vector" Center="Cell">\n<DataItem '
-                            f'NumberType="Float" Precision="8" Format="HDF" '
-                            f'Dimensions="{self.U.size(0)} {self.U.size(-1)}">\n')
-                f_out.write(f"{file_name}.h5:/mode\n</DataItem>\n</Attribute>\n")
-            else:
-                for d in ["x", "y", "z"]:
-                    f_out.write(f'<Attribute Name="mode_{d}" AttributeType="Vector" Center="Cell">\n<DataItem '
-                                f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
-                                f'"{self.U.size(0)} {self.U.size(-1)}">\n')
-                    f_out.write(f"{file_name}.h5:/mode_{d}\n</DataItem>\n</Attribute>\n")
+            # write POD modes
+            for m in range(self.U.size(-1)):
+                f_out.write(f'<Attribute Name="mode_{m}" AttributeType="Vector" Center="Cell">\n<DataItem '
+                            f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
+                            f'"{self.U.size(0)} {self.U.size(1)}">\n')
+                f_out.write(f"{file_name}.h5:/mode_{m}\n</DataItem>\n</Attribute>\n")
 
             # write the sqrt cell area
             f_out.write(f'<Attribute Name="cell_area" AttributeType="Vector" Center="Cell">\n<DataItem '

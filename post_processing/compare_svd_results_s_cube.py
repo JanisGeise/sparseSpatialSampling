@@ -17,7 +17,9 @@ def load_svd_from_hdf5(_load_path: str, _file_name: str, _scalar: bool = True):
     if _scalar:
         return data.get("singular_values")[()], data.get("mode")[()], data.get("mode_coefficients")[()]
     else:
-        modes = [data.get(f"mode_{d}")[()] for d in ["x", "y", "z"]]
+        # modes = [data.get(f"mode_{d}")[()] for d in ["x", "y", "z"]]
+        modes = pt.stack([pt.from_numpy(data.get(d)[()]) for d in data.keys() if d.startswith("mode_") and not
+                          d.startswith("mode_coefficients")], dim=-1)
         return data.get("singular_values")[()], modes, data.get("mode_coefficients")[()]
 
 

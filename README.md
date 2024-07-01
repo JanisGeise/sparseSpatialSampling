@@ -41,7 +41,8 @@ the standard deviation of the velocity field with respect to time can be used as
 - the main dimensions of the numerical domain must be provided as dict
 - if the geometry or domain is given by coordinates (e.g. an STL file):
   - for 2D, the coordinates of an enclosed area need to be provided
-  - for 3D, it has to be loaded using `pyVista`, e.g., as `cube = pv.PolyData(join("..", "tests", "cube.stl"))`
+  - for 3D, it has to be loaded using `pyVista`, e.g., as `cube = pv.PolyData(join("..", "tests", "cube.stl"))`  
+    **Note**: `pyVista` expects the STL file to form a closed surface, otherwise a runtime error is raised
 - otherwise, the domain is approximated by either a circle (2D), rectangle (2D), cube (3D), sphere (3D)
 - for more information it is referred to `s_cube/execute_grid_generation.py` and `s_cube/geometry.py`
 
