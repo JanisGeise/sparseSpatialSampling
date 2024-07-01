@@ -23,18 +23,20 @@ def load_svd_from_hdf5(_load_path: str, _file_name: str, _scalar: bool = True):
 
 if __name__ == "__main__":
     # path to the data and to the directory the results should be saved to
-    load_path = join("..", "data", "3D", "surfaceMountedCube_s_cube_Janis", "hpc")
+    # load_path = join("..", "data", "3D", "surfaceMountedCube_s_cube_Janis", "hpc")
+    load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
                              "plots_surfaceMountedCube_s_cube_2000_snapshots", "comparison_psd_metrics")
 
     # field name and flag if scalar or vector field
-    field = "U"
-    scalar = False
-    cases = [f"surfaceMountedCube_metric_std_pressure_0.50_svd_{field}",
-             f"surfaceMountedCube_metric_std_mag_velocity_0.50_svd_{field}"]
+    field = "p"
+    scalar = True
+    cases = [f"cube_2000_snapshots_svd_{field}",
+             join("hpc", "results_metric_0.50", f"surfaceMountedCube_metric_std_pressure_0.50_svd_{field}"),
+             join("hpc", "results_metric_0.50", f"surfaceMountedCube_metric_std_mag_velocity_0.50_svd_{field}")]
 
     # list with legend entries
-    legend = [r"$\sigma(p) = 66.54\%$", r"$\sigma(L_2(U)) = 50.16\%$"]
+    legend = ["$original$", r"$\sigma(p) = 66.54\%$", r"$\sigma(L_2(U)) = 50.16\%$"]
 
     # time step and number of time steps for computing the PSD
     dt, n_dt = 0.05, 2001

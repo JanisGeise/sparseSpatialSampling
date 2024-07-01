@@ -22,8 +22,8 @@ import pyvista as pv
 from os.path import join
 
 from s3_for_cylinder2D import load_cfd_data
-from s_cube.execute_grid_generation import execute_grid_generation, export_openfoam_fields
-
+from s_cube.execute_grid_generation import export_openfoam_fields, SparseSpatialSampling
+from s_cube.load_data import DataLoader
 
 if __name__ == "__main__":
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
@@ -51,11 +51,11 @@ if __name__ == "__main__":
     # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
 
     # execute the S^3 algorithm
-    export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",
-                                     _min_metric=min_metric, _write_times=write_times)
+    s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",
+                                   min_metric=min_metric, write_times=write_times)
 
-    # save information about the refinement and grid
-    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
+    # execute S^3
+    export = s_cube.execute_grid_generation()
 
     # export the fields available in all time steps
     export_openfoam_fields(export, load_path, bounds, fields=["U", "p"])
@@ -65,5 +65,14 @@ if __name__ == "__main__":
     # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
 
     # perform an SVD for the pressure and velocity field
+    loader = DataLoader()
+
     for f in ["p", "U"]:
-        export.compute_svd(f)
+        # assemble the data matrix
+        loader.load_data(save_path, save_name + f"_{f}", f)
+
+        # perform the svd
+        loader.compute_svd()
+
+        # write the data to HDF5 & XDMF
+        loader.write_data(save_path, save_name + f"_svd_{f}")

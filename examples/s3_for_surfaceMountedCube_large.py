@@ -16,7 +16,8 @@ from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube import DataWriter
-from s_cube.execute_grid_generation import execute_grid_generation, load_original_Foam_fields
+from s_cube.execute_grid_generation import load_original_Foam_fields, SparseSpatialSampling
+from s_cube.load_data import DataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -187,15 +188,24 @@ if __name__ == "__main__":
     for m in min_metric:
         # overwrite save name
         save_name = f"surfaceMountedCube_{save_name_metric}" + "_{:.2f}".format(m)
-        export = execute_grid_generation(coord, metric, geometry, save_path, save_name, "cube",
-                                         _min_metric=m, _refine_geometry=False)
+        s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m,
+                                       refine_geometry=False)
 
-        # save information about the refinement and grid
-        pt.save(export.mesh_info, join(save_path, f"mesh_info_{save_name}.pt"))
+        # execute S^3
+        export = s_cube.execute_grid_generation()
 
         # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
         export_fields_snapshot_wise(load_path, export, fields, bounds, times)
 
         # perform an SVD for the pressure and velocity field
+        loader = DataLoader()
+
         for f in ["p", "U"]:
-            export.compute_svd(f)
+            # assemble the data matrix
+            loader.load_data(save_path, save_name + f"_{f}", f)
+
+            # perform the svd
+            loader.compute_svd()
+
+            # write the data to HDF5 & XDMF
+            loader.write_data(save_path, save_name + f"_svd_{f}")

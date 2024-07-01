@@ -15,7 +15,8 @@ import torch as pt
 from stl import mesh
 from os.path import join
 
-from s_cube.execute_grid_generation import execute_grid_generation
+from s_cube.execute_grid_generation import SparseSpatialSampling
+from s_cube.load_data import DataLoader
 
 
 def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: float = 1.0, dimensions: str = "xy",
@@ -110,13 +111,18 @@ if __name__ == "__main__":
     # would have to set them after calling execute_grid_generation, e.g., as export.times = times
     times = pt.load(join(load_path, "oat15_tandem_times.pt"))[::10]
 
+    # instantiate a DataLoader object for performing an SVD on the interpolated data
+    loader = DataLoader()
+
     # execute the S^3 algorithm and export the pressure field for the generated grid
     for v in min_variance:
-        export = execute_grid_generation(xz, metric, geometry, save_path_results, "OAT15_" + str(area) +
-                                         "_area_variance_{:.2f}".format(v), "OAT15", _min_metric=v,
-                                         _write_times=times.tolist())
-        pt.save(export.mesh_info, join(save_path_results, "mesh_info_OAT15_" + str(area) +
-                                       "_area_variance_{:.2f}.pt".format(v)))
+        save_name = "OAT15_" + str(area) + "_area_variance_{:.2f}".format(v)
+
+        s_cube = SparseSpatialSampling(xz, metric, geometry, save_path_results, save_name, "OAT15", min_metric=v,
+                                       write_times=times.tolist())
+
+        # execute S^3
+        export = s_cube.execute_grid_generation()
 
         # we need to add one dimension if we have a scalar field
         if len(field.size()) == 2:
@@ -124,5 +130,11 @@ if __name__ == "__main__":
         else:
             export.export_data(xz, field, field_name, _n_snapshots_total=None)
 
-        # perform an SVD
-        export.compute_svd(field_name)
+        # assemble the data matrix
+        loader.load_data(save_path_results, save_name + f"_{field_name}", field_name)
+
+        # perform the svd
+        loader.compute_svd()
+
+        # write the data to HDF5 & XDMF
+        loader.write_data(save_path_results, save_name + f"_svd_{field_name}")

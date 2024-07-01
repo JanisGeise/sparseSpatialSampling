@@ -23,7 +23,8 @@ from os.path import join
 from typing import Tuple, Union
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.execute_grid_generation import execute_grid_generation, export_openfoam_fields
+from s_cube.load_data import DataLoader
+from s_cube.execute_grid_generation import export_openfoam_fields, SparseSpatialSampling
 
 
 def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
@@ -44,16 +45,16 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
              write times as list[str]
     """
     # create foam loader object
-    loader = FOAMDataloader(load_dir)
+    _loader = FOAMDataloader(load_dir)
 
     # load vertices and discard z-coordinate (if 2D)
-    vertices = loader.vertices[:, :n_dims]
+    vertices = _loader.vertices[:, :n_dims]
 
     # create a mask
     mask = mask_box(vertices, lower=boundaries[0], upper=boundaries[1])
 
     # assemble data matrix
-    write_time = [t for t in loader.write_times[1:] if float(t) >= t_start]
+    write_time = [t for t in _loader.write_times[1:] if float(t) >= t_start]
 
     # stack the coordinates to tuples and free up some space
     xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
@@ -71,12 +72,12 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
     for i, t in enumerate(write_time):
         # load the specified field
         if scalar:
-            data[:, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask)
+            data[:, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask)
         else:
-            data[:, :, i] = pt.masked_select(loader.load_snapshot(field_name, t), mask).reshape(mask.size())
+            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())
 
     # get the cell area
-    _cell_area = loader.weights.sqrt().unsqueeze(-1)
+    _cell_area = _loader.weights.sqrt().unsqueeze(-1)
 
     return data, xyz, _cell_area, write_time
 
@@ -84,7 +85,7 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
 if __name__ == "__main__":
     # load paths to the CFD data
     load_path = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "TEST")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.95
@@ -101,12 +102,12 @@ if __name__ == "__main__":
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
     geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
 
-    # generate the grid
-    export = execute_grid_generation(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
-                                     "cylinder2D", _min_metric=min_metric, _write_times=write_times)
+    # create a S^3 instance
+    s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
+                                   "cylinder2D", min_metric=min_metric, write_times=write_times)
 
-    # save information about the refinement and grid
-    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
+    # execute S^3
+    export = s_cube.execute_grid_generation()
 
     # we used the time steps t = 0.4 ... t_end for computing the metric, but we want to export all time steps, so reset
     # the 'times' property
@@ -120,5 +121,14 @@ if __name__ == "__main__":
     # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
 
     # perform an SVD for the pressure and velocity field
+    loader = DataLoader()
+
     for f in ["p", "U"]:
-        export.compute_svd(f)
+        # assemble the data matrix
+        loader.load_data(save_path, save_name + f"_{f}", f)
+
+        # perform the svd
+        loader.compute_svd()
+
+        # write the data to HDF5 & XDMF
+        loader.write_data(save_path, save_name + f"_svd_{f}")

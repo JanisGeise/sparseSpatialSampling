@@ -22,7 +22,7 @@ For executing $S^3$, the following things have to be provided:
 3. a metric for each point 
 4. geometries within the domain (optional)
 
-The general workflow will be explained more detailed below.
+The general workflow will be explained more detailed below. Currently, $S^3$ can't handle decomposed CFD data as input.
 
 ### 1. Providing the original CFD data
 - the coordinates of the original grid have to be provided as tensor with a shape of `[N_cells, N_dimensions]`
@@ -57,13 +57,16 @@ An example input may look like:
     # if we have geometries inside the domain, we can add the same way as we did for the domain
     geometry = {"name": "example geometry 2D", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": True}
 
-    # execute S^3, the coordinates are the corrdinates of the cell centers in the original grid while metric is the 
-    # metric based on which the grid is created
-    export = execute_grid_generation(coordinates, metric, [domain, geometry], save_path, save_name, grid_name,
-                                     _min_metric=min_metric)
+    # create a S^3 instance, the coordinates are the corrdinates of the cell centers in the original grid while metric 
+    # is the metric based on which the grid is created
+    s_cube = SparseSpatialSampling(coordinates, metric, [domain, geometry], save_path, save_name, grid_name, 
+                                   min_metric=min_metric)
+
+    # execute S^3
+    export = s_cube.execute_grid_generation()
 
 **Note:** in case no more geometries are present, the dict for the domain has to be wrapped into a list prior passing it to 
-the `execute_grid_generation` function, since this functions expects a list of geometries
+the `SparseSpatialSampling` constructor, since this functions expects a list of geometries
 
 #### Adding more geometries:
 - there can be added as many further geometries as required to avoid generating a grid in these areas
@@ -89,9 +92,6 @@ example for interpolating and exporting a field:
     export.times = times
     export.export_data(cooridnates, snapshots_original_field, field_name)
 
-    # save inforamtion about the refinement and timings
-    pt.save(export.mesh_info, join(save_path, "mesh_info_cube_variance_{:.2f}.pt".format(min_metric)))
-
 
 An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
 `examples/s3_for_surfaceMountedCube_large.py` (for large datasets, which are not fitting into the RAM all at once).
@@ -100,11 +100,12 @@ An example for exporting the fields snapshot-by-snapshot or in batches can be fo
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
 `export_data()` method of the `DataWriter` class
 - for data from `OpenFoam`, the function `export_openfoam_fields` in `execute_grid_generation` can be used to either 
-export all snapshots at once or snapshot-by-snapshot
+export all snapshots for a given list of fields at once or snapshot-by-snapshot (more convenient)
 - the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
 - one HDMF & XDMF file is created for each field
-- additionally, a summary of the refinement process and mesh characteristics is stored as property in the `DataWriter`
-instance called `mesh_info`, which can be saved with `pt.save(...)`
+- additionally, a `mesh_info` file containing a summary of the refinement process and mesh characteristics is saved
+- once the grid generation is completed, the `DataWriter`instance is saved. This avoids the necessity to execute the 
+grid generation again in case additional fields should be interpolated afterward
 
 ### Executing $S^3$
 #### Local machine
@@ -172,8 +173,17 @@ An [example jobscript](https://github.com/JanisGeise/sparseSpatialSampling/blob/
 ### Performing an SVD
 Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
 
-    # compute SVD of the interpolated velocity field
-    export.compute_svd("U")
+    # instantiate DataLoader
+    loader = DataLoader()
+
+    # load the data matrix from the HDF5 file
+    loader.load_data(path_to_the_hdf5_file, file_name, field_name)
+
+    # compute the SVD
+    loader.compute_svd()
+
+    # write the results of the SVD to HDF5 & XDMF
+    loader.write_data(save_path, save_name)
 
 The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
 coefficients are not referenced in the XDMF file. The singular values as well as the mode coefficients are saved in full

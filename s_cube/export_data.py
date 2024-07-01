@@ -68,10 +68,6 @@ class DataWriter:
         self._initialized = False
         self._finished = False
         self._n_snapshots_total = None
-        self._modes = None
-        self._mode_coefficients = None
-        self._singular_values = None
-        self._sqrt_cell_area = None
         self._t_start = time()
 
     def _write_data_to_hdmf5(self) -> None:
@@ -95,6 +91,7 @@ class DataWriter:
             # add field for the cell levels
             _writer.create_dataset("levels", data=self._levels)
             _writer.create_dataset("metric", data=self._metric)
+            _writer.create_dataset("size_initial_cell", data=self.mesh_info["size_initial_cell"])
             self._initialized = True
 
         else:
@@ -282,182 +279,6 @@ class DataWriter:
         """
         self._fit_data(_coord, _data, _field_name, _n_snapshots_total)
         self._write_data_to_hdmf5()
-
-    def compute_svd(self, field_name: str, save_rank: int = None) -> None:
-        """
-        Computes an SVd of the interpolated field.
-        It is assumed that the field was already interpolated and exported completely (all snapshots) to HDF5 file.
-        It is further assumed that the current grid set in the DataWriter class is the same as used to export the field.
-        Although the SVD is performed on the complete dataset, only the modes until the optimal rank are saved.
-        The singular values and left singular vectors are saved in full.
-        For more information on the determination of the optimal rank, it is referred to the flowtorch documentation:
-
-        https://flowmodelingcontrol.github.io/flowtorch-docs/1.2/flowtorch.analysis.html#flowtorch.analysis.svd.SVD.opt_rank
-
-        :param field_name: name of the field for which the SVD should be computed
-        :param save_rank: number of modes which should be saved to HDF5, if 'None' then all modes up the optimal rank
-                          are saved
-        :return: None
-        """
-        logger.info(f"Computing SVD for field {field_name}.")
-
-        # load the reduced dataset from HDF5 file, create datamatrix
-        _field = self._construct_data_matrix_from_hdf5(field_name)
-
-        # compute the sqrt of the cell area (2D) / volume (3D)
-        if self._sqrt_cell_area is None:
-            self._sqrt_cell_area = (1/pow(2, self.n_dimensions) * pow(self.mesh_info["size_initial_cell"] /
-                                                                      pow(2, self._levels), self.n_dimensions)).sqrt()
-
-        # subtract the temporal mean
-        _field -= pt.mean(_field, dim=-1).unsqueeze(-1)
-
-        if len(_field.size()) == 2:
-            # multiply by the sqrt of the cell areas to weight their contribution
-            _field *= self._sqrt_cell_area
-            svd = SVD(_field, rank=_field.size(-1))
-
-            # save either everything until the optimal rank or up to a user specified rank
-            save_rank = save_rank if save_rank is not None else svd.opt_rank
-
-            self._modes = svd.U[:, :save_rank] / self._sqrt_cell_area
-        else:
-            _field *= self._sqrt_cell_area.unsqueeze(-1)
-
-            # stack the data of all components for the SVD
-            orig_shape = _field.size()
-            _field = _field.reshape((orig_shape[1] * orig_shape[0], orig_shape[-1]))
-            svd = SVD(_field, rank=_field.size(-1))
-
-            # save either everything until the optimal rank or up to a user specified rank
-            save_rank = save_rank if save_rank is not None else svd.opt_rank
-
-            # reshape the data back to ux, uy, uz
-            new_shape = (orig_shape[0], orig_shape[1], svd.rank)
-            self._modes = svd.U.reshape(new_shape)[:, :, :save_rank] / self._sqrt_cell_area.unsqueeze(-1)
-
-        # write HDF5 file
-        self._mode_coefficients = svd.V
-        self._singular_values = svd.s
-        self._write_hfd5_for_svd(field_name)
-
-        # write XDMF file
-        self._write_xdmf_for_svd(field_name)
-
-    def _construct_data_matrix_from_hdf5(self, _field_name: str) -> pt.Tensor:
-        """
-        Reconstruct the full datamatrix of the interpolated field from the temporal grid structure inside the HDF5 file.
-
-        :param _field_name: name of the field for which the SVD should be computed
-        :return: tensor with the dimensions [N_cells, N_dimensions, N_snapshots] containing all snapshots of the
-                 interpolated field
-        """
-        try:
-            hdf_file = h5py.File(join(self._save_dir, f"{self._save_name}_{_field_name}.h5"), "r")
-        except FileNotFoundError:
-            logger.error(f"HDF5 file with the interpolated field {_field_name} not found. Make sure the specified field"
-                         f" exists and was already interpolated onto the generated grid.")
-            exit(0)
-
-        # assemble the data matrix
-        keys = list(hdf_file[f"{_field_name}_center"].keys())
-        shape = hdf_file[f"{_field_name}_center"][keys[0]].shape
-        if len(shape) == 1:
-            data_out = pt.zeros((shape[0], len(keys)), dtype=pt.float32)
-        else:
-            data_out = pt.zeros((shape[0], shape[1], len(keys)), dtype=pt.float32)
-        for i, k in enumerate(keys):
-            if len(shape) == 1:
-                data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
-            else:
-                data_out[:, :, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
-
-        return data_out
-
-    def _write_hfd5_for_svd(self, _field_name: str) -> None:
-        """
-        Write the HDF5 file storing the results from the SVD.
-
-        :param _field_name: name of the field for which the SVD should be computed
-        :return: None
-        """
-        _writer = h5py.File(join(self._save_dir, f"{self._save_name}_svd_{_field_name}.h5"), "w")
-        _grid_data = _writer.create_group("grid")
-        _grid_data.create_dataset("faces", data=self._face_id)
-        _grid_data.create_dataset("vertices", data=self._vertices)
-        _grid_data.create_dataset("centers", data=self._centers)
-
-        # if all snapshots of the interpolated fields are available, perform an SVD for each component of the
-        # field (will be extended to arbitrary batch sizes once this is working)
-        if len(self._modes.size()) == 2:
-            _writer.create_dataset("mode", data=self._modes)
-        else:
-            dims = ["x", "y", "z"]
-            for i in range(self._modes.size(1)):
-                _writer.create_dataset(f"mode_{dims[i]}", data=self._modes[:, i, :].squeeze())
-
-        # write the mode coefficients and singular values only to the HDF5 file (not XDMF)
-        _writer.create_dataset("mode_coefficients", data=self._mode_coefficients)
-        _writer.create_dataset("singular_values", data=self._singular_values)
-        _writer.create_dataset("sqrt_cell_area", data=self._sqrt_cell_area)
-
-        # close hdf file
-        _writer.close()
-
-    def _write_xdmf_for_svd(self, _field_name: str) -> None:
-        """
-        Write the XDMF file referencing the modes resulting from the SVD in the corresponding HDF5 file.
-
-        :param _field_name: name of the field for which the SVD should be computed
-        :return: None
-        """
-        _grid_type = "Quadrilateral" if self.n_dimensions == 2 else "Hexahedron"
-        _file_name = f"{self._save_name}_svd_{_field_name}"
-        _dims = "XY" if self.n_dimensions == 2 else "XYZ"
-
-        _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
-                         f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Uniform">\n' \
-                         f'<Topology TopologyType="{_grid_type}" NumberOfElements="{self._n_faces}">\n'\
-                         f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} '\
-                         f'{pow(2, self.n_dimensions)}">\n'
-
-        # write the corresponding XDMF file
-        with open(join(self._save_dir, f"{_file_name}.xdmf"), "w") as f_out:
-            # write global header
-            f_out.write(_global_header)
-
-            # include the grid data from the HDF5 file
-            f_out.write(f"{_file_name}.h5:/grid/faces\n")
-
-            # write geometry part
-            f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
-                        f'<DataItem Rank="2" Dimensions="{self._n_vertices} {self.n_dimensions}" '
-                        f'NumberType="Float" Precision="8" Format="HDF">\n')
-
-            # write coordinates of vertices
-            f_out.write(f"{_file_name}.h5:/grid/vertices\n")
-
-            # write end tags
-            f_out.write("</DataItem>\n</Geometry>\n")
-
-            # write POD modes to the last time step
-            if len(self._modes.size()) == 2:
-                f_out.write(f'<Attribute Name="mode" AttributeType="Vector" Center="Cell">\n<DataItem '
-                            f'NumberType="Float" Precision="8" Format="HDF" '
-                            f'Dimensions="{self._modes.size(0)} {self._modes.size(-1)}">\n')
-                f_out.write(f"{_file_name}.h5:/mode\n</DataItem>\n</Attribute>\n")
-            else:
-                for d in ["x", "y", "z"]:
-                    f_out.write(f'<Attribute Name="mode_{d}" AttributeType="Vector" Center="Cell">\n<DataItem '
-                                f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
-                                f'"{self._modes.size(0)} {self._modes.size(-1)}">\n')
-                    f_out.write(f"{_file_name}.h5:/mode_{d}\n</DataItem>\n</Attribute>\n")
-
-            # write the sqrt cell area
-            f_out.write(f'<Attribute Name="sqrt_cell_area" AttributeType="Vector" Center="Cell">\n<DataItem '
-                        f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
-                        f'"{self._sqrt_cell_area.size(0)} {self._sqrt_cell_area.size(-1)}">\n')
-            f_out.write(f"{_file_name}.h5:/sqrt_cell_area\n</DataItem>\n</Attribute>\n</Grid>\n</Domain>\n</Xdmf>")
 
 
 if __name__ == "__main__":

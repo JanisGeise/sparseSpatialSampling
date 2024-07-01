@@ -6,7 +6,7 @@ import torch as pt
 from os.path import join
 
 from s3_for_cylinder2D import load_cfd_data
-from s_cube.execute_grid_generation import execute_grid_generation, export_openfoam_fields
+from s_cube.execute_grid_generation import export_openfoam_fields, SparseSpatialSampling
 
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
@@ -29,10 +29,13 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
     :return: None
     """
     for v in variances_to_run:
-        export = execute_grid_generation(coordinates, metric, geometries, save_path,
-                                         "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
-                                         _min_metric=v.item())
-        pt.save(export.mesh_info, join(save_path, "mesh_info_variance_{:.2f}.pt".format(v.item())))
+        s_cube = SparseSpatialSampling(coordinates, metric, geometries, save_path,
+                                       "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
+                                       min_metric=v.item())
+        # execute S^3
+        export = s_cube.execute_grid_generation()
+
+        # export the fields
         export_openfoam_fields(export, load_path, boundaries, fields=fields)
 
 
@@ -46,7 +49,7 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], [0.05]]  # [[x, y], [r]]
 
     # load the CFD data
-    pressure, coord, _ = load_cfd_data(load_path_cylinder, bounds)
+    pressure, coord, _, _ = load_cfd_data(load_path_cylinder, bounds)
 
     # generate the grid, export the data
     domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
@@ -66,7 +69,7 @@ if __name__ == "__main__":
     domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
 
     # load the CFD data
-    pressure, coord, _ = load_cfd_data(load_path_cube, bounds, n_dims=3)
+    pressure, coord, _, _ = load_cfd_data(load_path_cube, bounds, n_dims=3)
 
     # either define the cube with its dimensions...
     cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
