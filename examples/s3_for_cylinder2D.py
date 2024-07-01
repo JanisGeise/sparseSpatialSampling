@@ -24,7 +24,8 @@ from typing import Tuple, Union
 from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube.load_data import DataLoader
-from s_cube.execute_grid_generation import export_openfoam_fields, SparseSpatialSampling
+from s_cube.export_data import export_openfoam_fields
+from s_cube.execute_grid_generation import SparseSpatialSampling
 
 
 def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,

@@ -16,7 +16,8 @@ from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube import DataWriter
-from s_cube.execute_grid_generation import load_original_Foam_fields, SparseSpatialSampling
+from s_cube.export_data import load_original_Foam_fields
+from s_cube.execute_grid_generation import SparseSpatialSampling
 from s_cube.load_data import DataLoader
 
 logger = logging.getLogger(__name__)

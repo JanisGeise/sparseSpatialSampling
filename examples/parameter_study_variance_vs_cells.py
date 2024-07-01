@@ -6,7 +6,8 @@ import torch as pt
 from os.path import join
 
 from s3_for_cylinder2D import load_cfd_data
-from s_cube.execute_grid_generation import export_openfoam_fields, SparseSpatialSampling
+from s_cube.execute_grid_generation import SparseSpatialSampling
+from s_cube.export_data import export_openfoam_fields
 
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
