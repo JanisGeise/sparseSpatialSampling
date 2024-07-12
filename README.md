@@ -1,11 +1,14 @@
 # Sparse Spatial Sampling ($S^3$)
 A different version of the existing $S^3$ algorithm (see [references](#References)) for processing large amounts of CFD data. 
-The Idea is to create a grid based on a metric provided by the user, e.g., the standard deviation of the pressure fields 
+The idea is to create a grid based on a metric provided by the user, e.g., the standard deviation of the pressure fields 
 over time. The $S^3$ algorithm then generates a grid which captures *x%* of the metric from the original grid or contains
 a specified max. number of cells, depending on the setup given by the user. After generating the grid, the original CFD 
 data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## Getting started
+
+**Note: the code is currently refactored (in progress) to improve its usability.** 
+The documentation sa well as the code basis will be updated once the refactoring is completed.
 
 ### Overview
 The repository contains the following directories:
