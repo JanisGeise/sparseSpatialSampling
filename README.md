@@ -8,7 +8,7 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 ## Getting started
 
 **Note: the code is currently refactored (in progress) to improve its usability.** 
-The documentation sa well as the code basis will be updated once the refactoring is completed.
+The documentation as well as the code basis will be updated once the refactoring is completed.
 
 ### Overview
 The repository contains the following directories:
@@ -21,7 +21,8 @@ The repository contains the following directories:
 For executing $S^3$, the following things have to be provided:
 
 1. the simulation data as point cloud
-2. either the main dimensions of the numerical domain or the numerical domain as STL file
+2. either the main dimensions of the numerical domain or the numerical domain as STL file (3D) or coordinates forming 
+an enclosed area (2D)
 3. a metric for each point 
 4. geometries within the domain (optional)
 
@@ -40,46 +41,59 @@ the standard deviation of the velocity field with respect to time can be used as
 
 ### 3. Providing the numerical domain and geometries
 
-#### Domain:
-- the main dimensions of the numerical domain must be provided as dict
-- if the geometry or domain is given by coordinates (e.g. an STL file):
-  - for 2D, the coordinates of an enclosed area need to be provided
-  - for 3D, it has to be loaded using `pyVista`, e.g., as `cube = pv.PolyData(join("..", "tests", "cube.stl"))`  
-    **Note**: `pyVista` expects the STL file to form a closed surface, otherwise a runtime error is raised
-- otherwise, the domain is approximated by either a circle (2D), rectangle (2D), cube (3D), sphere (3D)
-- for more information it is referred to `s_cube/execute_grid_generation.py` and `s_cube/geometry.py`
+The $S^3$ package currently provides the following shapes representing numerical domains or geometries:
+1. `CubeGeometry`: rectangles (2D) or cubes (3D)
+2. `SphereGeometry`: circles (2D) or spheres (3D)
+3. `GeometryCoordinates2D`: arbitrary 2D geometries, the coordinates must be provided as an enclosed area
+4. `GeometrySTL3D`: arbitrary 3D geometries, an STL file with a manifold and closed surface must be provided
 
-An example input may look like:
+These geometry classes are located in `s_cube.geometry`.
 
-    # 2D box
-    domain = {"name": "example domain", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": False}
+#### Providing the numerical domain:
+- exactly one geometry object needs to be declared as domain, which can be done by passing `keep_inside=True` to the 
+geometry object indicating that the points inside the object should be kept as grid
+- the domain can be represented by any of the available geometry object classes
+
+#### Adding geometries:
+- there can be added as many further geometries as required to avoid generating a grid in areas where a geometry in 
+the CFD simulation is present
+- for all geometries, which are not domains, `keep_inside = False` has to be set indicating that there shouldn't be cells
+generated inside these objects
+
+For more information on the required format of the input dicts it is referred to `s_cube.geometry` or the
+provided `examples`.
+
+#### Putting it all together
+Once the numerical domain and optional geometries are defined, we can execute $S^3$. An example input may look like:
+
+    # 2D box as numerical domain
+    domain_2d = CubeGeometry(name="domain", keep_inside=True, lower_bound=[0, 0], upper_bound=[2.2, 0.41])
+
+    # 3D box as numerical domain
+    domain_3d = CubeGeometry(name="domain", keep_inside=True, lower_bound=[0, 0, 0], upper_bound=[14.5, 9, 2])
     
-    # alternatively, if the domain is provided as STL file for a 3D box
-    cube = pv.PolyData(join("..", "tests", "cube.stl"))
-    domain_3d = {"name": "example domain STL", "bounds": None, "type": "stl", "is_geometry": False, "coordinates": cube}
+    # alternatively, if the domain is provided as STL file for the 3D box, we can use the GeometrySTL3D class as well
+    domain_3d = GeometrySTL3D("cube", False, join("..", "tests", "cube.stl"))
 
-    # if we have geometries inside the domain, we can add the same way as we did for the domain
-    geometry = {"name": "example geometry 2D", "bounds": [[xmin, ymin], [xmax, ymax]], "type": "cube", "is_geometry": True}
+    # if we have geometries inside the domain, we can add the same way as we did for the domain. the keyword `refine`
+    # indicates that we want to refine the mesh near the geometry after it is creates for a better resolution of the 
+    # geometry (by default this is the max. refinement level present at the geometry)
+    geometry = SphereGeometry("cylinder", False, position=[0.2, 0.2], radius=0.05, refine=True)
+
+    # alternatively, we could also define a min. refinement level with which we want to resolve the geometry. In case we
+    # set a min_refinement_level but we keep refine=False then refine is automatically set to True
+    geometry = SphereGeometry("cylinder", False, position=[0.2, 0.2], radius=0.05, refine=True, min_refinement_level=6)
+
+    # analogously, we can define a geometry for the 3D case
+    domain_3d = CubeGeometry(name="cube", keep_inside=False, lower_bound=[3.5, 4, -1], upper_bound=[4.5, 5, 1])
 
     # create a S^3 instance, the coordinates are the corrdinates of the cell centers in the original grid while metric 
     # is the metric based on which the grid is created
     s_cube = SparseSpatialSampling(coordinates, metric, [domain, geometry], save_path, save_name, grid_name, 
                                    min_metric=min_metric)
 
-    # execute S^3
+    # execute S^3 to generate a grid bassed on the given metric
     export = s_cube.execute_grid_generation()
-
-**Note:** in case no more geometries are present, the dict for the domain has to be wrapped into a list prior passing it to 
-the `SparseSpatialSampling` constructor, since this functions expects a list of geometries
-
-#### Adding more geometries:
-- there can be added as many further geometries as required to avoid generating a grid in these areas
-- for simple geometries (cube, rectangle, sphere or circle), only the main dimensions and positions need to be passed
-- if coordinates of the geometries should be used, they have to be provided either as an enclosed area (for 2D case) or 
-as STL file (for 3D case)
-
-For more information on the required format of the input dicts it is referred to `s_cube/execute_grid_generation.py` 
-and `s_cube/geometry.py` or the provided `examples`.
 
 ### Interpolation of the original CFD data
 - once the grid is generated, the original fields from CFD can be interpolated onto this grid by calling the `fit_data` 

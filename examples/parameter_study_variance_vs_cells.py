@@ -5,9 +5,9 @@
 import torch as pt
 from os.path import join
 
-from s3_for_cylinder2D import load_cfd_data
-from s_cube.execute_grid_generation import SparseSpatialSampling
-from s_cube.export_data import export_openfoam_fields
+from s_cube.geometry import CubeGeometry
+from s_cube.sparse_spatial_sampling import SparseSpatialSampling
+from s_cube.utils import export_openfoam_fields, load_cfd_data
 
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
@@ -65,20 +65,15 @@ if __name__ == "__main__":
     save_path_cube = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
                           "results")
 
-    # boundaries of the masked domain for the cube
-    bounds = [[0, 0, 0], [9, 14.5, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
+    # boundaries of the masked domain for the cube, [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    bounds = [[0, 0, 0], [9, 14.5, 2]]
 
     # load the CFD data
     pressure, coord, _, _ = load_cfd_data(load_path_cube, bounds, n_dims=3)
 
-    # either define the cube with its dimensions...
-    cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
-
-    # ... or use the provided STL file
-    # cube = pv.PolyData(join("..", "tests", "cube.stl"))
-    # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
+    # define the geometry object for the domain and cube
+    domain = CubeGeometry("domain", True, bounds[0], bounds[1])
+    geometry = CubeGeometry("cube", False, [3.5, 4, -1], [4.5, 5, 1])
 
     # execute the parameter study for the cylinder
     execute_parameter_study(coord, pt.std(pressure, 1), [domain, geometry], bounds, save_path_cube, load_path_cube,

@@ -17,39 +17,37 @@
     In this example, the cube can be represented by an STL file or by given position and dimensions.
 """
 import torch as pt
-import pyvista as pv
 
 from os.path import join
 
-from s3_for_cylinder2D import load_cfd_data
-from s_cube.export_data import export_openfoam_fields
-from s_cube.execute_grid_generation import SparseSpatialSampling
 from s_cube.load_data import DataLoader
+from s_cube.utils import export_openfoam_fields, load_cfd_data
+from s_cube.geometry import CubeGeometry, GeometrySTL3D
+from s_cube.sparse_spatial_sampling import SparseSpatialSampling
+
 
 if __name__ == "__main__":
     # path to original surfaceMountedCube simulation (size ~ 8.4 GB, reconstructed)
     load_path = join("..", "data", "3D", "surfaceMountedCube_original_grid_size", "fullCase")
     save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
-                     "results")
+                     "TEST")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
     save_name = "metric_{:.2f}".format(min_metric)
 
-    # load the CFD data in the given boundaries
-    bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    # load the CFD data in the given boundaries, [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    bounds = [[0, 0, 0], [14.5, 9, 2]]
     field, coord, _, write_times = load_cfd_data(load_path, bounds, n_dims=3)
 
     # create a setup for geometry objects for the domain
-    domain = {"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False}
+    domain = CubeGeometry("domain", True, bounds[0], bounds[1])
 
     # either define the cube by its dimensions...
-    cube = [[3.5, 4, -1], [4.5, 5, 1]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    geometry = {"name": "cube", "bounds": cube, "type": "cube", "is_geometry": True}
+    geometry = CubeGeometry("cube", False, [3.5, 4, -1], [4.5, 5, 1])
 
     # ... or use the provided STL file
-    # cube = pv.PolyData(join("..", "tests", "cube.stl"))
-    # geometry = {"name": "cube", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": cube}
+    # geometry = GeometrySTL3D("cube", False, join("..", "tests", "cube.stl"))
 
     # execute the S^3 algorithm
     s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name, "cube",

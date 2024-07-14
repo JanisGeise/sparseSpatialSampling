@@ -20,68 +20,11 @@
 import torch as pt
 
 from os.path import join
-from typing import Tuple, Union
-from flowtorch.data import FOAMDataloader, mask_box
 
 from s_cube.load_data import DataLoader
-from s_cube.export_data import export_openfoam_fields
-from s_cube.execute_grid_generation import SparseSpatialSampling
-
-
-def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
-                  scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
-    """
-    load the specified field, mask out the defined area.
-
-    Note: vectors are always loaded with all three components (even if the case is 3D) because we don't know on which
-          plane the flow problem is defined.
-
-    :param load_dir: path to the simulation data
-    :param boundaries: list with list containing the upper and lower boundaries of the mask
-    :param field_name: name of the field
-    :param n_dims: number of physical dimensions
-    :param t_start: starting point in time, all snapshots for which t >= t_start will be loaded
-    :param scalar: flag if the field that should be loaded is a scalar- or a vector field
-    :return: the field at each write time, x- & y- and z- coordinates (depending on 2D or 3D) of the vertices and all
-             write times as list[str]
-    """
-    # create foam loader object
-    _loader = FOAMDataloader(load_dir)
-
-    # load vertices and discard z-coordinate (if 2D)
-    vertices = _loader.vertices[:, :n_dims]
-
-    # create a mask
-    mask = mask_box(vertices, lower=boundaries[0], upper=boundaries[1])
-
-    # assemble data matrix
-    write_time = [t for t in _loader.write_times[1:] if float(t) >= t_start]
-
-    # stack the coordinates to tuples and free up some space
-    xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
-    del vertices
-
-    # allocate empty data matrix
-    if scalar:
-        data = pt.zeros((mask.sum().item(), len(write_time)), dtype=pt.float32)
-    else:
-        data = pt.zeros((mask.sum().item(), n_dims, len(write_time)), dtype=pt.float32)
-
-        # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
-        mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
-
-    for i, t in enumerate(write_time):
-        # load the specified field
-        if scalar:
-            data[:, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask)
-        else:
-            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())
-
-    # get the cell area
-    _cell_area = _loader.weights.sqrt().unsqueeze(-1)
-
-    return data, xyz, _cell_area, write_time
-
+from s_cube.utils import load_cfd_data, export_openfoam_fields
+from s_cube.geometry import CubeGeometry, SphereGeometry
+from s_cube.sparse_spatial_sampling import SparseSpatialSampling
 
 if __name__ == "__main__":
     # load paths to the CFD data
@@ -94,19 +37,18 @@ if __name__ == "__main__":
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0, 0], [2.2, 0.41]]          # [[xmin, ymin], [xmax, ymax]]
-    cylinder = [[0.2, 0.2], [0.05]]         # [[x, y], [r]]
+    cylinder = [[0.2, 0.2], 0.05]         # [[x, y], r]
 
     # load the CFD data
     field, coord, _, write_times = load_cfd_data(load_path, bounds)
 
-    # create a setup for geometry objects for the domain and the cylinder, we don't use any STL files
-    domain = {"name": "domain cylinder", "bounds": bounds, "type": "cube", "is_geometry": False}
-    geometry = {"name": "cylinder", "bounds": cylinder, "type": "sphere", "is_geometry": True}
+    # create geometry objects for the domain and the cylinder
+    domain = CubeGeometry("domain", True, bounds[0], bounds[1])
+    geometry = SphereGeometry("cylinder", False, cylinder[0], cylinder[1], refine=True)
 
     # create a S^3 instance
     s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
-                                   "cylinder2D", min_metric=min_metric, write_times=write_times)
-
+                                   "cylinder2D", min_metric=min_metric, write_times=write_times, max_delta_level=True)
     # execute S^3
     export = s_cube.execute_grid_generation()
 

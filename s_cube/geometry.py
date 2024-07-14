@@ -1,143 +1,295 @@
 """
-    Implements class for storing the geometry and the domain; currently only simple geometries are allowed, such as
-        - rectangle (2D), cube (3D)
-        - circle (2D), sphere (3D)
-
-    Further, arbitrary geometries, e.g., loaded from STL files, can be used. However, these geometries need to be
-    provided in a form such their coordinates represent an enclosed area (2D). For 3D, the STL file can be loaded
-    directly using pyVista as
-
-    'pyvista.Polydata("path_to_stl_file")'
-
-    For more information, it is referred to the examples in the 'examples' directory
+    Implements different geometry objects, which can be used to represent the numerical domain or geometries inside the
+    domain.
+    Currently implemented are:
+        - CubeGeometry: rectangles (2D), cubes (3D)
+        - SphereGeometry: circles (2D), spheres (3D)
+        - GeometryCoordinates2D: arbitrary 2D geometries; coordinates must be provided
+        - GeometrySTL3D: arbitrary 3D geometries; STL file must be provided
 """
 import logging
-import pyvista as pv
 
-from torch import tensor
+from typing import Union
+from torch import Tensor, tensor
+from pyvista import PolyData
 from shapely import Point, Polygon
-from flowtorch.data import mask_box, mask_sphere
+from flowtorch.data import mask_sphere, mask_box
+
+from .geometry_base import GeometryObject
+
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class GeometryObject:
-    def __init__(self, lower_bound, upper_bound, obj_type: str, geometry: bool = True, name: str = "cube",
-                 _coordinates: any = None, _dimensions: int = None):
+class CubeGeometry(GeometryObject):
+    def __init__(self, name: str, keep_inside: bool, lower_bound: list, upper_bound: list, refine: bool = False,
+                 min_refinement_level: int = None):
         """
-        Implements a geometry object acting as geometry inside the numerical domain, or as the numerical domain.
+        implements a class for using rectangles (2D) or cubes (3D) as geometry objects representing the numerical
+        domain or geometries inside the domain
 
-        Note:
-
-            - for 3D-STL files, the STL file needs to be loaded and passed directly via pyVIsta, e.g.
-
-                cube = pv.PolyData(join("..", "tests", "cube.stl"))
-
-            - for 2D STL files, only the coordinates need to be passed; the type is irrelevant, since they will be
-              converted to shapely.Polygon() types.However, it is important that these points form an enclosed area.
-
-
-        Further:
-                exactly one geometry needs to be specified as the (main) domain, which is used to compute the
-                main dimensions of the domain and to initialize everything. If further subdomains need to be
-                specified, e.g., to mask out other areas (e.g., a step at the domain boundary), these geometry
-                objects are not allowed to have the 'obj_type' domain. To define that these objects should act
-                as a domain, the parameter 'inside' needs to be set to False instead
-
-        :param lower_bound: Lower boundary, sorted as:
-
-                            [x_min, y_min, z_min]               (3D, cube type)
-                            [x_center, y_center, z_center]      (3D, sphere type)
-
-                            For 2D, the z-component is not present. If lower_bound is 'None', an STL file needs to be
-                            provided as geometry
-        :param upper_bound: upper boundary, sorted as:
-                            [x_max, y_max, z_max]       (3D, cube type)
-                            [radius]                    (3D, sphere type)
-                            If 'None', an STL file needs to be provided as geometry
-        :param obj_type: Either "sphere", "cube" or "STL". If 'STL', the coordinates of the geometry need to be provided
-        :param geometry: if we have a geometry type or a domain type. If 'False', all points outside this geometry will
-                         be removed, if 'True' all points inside the geometry will be removed
-        :param name: name of the geometry object, can be chosen freely
-        :param _coordinates: coordinates of the geometry, required if an STL file is provided as geometry. Note: The
-                             coordinates have to form an enclosed ares (2D)
-        :param _dimensions: number of physical dimensions, needs to be provided if an STL file for 3D is used
+        :param name: name of the geometry object
+        :type name: str
+        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :type name: bool
+        :param lower_bound: lower boundaries of the rectangle or cube, sorted as [x_min, y_min, z_min]
+        :type lower_bound: list
+        :param upper_bound: upper boundaries of the rectangle or cube, sorted as [x_max, y_max, z_max]
+        :type upper_bound: list
+        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :type refine: bool
+        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
+                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
+                                     refinement level present at its surface after S^3 has generated the grid
+        :type min_refinement_level: int
         """
-        self.inside = geometry
+        super().__init__(name, keep_inside, refine, min_refinement_level)
         self._lower_bound = lower_bound
         self._upper_bound = upper_bound
-        self._obj_type = obj_type
-        self.obj_name = name
-        self._dimensions = _dimensions
+        self._type = "cube"
 
-        if _coordinates is not None:
-            assert self._dimensions is not None, ("When providing Coordinates for geometry objects, the number of "
-                                                  "physical dimensions have to be provided as well.")
-            if _dimensions == 2:
-                self._coordinates = Polygon(_coordinates)
-            else:
-                self._coordinates = _coordinates
+        # check the user input based on the specified settings
+        self._check_geometry()
 
-        # check if the object type matches the ones currently implemented
-        self._check_obj_type()
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+        """
+        method to check if a cell is valid or invalid based on the specified settings
 
-    def check_geometry(self, cell_nodes, _refine: bool = False) -> bool:
-        if self._obj_type == "sphere":
-            # for a sphere, the lower bound corresponds to its radius
-            mask = mask_sphere(cell_nodes, self._lower_bound, self._upper_bound[0])
-        elif self._obj_type == "cube":
-            mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
-        else:
-            # for each node of the cell, check if it is inside the geometry. We can't compute this at once for all
-            # nodes, because within() method only returns a single bool, but we need to have a bool for each node
-            if self._dimensions == 2:
-                mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
-            else:
-                # for 3D geometries represented by STL files, we need to mask using pyVista
-                n = pv.PolyData(cell_nodes.tolist())
-                mask = tensor(n.select_enclosed_points(self._coordinates, check_surface=False)["SelectedPoints"]).bool()
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: Bool
+        :return: flag if the cell is valid or invalid based on the specified settings
+        :rtype: bool
+        """
+        # check if the number of boundaries matches the number of physical dimensions;
+        # this can't be done beforehand because we don't know the number of physical dimensions yet
+        assert cell_nodes.size(-1) == len(self._lower_bound), (f"Number of dimensions of the cell does not match the "
+                                                               f"number of given bounds. Expected "
+                                                               f"{cell_nodes.size(-1)} values, found "
+                                                               f"{len(self._lower_bound)}.")
 
-        # if we are not refining the geometry, then we want to remove the cells which have all nodes located inside a
-        # geometry or outside the domain
-        if not _refine:
-            # any(~geometry), because mask returns False if we are outside, but we want True if we are outside
-            if self.inside:
-                if any(~mask):
-                    invalid = False
-                else:
-                    invalid = True
+        # create a mask
+        mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
 
-            # if we are outside the domain, we want to return False
-            else:
-                if any(mask):
-                    invalid = False
-                else:
-                    invalid = True
+        # check if the cell is valid or invalid
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
 
-        # otherwise, we want to refine all cells that have at least one node in the geometry / outside the domain
-        else:
-            if self.inside:
-                if all(~mask):
-                    invalid = False
-                else:
-                    invalid = True
-            else:
-                if all(mask):
-                    invalid = False
-                else:
-                    invalid = True
+    def _check_geometry(self) -> None:
+        """
+        method to check the user input for correctness
+        """
+        # check is boundaries are empty list
+        assert self._lower_bound, "Found empty list for the lower bound. Please provide values for the lower bound."
+        assert self._upper_bound, "Found empty list for the upper bound. Please provide values for the upper bound."
 
-        return invalid
+        # check if the number of values for the lower boundary is the same as for the upper boundary
+        assert len(self._lower_bound) == len(self._upper_bound), (f"The number of provided boundaries for the lower "
+                                                                  f"bound does not match the number of boundaries for "
+                                                                  f"the upper bound. Found {len(self._lower_bound)} "
+                                                                  f"values for the lower bound but "
+                                                                  f"{len(self._upper_bound)} values for the upper "
+                                                                  f"bound.")
 
-    def _check_obj_type(self):
-        if self._obj_type != "cube" and self._obj_type != "sphere" and self._obj_type.upper() != "STL":
-            logger.critical(f"Unknown object type '{self._obj_type}'. Valid object types are 'sphere' or 'cube'")
-            exit()
-        if self._obj_type.upper() == "STL" and self._coordinates is None:
-            # if we have an STL file check if the coordinates are provided, if not then exit
-            logger.critical(f"Coordinates of the STL file for geometry '{self.obj_name}' are not provided.")
-            exit()
+        # check if the lower boundary is smaller than the upper boundary
+        for i, v in enumerate(zip(self._lower_bound, self._upper_bound)):
+            assert v[0] < v[1], (f"Value of {v[0]} for the lower bound at position {i} is larger or equal than the "
+                                 f"value of {v[1]} for the upper bound. The the lower bound must be smaller than the "
+                                 f"upper bound!")
+
+
+class SphereGeometry(GeometryObject):
+    def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
+                 min_refinement_level: int = None):
+        """
+        implements a class for using circles (2D) or spheres (3D) as geometry objects representing the numerical
+        domain or geometries inside the domain
+
+        :param name: name of the geometry object
+        :type name: str
+        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :type keep_inside: bool
+        :param position: position of the circle or sphere as [x, y, z] (center of sphere)
+        :type position: list
+        :param radius: radius of the circle or sphere
+        :type radius: Union[int, float]
+        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :type refine: bool
+        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
+                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
+                                     refinement level present at its surface after S^3 has generated the grid
+        :type min_refinement_level: int
+        """
+        super().__init__(name, keep_inside, refine, min_refinement_level)
+        self._position = position
+        self._radius = radius
+        self._type = "sphere"
+
+        # check the user input based on the specified settings
+        self._check_geometry()
+
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+        """
+        method to check if a cell is valid or invalid based on the specified settings
+
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: Bool
+        :return: flag if the cell is valid or invalid based on the specified settings
+        :rtype: bool
+        """
+        # check if the number of boundaries matches the number of physical dimensions;
+        # this can't be done beforehand because we don't know the number of physical dimensions yet
+        assert cell_nodes.size(-1) == len(self._position), (f"Number of dimensions of the cell does not match the "
+                                                            f"number of dimensions for the position. Expected "
+                                                            f"{cell_nodes.size(-1)} values, found "
+                                                            f"{len(self._position)}.")
+
+        # create a mask
+        mask = mask_sphere(cell_nodes, self._position, self._radius)
+
+        # check if the cell is valid or invalid
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
+
+    def _check_geometry(self) -> None:
+        """
+        method to check the user input for correctness
+        """
+        # check if position is an empty list
+        assert self._position, "Found empty list for the position. Please provide values for the position."
+
+        # check if the radius is an int or float
+        assert type(self._radius) is int or type(self._radius) is float, (f"Expected a type or radius to be "
+                                                                          f"Union[int, float], got "
+                                                                          f"{type(self._radius)}.")
+
+
+class GeometryCoordinates2D(GeometryObject):
+    def __init__(self, name: str, keep_inside: bool, coordinates: any, refine: bool = False,
+                 min_refinement_level: int = None):
+        """
+        implements a class for using coordinates as geometry objects representing the numerical
+        domain or geometries inside the domain for a 2D case only
+
+        Note: The coordinates need to form an enclosed area
+
+        :param name: name of the geometry object
+        :type name: str
+        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :type keep_inside: bool
+        :param coordinates: coordinates of the geometry or domain; they need to form an enclosed area
+        :type coordinates: any
+        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :type refine: bool
+        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
+                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
+                                     refinement level present at its surface after S^3 has generated the grid
+        :type keep_inside: int
+        """
+        super().__init__(name, keep_inside, refine, min_refinement_level)
+        self._coordinates = Polygon(coordinates)
+        self._type = "coordinates 2D"
+
+        # check the user input based on the specified settings
+        self._check_geometry()
+
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+        """
+        method to check if a cell is valid or invalid based on the specified settings
+
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: Bool
+        :return: flag if the cell is valid or invalid based on the specified settings
+        :rtype: bool
+        """
+        # Create a mask. We can't compute this for all nodes at once, because within() method only returns a single
+        # bool, but we need to have a bool for each node
+        # TODO: make more efficient if possible
+        mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
+
+        # check if the cell is valid or invalid
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
+
+    def _check_geometry(self) -> None:
+        """
+        method to check the user input for correctness
+        """
+        # TODO assert enclosed area -> test if works possible?
+        pass
+
+
+class GeometrySTL3D(GeometryObject):
+    def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
+                 min_refinement_level: int = None):
+        """
+        implements a class for using an STL file as geometry objects representing the numerical domain or geometries
+        inside the domain for a 3D case
+
+        Note: pyVista requires the STL file to have a closed surface
+
+        :param name: name of the geometry object
+        :type name: str
+        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :type keep_inside: bool
+        :param path_stl_file: path to the STL file
+        :type path_stl_file: str
+        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :type refine: bool
+        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
+                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
+                                     refinement level present at its surface after S^3 has generated the grid
+        :type min_refinement_level: int
+        """
+        super().__init__(name, keep_inside, refine, min_refinement_level)
+        self._stl_file = PolyData(path_stl_file)
+        self._type = "STL"
+
+        # check the user input based on the specified settings
+        self._check_geometry()
+
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+        """
+        method to check if a cell is valid or invalid based on the specified settings
+
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: Bool
+        :return: flag if the cell is valid or invalid based on the specified settings
+        :rtype: bool
+        """
+        # for 3D geometries represented by STL files, we need to mask using pyVista; here we don't check for closed
+        # surface since we already did that on initialization
+        n = PolyData(cell_nodes.tolist())
+        mask = tensor(n.select_enclosed_points(self._stl_file, check_surface=False)["SelectedPoints"]).bool()
+
+        # check if the cell is valid or invalid
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
+
+    def _check_geometry(self) -> None:
+        """
+        method to check the user input for correctness
+        """
+        # check if the STL file is closed and manifold
+        test_data = PolyData([(0.0, 0.0, 0.0)])
+        try:
+            # pyVista will throw a RuntimeError if the surface is not closed and manifold
+            _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
+        except RuntimeError:
+            logger.critical("Expected an STL file with a closed and manifold surface.")
+            exit(0)
 
 
 if __name__ == "__main__":

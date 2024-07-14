@@ -1,5 +1,6 @@
 """
     load the exported grids, data. Perform SVD and write the results to HDF5
+    # TODO: del once everything else is refactored and working
 """
 import h5py
 import logging

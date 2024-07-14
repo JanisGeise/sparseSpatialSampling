@@ -15,12 +15,13 @@ import torch as pt
 from stl import mesh
 from os.path import join
 
-from s_cube.execute_grid_generation import SparseSpatialSampling
 from s_cube.load_data import DataLoader
+from s_cube.sparse_spatial_sampling import SparseSpatialSampling
+from s_cube.geometry import CubeGeometry, GeometryCoordinates2D
 
 
-def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", sf: float = 1.0, dimensions: str = "xy",
-                             x_offset: float = 0.0, y_offset: float = 0.0, z_offset: float = 0.0):
+def load_airfoil_from_stl_file(_load_path: str, _name: str = "oat15.stl", sf: float = 1.0, dimensions: str = "xy",
+                               x_offset: float = 0.0, y_offset: float = 0.0, z_offset: float = 0.0):
     """
     Example function for loading airfoil geometries stored as STL file and extract an enclosed 2D-area from it.
     Important Note:
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     field_name = "p"
     area = "small"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+                             f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint_TEST")
 
     # execute S^3 for range of variances (for parameter study)
     min_variance = pt.arange(0.25, 1.05, 0.05)
@@ -93,18 +94,21 @@ if __name__ == "__main__":
     metric = pt.std(field, dim=1)
 
     # load the airfoil geometry of the leading airfoil from STL file
-    oat15 = load_airfoil_as_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
+    oat15 = load_airfoil_from_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
 
     # define the boundaries for the domain and assemble the geometry objects
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
     bounds = [[pt.min(xz[:, 0]).item(), pt.min(xz[:, 1]).item()], [pt.max(xz[:, 0]).item(), pt.max(xz[:, 1]).item()]]
-    geometry = [{"name": "domain", "bounds": bounds, "type": "cube", "is_geometry": False},
-                {"name": "OAT15", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": oat15}]
 
-    # if we use the large domain, load the rear airfoil of the tandem configuration as well
+    # create a geometry object for the domain and the OAT airfoil (loaded from coordinates)
+    geometry = [CubeGeometry("domain", True, bounds[0], bounds[1]),
+                GeometryCoordinates2D("OAT15", False, oat15, refine=True, min_refinement_level=12)]
+
+    # if we use the large domain, load the rear airfoil of the tandem configuration as well (NACA airfoil)
     if area == "large":
-        naca = load_airfoil_as_stl_file(join(load_path, "naca_airfoil_no_TE.stl"), dimensions="xz")
-        geometry.append({"name": "NACA", "bounds": None, "type": "stl", "is_geometry": True, "coordinates": naca})
+        naca = load_airfoil_from_stl_file(join(load_path, "naca_airfoil_no_TE.stl"), dimensions="xz")
+        geometry.append(GeometryCoordinates2D("NACA", False, naca, refine=True,
+                                              min_refinement_level=7))
 
     # load the corresponding write times and stack the coordinates, the field is available for all time steps sow can
     # pass it to execute_grid_generation directly. If the field to export is only available at certain time steps, we
@@ -118,8 +122,9 @@ if __name__ == "__main__":
     for v in min_variance:
         save_name = "OAT15_" + str(area) + "_area_variance_{:.2f}".format(v)
 
+        # instantiate an S^3 object
         s_cube = SparseSpatialSampling(xz, metric, geometry, save_path_results, save_name, "OAT15", min_metric=v,
-                                       write_times=times.tolist())
+                                       write_times=times.tolist(), max_delta_level=True)
 
         # execute S^3
         export = s_cube.execute_grid_generation()

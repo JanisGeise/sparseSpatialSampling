@@ -15,16 +15,17 @@ from os.path import join
 from os import path, makedirs
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube import DataWriter
-from s_cube.export_data import load_original_Foam_fields
-from s_cube.execute_grid_generation import SparseSpatialSampling
+from s_cube.export_data import DataWriter
+from s_cube.utils import load_original_Foam_fields
+from s_cube.geometry import CubeGeometry
+from s_cube.sparse_spatial_sampling import SparseSpatialSampling
 from s_cube.load_data import DataLoader
 
 logger = logging.getLogger(__name__)
 
 
 def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: bool = True, _compute_metric: bool = True,
-                                    field_name: str = "p"):
+                                    _field_name: str = "p"):
     """
     Load the vertices within the given boundaries and write times of the original simulation. If specified, compute the
     metric as standard deviation wrt time of the loaded field as:
@@ -37,7 +38,7 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
     :param boundaries: list with list containing the upper and lower boundaries of the mask
     :param scalar: flag if the field is a scalar field or a vector field
     :param _compute_metric: flag if the metric should be computed
-    :param field_name: name of the field, which should be loaded
+    :param _field_name: name of the field, which should be loaded
     :return: x-, y- & z-coordinates of the cells, all write times and the metric if specified
     """
     # create foam loader object
@@ -72,10 +73,10 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
             # load the specified field
             if scalar:
-                avg_field += pt.masked_select(loader.load_snapshot(field_name, t_i), mask)
+                avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask)
             else:
                 # for vector fields, we use the magnitude
-                avg_field += pt.masked_select(loader.load_snapshot(field_name, t_i),
+                avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i),
                                               mask).reshape(mask.size()).pow(2).sum(1).sqrt()
         avg_field /= len(write_times)
 
@@ -85,9 +86,9 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
             # load the specified field
             if scalar:
-                std_field += (pt.masked_select(loader.load_snapshot(field_name, t_i), mask) - avg_field).pow(2)
+                std_field += (pt.masked_select(loader.load_snapshot(_field_name, t_i), mask) - avg_field).pow(2)
             else:
-                _mag_field = pt.masked_select(loader.load_snapshot(field_name, t_i),
+                _mag_field = pt.masked_select(loader.load_snapshot(_field_name, t_i),
                                               mask).reshape(mask.size()).pow(2).sum(1).sqrt()
                 std_field += (_mag_field - avg_field).pow(2)
         std_field /= len(write_times)
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     if compute_metric:
         logger.info("Loading coordinates and computing metric.")
         coord, metric, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=True,
-                                                               field_name=field_name, scalar=scalar_field)
+                                                               _field_name=field_name, scalar=scalar_field)
 
         # save the metric, so we don't need to compute it again
         if not path.exists(save_path):
@@ -182,15 +183,14 @@ if __name__ == "__main__":
         metric = pt.load(join(save_path, f"{save_name_metric}.pt"))
 
     # define the geometries for the domain and the cube
-    geometry = [{"name": "domain cube", "bounds": bounds, "type": "cube", "is_geometry": False},
-                {"name": "cube", "bounds": [[3.5, 4, -1], [4.5, 5, 1]], "type": "cube", "is_geometry": True}]
+    geometry = [CubeGeometry("domain", True, bounds[0], bounds[1]),
+                CubeGeometry("cube", False, [3.5, 4, -1], [4.5, 5, 1])]
 
     # execute the S^3 algorithm
     for m in min_metric:
         # overwrite save name
         save_name = f"surfaceMountedCube_{save_name_metric}" + "_{:.2f}".format(m)
-        s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m,
-                                       refine_geometry=False)
+        s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m)
 
         # execute S^3
         export = s_cube.execute_grid_generation()
