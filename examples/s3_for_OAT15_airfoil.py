@@ -64,10 +64,6 @@ def load_airfoil_from_stl_file(_load_path: str, _name: str = "oat15.stl", sf: fl
     _, idx = np.unique(coord_af, axis=0, return_index=True)
     coord_af = coord_af[np.sort(idx)]
 
-    # close TE for OAT15 airfoil, because the blocks are sorted as: suction side -> TE -> pressure side,
-    # but we need an enclosed area
-    coord_af = np.append(coord_af, np.expand_dims(coord_af[0, :], axis=0), axis=0)
-
     return coord_af
 
 
@@ -102,7 +98,7 @@ if __name__ == "__main__":
 
     # create a geometry object for the domain and the OAT airfoil (loaded from coordinates)
     geometry = [CubeGeometry("domain", True, bounds[0], bounds[1]),
-                GeometryCoordinates2D("OAT15", False, oat15, refine=True, min_refinement_level=12)]
+                GeometryCoordinates2D("OAT15", False, oat15, refine=True)]
 
     # if we use the large domain, load the rear airfoil of the tandem configuration as well (NACA airfoil)
     if area == "large":

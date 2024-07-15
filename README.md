@@ -55,7 +55,7 @@ geometry object indicating that the points inside the object should be kept as g
 - the domain can be represented by any of the available geometry object classes
 
 #### Adding geometries:
-- there can be added as many further geometries as required to avoid generating a grid in areas where a geometry in 
+- there can be added as many geometries as required to avoid generating a grid in areas where a geometry in 
 the CFD simulation is present
 - for all geometries, which are not domains, `keep_inside = False` has to be set indicating that there shouldn't be cells
 generated inside these objects
@@ -65,6 +65,9 @@ provided `examples`.
 
 #### Putting it all together
 Once the numerical domain and optional geometries are defined, we can execute $S^3$. An example input may look like:
+
+    from s_cube.sparse_spatial_sampling import SparseSpatialSampling
+    from s_cube.geometry import CubeGeometry, SphereGeometry, GeometrySTL3D
 
     # 2D box as numerical domain
     domain_2d = CubeGeometry(name="domain", keep_inside=True, lower_bound=[0, 0], upper_bound=[2.2, 0.41])
@@ -89,7 +92,7 @@ Once the numerical domain and optional geometries are defined, we can execute $S
 
     # create a S^3 instance, the coordinates are the corrdinates of the cell centers in the original grid while metric 
     # is the metric based on which the grid is created
-    s_cube = SparseSpatialSampling(coordinates, metric, [domain, geometry], save_path, save_name, grid_name, 
+    s_cube = SparseSpatialSampling(coordinates, metric, [domain_*d, geometry_*d], save_path, save_name, grid_name, 
                                    min_metric=min_metric)
 
     # execute S^3 to generate a grid bassed on the given metric

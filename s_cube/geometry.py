@@ -10,8 +10,8 @@
 import logging
 
 from typing import Union
-from torch import Tensor, tensor
 from pyvista import PolyData
+from torch import Tensor, tensor
 from shapely import Point, Polygon
 from flowtorch.data import mask_sphere, mask_box
 
@@ -70,7 +70,7 @@ class CubeGeometry(GeometryObject):
         assert cell_nodes.size(-1) == len(self._lower_bound), (f"Number of dimensions of the cell does not match the "
                                                                f"number of given bounds. Expected "
                                                                f"{cell_nodes.size(-1)} values, found "
-                                                               f"{len(self._lower_bound)}.")
+                                                               f"{len(self._lower_bound)} for geometry {self.name}.")
 
         # create a mask
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
@@ -92,13 +92,13 @@ class CubeGeometry(GeometryObject):
                                                                   f"the upper bound. Found {len(self._lower_bound)} "
                                                                   f"values for the lower bound but "
                                                                   f"{len(self._upper_bound)} values for the upper "
-                                                                  f"bound.")
+                                                                  f"bound for geometry {self.name}.")
 
         # check if the lower boundary is smaller than the upper boundary
         for i, v in enumerate(zip(self._lower_bound, self._upper_bound)):
             assert v[0] < v[1], (f"Value of {v[0]} for the lower bound at position {i} is larger or equal than the "
-                                 f"value of {v[1]} for the upper bound. The the lower bound must be smaller than the "
-                                 f"upper bound!")
+                                 f"value of {v[1]} for the upper bound for geometry {self.name}. The the lower bound "
+                                 f"must be smaller than the upper bound!")
 
 
 class SphereGeometry(GeometryObject):
@@ -149,7 +149,7 @@ class SphereGeometry(GeometryObject):
         assert cell_nodes.size(-1) == len(self._position), (f"Number of dimensions of the cell does not match the "
                                                             f"number of dimensions for the position. Expected "
                                                             f"{cell_nodes.size(-1)} values, found "
-                                                            f"{len(self._position)}.")
+                                                            f"{len(self._position)} for geometry {self.name}.")
 
         # create a mask
         mask = mask_sphere(cell_nodes, self._position, self._radius)
@@ -167,7 +167,8 @@ class SphereGeometry(GeometryObject):
         # check if the radius is an int or float
         assert type(self._radius) is int or type(self._radius) is float, (f"Expected a type or radius to be "
                                                                           f"Union[int, float], got "
-                                                                          f"{type(self._radius)}.")
+                                                                          f"{type(self._radius)} for geometry "
+                                                                          f"{self.name}.")
 
 
 class GeometryCoordinates2D(GeometryObject):
@@ -214,7 +215,6 @@ class GeometryCoordinates2D(GeometryObject):
         """
         # Create a mask. We can't compute this for all nodes at once, because within() method only returns a single
         # bool, but we need to have a bool for each node
-        # TODO: make more efficient if possible
         mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
 
         # check if the cell is valid or invalid
@@ -224,8 +224,9 @@ class GeometryCoordinates2D(GeometryObject):
         """
         method to check the user input for correctness
         """
-        # TODO assert enclosed area -> test if works possible?
-        pass
+        # check if an enclosed area is provided (is_closed property only available for line strings in shapely)
+        assert self._coordinates.boundary.is_closed, (f"Expected an enclosed area formed by the provided coordinates "
+                                                      f"for geometry {self.name}.")
 
 
 class GeometrySTL3D(GeometryObject):
@@ -288,7 +289,7 @@ class GeometrySTL3D(GeometryObject):
             # pyVista will throw a RuntimeError if the surface is not closed and manifold
             _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
         except RuntimeError:
-            logger.critical("Expected an STL file with a closed and manifold surface.")
+            logger.critical(f"Expected an STL file with a closed and manifold surface for geometry {self.name}.")
             exit(0)
 
 
