@@ -8,7 +8,6 @@ from os.path import join
 from os import path, makedirs
 
 from .s_cube import SamplingTree
-from .export_data import DataWriter
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -46,65 +45,69 @@ class SparseSpatialSampling:
                                  5% of _n_cells_iter_start
         :return: None
         """
-        self._coordinates = coordinates
-        self._metric = metric
+        self.coordinates = coordinates
+        self.metric = metric
+        self.save_path = save_path
+        self.save_name = save_name
+        self.grid_name = grid_name
+        self.write_times = write_times
+
+        # results we get from SamplingTree
+        self.centers = None
+        self.vertices = None
+        self.faces = None
+        self.n_dimensions = coordinates.squeeze().size(-1)
+        self.size_initial_cell = None
+        self.levels = None
+
+        # properties only required by SamplingTree
         self._geometries = geometry_objects
-        self._save_path = save_path
-        self._save_name = save_name
-        self._grid_name = grid_name
         self._level_bounds = level_bounds
         self._n_cells_max = n_cells_max
         self._min_metric = min_metric
         self._max_delta_level = max_delta_level
-        self._write_times = write_times
         self._n_cells_iter_start = n_cells_iter_start
         self._n_cells_iter_end = n_cells_iter_end
         self._sampling = None
-        self._export = None
 
         # check if the dicts for the geometry objects are correct
         self._check_input()
 
         # create SamplingTree
-        self._sampling = SamplingTree(self._coordinates, self._metric, self._geometries, n_cells=self._n_cells_max,
+        self._sampling = SamplingTree(self.coordinates, self.metric, self._geometries, n_cells=self._n_cells_max,
                                       level_bounds=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
                                       n_cells_iter_start=self._n_cells_iter_start)
 
-    def execute_grid_generation(self) -> DataWriter:
+    def execute_grid_generation(self) -> None:
         """
         executed the S^3 algorithm
 
         :return: instance of the Datawriter class containing the generated grid along with additional information & data
         """
         # create directory for data and final grid
-        if not path.exists(self._save_path):
-            makedirs(self._save_path)
+        if not path.exists(self.save_path):
+            makedirs(self.save_path)
 
         # execute grid generation
         self._sampling.refine()
 
-        # create a DataWriter instance for the created grid
-        # TODO:
-        #       -> Once datawriter is refactored -> remove datawriter from S_cube class (incl. in save() method and all
-        #         properties etc.), so that S^3 class doesn't return DataWriter object
-        self._export = DataWriter(self._sampling.face_ids, self._sampling.all_nodes, self._sampling.all_centers,
-                                  self._sampling.all_levels, save_dir=self._save_path, save_name=self._save_name,
-                                  grid_name=self._save_name, times=self._write_times)
+        # save the mesh info file
+        pt.save(self._sampling.data_final_mesh, join(self.save_path, f"mesh_info_{self.save_name}.pt"))
 
-        # add the metric and mesh info
-        self._export._metric = self._metric
-        self._export.mesh_info = self._sampling.data_final_mesh
+        # to make things easier, assign the values we need from S^3 directly as properties, then we can delete the
+        # SamplingTree
+        self.levels = self._sampling.all_levels
+        self.centers = self._sampling.all_centers
+        self.vertices = self._sampling.all_nodes
+        self.faces = self._sampling.face_ids
+        self.size_initial_cell = self._sampling.data_final_mesh["size_initial_cell"]
 
-        # remove everything, which is not required anymore
-        self._coordinates = None
-        self._metric = None
+        # reset SamplingTree
         self._sampling = None
 
-        # save everything
-        self._save()
-
-        return self._export
+        # save everything TODO: not working
+        # pt.save(self, join(self._save_path, f"s_cube_{self._save_name}.pt"))
 
     def _check_input(self) -> None:
         """
@@ -113,9 +116,9 @@ class SparseSpatialSampling:
         :return: None
         """
         # check if the metric is 1D
-        assert len(self._metric.size()) == 1, (f"The size of the metric must be a 1D tensor of the length "
-                                               f"{self._coordinates.size(0)}. The size of the metric given is "
-                                               f"{self._metric.size()}.")
+        assert len(self.metric.size()) == 1, (f"The size of the metric must be a 1D tensor of the length "
+                                               f"{self.coordinates.size(0)}. The size of the metric given is "
+                                               f"{self.metric.size()}.")
 
         # make sure the target metric is not larger than one (if it should be used as stopping criteria)
         if self._n_cells_max is None:
@@ -141,15 +144,6 @@ class SparseSpatialSampling:
             # we need lower level >= 1, because otherwise the stopping criteria is not working
             logger.warning(f"Lower level bound of {self._level_bounds[0]} is invalid. Changed lower level bound to 1.")
             self._level_bounds = (1, self._level_bounds[1])
-
-    def _save(self) -> None:
-        """
-        Save the mesh info and DataWriter instanz in case we want to interpolate other fields later
-
-        :return: None
-        """
-        pt.save(self._export.mesh_info, join(self._save_path, f"mesh_info_{self._save_name}.pt"))
-        pt.save(self._export, join(self._save_path, f"DataWriter_{self._save_name}.pt"))
 
 
 if __name__ == "__main__":

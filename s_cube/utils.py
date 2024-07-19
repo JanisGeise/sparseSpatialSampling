@@ -1,13 +1,20 @@
 """
-    helper functions for loading openfoam fields and functions encapsulating the complete loading, interpolation and
-    export of fields
+    Helper functions for loading openfoam fields and functions encapsulating the complete loading, interpolation, and
+    export of fields.
+    Further, a function to compute an SVD on the data from s_cube for a given datamatrix and weights.
 """
+import logging
 import torch as pt
 
 from typing import Union, Tuple
+
+from flowtorch.analysis import SVD
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.export_data import logger, DataWriter
+from s_cube.export import ExportData
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: list,
@@ -62,7 +69,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             try:
                 _field_size = loader.load_snapshot(field, _write_times[0]).size()
             except ValueError:
-                logger.warning(f"\tField '{field}' is not available. Skipping this field...")
+                logger.warning(f"Field '{field}' is not available. Skipping field {field}.")
                 continue
 
             if len(_field_size) == 1:
@@ -86,8 +93,8 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
             # in a part of this mask.
             except RuntimeError:
-                logger.warning(f"\tField '{field}' is does not match the size of the masked domain. Skipping this "
-                               f"field...")
+                logger.warning(f"Field '{field}' is does not match the size of the masked domain. Skipping "
+                               f"field {field}.")
                 continue
 
             # since the size of data matrix must be: [N_cells, N_dimensions, N_snapshots] (vector field) or
@@ -105,7 +112,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
             return _fields_out[0]
 
 
-def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: list,
+def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: list,
                            batch_size: int = None, fields: Union[list, str] = None) -> None:
     """
     Wrapper function for interpolating the original CFD data executed with OpenFoam onto the generated grid with the
@@ -139,12 +146,12 @@ def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: l
                                               _get_field_names_and_times=True)
 
     # save time steps of all snapshots if not already provided when starting the refinement, needs to be list[str]
-    if datawriter.times is None:
+    if datawriter.write_times is None:
         times, _ = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
                                              _get_field_names_and_times=True)
-        datawriter.times = times
+        datawriter.write_times = times
 
-    batch_size = batch_size if batch_size is not None else len(datawriter.times)
+    batch_size = batch_size if batch_size is not None else len(datawriter.write_times)
 
     if type(fields) is str:
         fields = [fields]
@@ -152,20 +159,20 @@ def export_openfoam_fields(datawriter: DataWriter, load_path: str, boundaries: l
     # interpolate and export the specified fields
     for f in fields:
         counter = 1
-        if not len(datawriter.times) % batch_size:
-            n_batches = int(len(datawriter.times) / batch_size)
+        if not len(datawriter.write_times) % batch_size:
+            n_batches = int(len(datawriter.write_times) / batch_size)
         else:
-            n_batches = int(len(datawriter.times) / batch_size) + 1
+            n_batches = int(len(datawriter.write_times) / batch_size) + 1
 
-        for t in pt.arange(0, len(datawriter.times), step=batch_size).tolist():
+        for t in pt.arange(0, len(datawriter.write_times), step=batch_size).tolist():
             logger.info(f"Exporting batch {counter} / {n_batches}")
             coordinates, data = load_original_Foam_fields(load_path, datawriter.n_dimensions, boundaries,
                                                           _field_names=f,
-                                                          _write_times=datawriter.times[t:t + batch_size])
+                                                          _write_times=datawriter.write_times[t:t + batch_size])
 
             # in case the field is not available, the export()-method will return None
             if data is not None:
-                datawriter.export_data(coordinates, data, f, _n_snapshots_total=len(datawriter.times))
+                datawriter.export(coordinates, data, f, _n_snapshots_total=len(datawriter.write_times))
             counter += 1
 
 
@@ -222,3 +229,46 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
     _cell_area = _loader.weights.sqrt().unsqueeze(-1)
 
     return data, xyz, _cell_area, write_time
+
+
+def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
+    """
+    Computes an SVD for a given field, the field is weighted with the cell area.
+    For more information on the determination of the optimal rank, it is referred to the flowtorch documentation:
+
+    https://flowmodelingcontrol.github.io/flowtorch-docs/1.2/flowtorch.analysis.html#flowtorch.analysis.svd.SVD.opt_rank
+
+    :param data_matrix: The data matrix with the snapshots, it is expected that the lasst dimension represents the
+                        temporal evolution
+    :param cell_area: Area (2D) / Volume (3D) for each cell
+    :param rank: Number of modes which should be used to compute the SVD, if 'None' then the optimal rank will be used
+    :return: Tuple containing the singular values, modes and mode coefficients as (s, U, V)
+    """
+    # subtract the temporal mean
+    _field_size = data_matrix.size()
+    data_matrix -= pt.mean(data_matrix, dim=-1).unsqueeze(-1)
+
+    if len(_field_size) == 2:
+        # multiply by the sqrt of the cell areas to weight their contribution
+        data_matrix *= cell_area.sqrt().unsqueeze(-1)
+
+        # save either everything until the optimal rank or up to a user specified rank
+        svd = SVD(data_matrix, rank=rank if rank is not None else data_matrix.size(-1))
+
+        return svd.s, svd.U / cell_area.sqrt().unsqueeze(-1), svd.V
+
+    else:
+        # multiply by the sqrt of the cell areas to weight their contribution
+        data_matrix *= cell_area.sqrt().unsqueeze(-1).unsqueeze(-1)
+
+        # stack the data of all components for the SVD
+        orig_shape = _field_size
+        data_matrix = data_matrix.reshape((orig_shape[1] * orig_shape[0], orig_shape[-1]))
+
+        # save either everything until the optimal rank or up to a user specified rank
+        svd = SVD(data_matrix, rank=rank if rank is not None else data_matrix.size(-1))
+
+        # reshape the data back to ux, uy, uz
+        new_shape = (orig_shape[0], orig_shape[1], svd.rank)
+
+        return svd.s, svd.U.reshape(new_shape) / cell_area.sqrt().unsqueeze(-1).unsqueeze(-1), svd.V

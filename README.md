@@ -96,7 +96,7 @@ Once the numerical domain and optional geometries are defined, we can execute $S
                                    min_metric=min_metric)
 
     # execute S^3 to generate a grid bassed on the given metric
-    export = s_cube.execute_grid_generation()
+    s_cube.execute_grid_generation()
 
 ### Interpolation of the original CFD data
 - once the grid is generated, the original fields from CFD can be interpolated onto this grid by calling the `fit_data` 
@@ -111,15 +111,15 @@ example for interpolating and exporting a field:
 
     # times are the time steps of the simulation, need to be either a str or a list[str]
     export.times = times
-    export.export_data(cooridnates, snapshots_original_field, field_name)
+    export.export(cooridnates, snapshots_original_field, field_name)
 
 
 An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
 `examples/s3_for_surfaceMountedCube_large.py` (for large datasets, which are not fitting into the RAM all at once).
 
-### Results & output files
+### Results & output files (TODO: update)
 - once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
-`export_data()` method of the `DataWriter` class
+`export()` method of the `DataWriter` class
 - for data from `OpenFoam`, the function `export_openfoam_fields` in `execute_grid_generation` can be used to either 
 export all snapshots for a given list of fields at once or snapshot-by-snapshot (more convenient)
 - the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
@@ -191,7 +191,7 @@ An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation 
 An [example jobscript](https://github.com/JanisGeise/sparseSpatialSampling/blob/main/example_jobscript) for the
 [Barnard](https://compendium.hpc.tu-dresden.de/jobs_and_resources/barnard/) HPC of TU Dresden is provided.
 
-### Performing an SVD
+### Performing an SVD (TODO: update)
 Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
 
     # instantiate DataLoader
@@ -231,7 +231,7 @@ highly depends on the chosen metric. In most cases, the number of cells will sca
 The available RAM has to be large enough to hold all snapshots of the interpolated field as well as additional memory to
 perform the SVD.
 
-### Reaching the specified target metric
+### Reaching the specified target metric (TODO: update)
 - if the target metric is not reached with sufficient accuracy, the parameter `n_cells_iter_start` and
 `n_cells_iter_end` have to be decreased. If none provided, they are automatically set to:  
   

@@ -13,23 +13,89 @@
                 - [N_cells, N_dimensions, N_snapshots] (vector field)
                 - [N_cells, 1, N_snapshots] (scalar field)
 
-                to correctly execute the 'export_data()' method of the DataWriter class
+                to correctly execute the 'export()' method of the Datawriter class. If the data was created with,
+                OpenFoam s_cube.utils.export_openfoam_fields can be used alternatively to automatically export a given
+                number of fields.
 
     In this example, the cylinder is represented by a center and radius (no STL file).
 """
+import logging
 import torch as pt
 
 from os.path import join
+from typing import Union
 
-from s_cube.load_data import DataLoader
-from s_cube.utils import load_cfd_data, export_openfoam_fields
+from s_cube.export import ExportData
+from s_cube.data import Datawriter, Dataloader
 from s_cube.geometry import CubeGeometry, SphereGeometry
 from s_cube.sparse_spatial_sampling import SparseSpatialSampling
+from s_cube.utils import load_cfd_data, export_openfoam_fields, compute_svd
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+def write_svd_s_cube_to_file(field_names: Union[list, str], save_dir: str, file_name: str, n_modes: int = None,
+                             rank = None) -> None:
+    """
+    computes an SVD for a given number of fields and exports the results to HDF5 & XDMF for visualizing,
+     e.g., in ParaView
+
+    :param field_names: names of the fields for which the SVD should be computed
+    :param save_dir: directory to which the results should be written to
+    :param file_name: the name of the file, for clarity '_svd' will be appended to the file name
+    :param n_modes: number of modes to write to the file, if larger than available modes, all available modes will be
+                    written
+    :param rank: number of modes which should be used to compute the SVD, if 'None' then the optimal rank will be used
+    :return: None
+    """
+    if type(field_names) is str:
+        field_names = [field_names]
+
+    for f in field_names:
+        dataloader = Dataloader(save_dir, f"{file_name}.h5")
+
+        # assemble a datamatrix for computing an SVD
+        dm_u = dataloader.load_snapshots(f)
+
+        # perform an SVD weighted with cell areas
+        s, U, V = compute_svd(dm_u, dataloader.weights, rank)
+
+        # write the data to HDF5 & XDMF
+        datawriter = Datawriter(save_dir, file_name + f"_{f}_svd.h5")
+
+        # write the grid
+        datawriter.write_data("centers", group="grid", data=dataloader.vertices)
+        datawriter.write_data("vertices", group="grid", data=dataloader.nodes)
+        datawriter.write_data("faces", group="grid", data=dataloader.faces)
+
+        # set the max. number of modes to write, if the specified number of modes is larger than the available modes,
+        # then only write all available modes
+        n_modes = U.size(-1) if n_modes is None else n_modes
+        if n_modes > U.size(-1):
+            logger.warning(f"Number of modes to write is set to {n_modes}, but found only {U.size(-1)} modes to write.")
+            n_modes = U.size(-1)
+
+        # write the modes as vectors, where each mode is treated as an independent vector
+        for i in range(n_modes):
+            if len(U.size()) == 2:
+                datawriter.write_data(f"mode_{i + 1}", group="constant", data=U[:, i].squeeze())
+            else:
+                datawriter.write_data(f"mode_{i + 1}", group="constant", data=U[:, :, i].squeeze())
+
+        # write the rest as tensor (not referenced in XDMF file anyway)
+        datawriter.write_data("V", group="constant", data=V)
+        datawriter.write_data("s", group="constant", data=s)
+
+        # write XDMF file
+        datawriter.write_xdmf_file()
+
 
 if __name__ == "__main__":
     # load paths to the CFD data
     load_path = join("..", "data", "2D", "cylinder2D_re1000")
-    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "TEST")
+    save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "TEST_NEW")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.95
@@ -49,29 +115,23 @@ if __name__ == "__main__":
     # create a S^3 instance
     s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
                                    "cylinder2D", min_metric=min_metric, write_times=write_times, max_delta_level=True)
+
     # execute S^3
-    export = s_cube.execute_grid_generation()
+    s_cube.execute_grid_generation()
+
+    # create export instance, export all fields into the same HFD5 file and create single XDMF from it
+    export = ExportData(s_cube, write_new_file_for_each_field=False)
 
     # we used the time steps t = 0.4 ... t_end for computing the metric, but we want to export all time steps, so reset
     # the 'times' property
-    export.times = None
+    export.write_times = None
 
     # export the fields available in all time steps
     export_openfoam_fields(export, load_path, bounds)
 
     # alternatively, we can export data available at only certain time steps as
-    # export.times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]          # replace with actual time steps
-    # export.export_data(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
+    # export.write_times = [str(i.item()) for i in pt.arange(0.1, 0.5, 0.1)]          # replace with actual time steps
+    # export.export(coord, field.unsqueeze(1), "p", _n_snapshots_total=None)
 
-    # perform an SVD for the pressure and velocity field
-    loader = DataLoader()
-
-    for f in ["p", "U"]:
-        # assemble the data matrix
-        loader.load_data(save_path, save_name + f"_{f}", f)
-
-        # perform the svd
-        loader.compute_svd()
-
-        # write the data to HDF5 & XDMF
-        loader.write_data(save_path, save_name + f"_svd_{f}")
+    # compute SVD on grid generated by S^3 and export the results to HDF5 & XDMF
+    write_svd_s_cube_to_file(["p", "U"], save_path, save_name, 50)
