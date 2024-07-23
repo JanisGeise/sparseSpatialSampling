@@ -18,7 +18,8 @@ from typing import Tuple, Union
 from flowtorch.analysis import SVD
 from matplotlib.patches import Polygon
 
-from post_processing.compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5, get_cell_area
+from s_cube.data import Dataloader
+from post_processing.compute_error import load_airfoil_as_stl_file
 
 
 def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: list, n_values: int = 100) -> None:
@@ -125,14 +126,14 @@ if __name__ == "__main__":
     # which fields and settings to use
     field_name = "p"
     area = "small"
-    metric = "0.95"
+    metric = "0.75"
 
     # path to the HDF5 file
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
     # path to the directory to which the plots should be saved to
-    file_name = f"OAT15_{area}_area_variance_{metric}_{field_name}.h5"
+    file_name = f"OAT15_{area}_area_variance_{metric}.h5"
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                              f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
 
@@ -147,7 +148,8 @@ if __name__ == "__main__":
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
     # field from generated grid
-    interpolated_field = construct_data_matrix_from_hdf5(join(load_path, file_name), field_name)
+    dataloader = Dataloader(load_path, file_name)
+    interpolated_field = dataloader.load_snapshots(field_name)
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
@@ -158,19 +160,19 @@ if __name__ == "__main__":
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
 
     # compute the cell areas (2D) / volumes (3D) for the interpolated field
-    cell_area_inter = get_cell_area(load_path, file_name, xz.size(-1), interpolated_field["levels"]).sqrt()
+    cell_area_inter = dataloader.weights.sqrt().unsqueeze(-1)
 
     # multiply by the sqrt of the cell areas to weight their contribution
     orig_field *= cell_area_orig
-    interpolated_field[field_name] *= cell_area_inter
+    interpolated_field *= cell_area_inter
 
     # make SVD of original flow field data
     orig_field -= pt.mean(orig_field, dim=1).unsqueeze(-1)
     svd_orig = SVD(orig_field, rank=orig_field.size(-1))
 
     # make SVD of interpolated flow field data
-    interpolated_field[field_name] -= pt.mean(interpolated_field[field_name], dim=1).unsqueeze(-1)
-    svd_inter = SVD(interpolated_field[field_name], rank=orig_field.size(-1))
+    interpolated_field -= pt.mean(interpolated_field, dim=1).unsqueeze(-1)
+    svd_inter = SVD(interpolated_field, rank=orig_field.size(-1))
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -189,7 +191,7 @@ if __name__ == "__main__":
                          legend=["$original$", "$interpolated$"])
 
     # plot the first N POD modes (left singular vectors)
-    plot_pod_modes(xz, interpolated_field["coordinates"], svd_orig.U / cell_area_orig, svd_inter.U / cell_area_inter,
+    plot_pod_modes(xz, dataloader.vertices, svd_orig.U / cell_area_orig, svd_inter.U / cell_area_inter,
                    save_path_results, f"comparison_pod_modes_metric_{metric}_weighted", _geometry=geometry)
 
     # plot POD mode coefficients (right singular vectors)

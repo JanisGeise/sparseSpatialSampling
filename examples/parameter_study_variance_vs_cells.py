@@ -5,6 +5,7 @@
 import torch as pt
 from os.path import join
 
+from s_cube.export import ExportData
 from s_cube.geometry import CubeGeometry
 from s_cube.sparse_spatial_sampling import SparseSpatialSampling
 from s_cube.utils import export_openfoam_fields, load_cfd_data
@@ -34,7 +35,10 @@ def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometrie
                                        "interpolated_mesh_variance_{:.2f}".format(v.item()), grid_name,
                                        min_metric=v.item())
         # execute S^3
-        export = s_cube.execute_grid_generation()
+        s_cube.execute_grid_generation()
+
+        # create export instance, export all fields into the same HFD5 file and create single XDMF from it
+        export = ExportData(s_cube, write_new_file_for_each_field=False)
 
         # export the fields
         export_openfoam_fields(export, load_path, boundaries, fields=fields)

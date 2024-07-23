@@ -11,12 +11,13 @@ from os import path, makedirs
 from flowtorch.analysis import SVD
 from flowtorch.data import FOAM2HDF5
 
+from s_cube.data import Datawriter
 from s_cube.utils import load_cfd_data
 
 
 def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
     """
-        Computes an SVd of the interpolated field.
+        computes an SVD of the interpolated field.
 
         For more information on the determination of the optimal rank, it is referred to the flowtorch documentation:
 
@@ -66,93 +67,27 @@ def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients
         :param _field_name: name of the field for which the SVD should be computed
         :return: None
     """
-    _writer = h5py.File(join(_save_dir, f"{_save_name}_svd_{_field_name}.h5"), "w")
-    _grid_data = _writer.create_group("grid")
-    _grid_data.create_dataset("faces", data=_face_id)
-    _grid_data.create_dataset("vertices", data=_vertices)
-    _grid_data.create_dataset("centers", data=_centers)
+    datawriter = Datawriter(save_path, f"{save_name}_{field_name}_svd.h5", mixed=True)
+
+    # write the grid
+    datawriter.write_data("faces", group="grid", data=_face_id)
+    datawriter.write_data("vertices", group="grid", data=_vertices)
+    datawriter.write_data("centers", group="grid", data=_centers)
 
     # if all snapshots of the interpolated fields are available, perform an SVD for each component of the
     # field (will be extended to arbitrary batch sizes once this is working)
-    if len(_modes.size()) == 2:
-        _writer.create_dataset("mode", data=_modes)
-    else:
-        dims = ["x", "y", "z"]
-        for i in range(_modes.size(1)):
-            _writer.create_dataset(f"mode_{dims[i]}", data=_modes[:, i, :].squeeze())
-
-    # write the mode coefficients and singular values only to the HDF5 file (not XDMF)
-    _writer.create_dataset("mode_coefficients", data=_mode_coefficients)
-    _writer.create_dataset("singular_values", data=_singular_values)
-    _writer.create_dataset("sqrt_cell_area", data=_sqrt_cell_area)
-
-    # close hdf file
-    _writer.close()
-
-
-def write_xdmf_for_svd(n_dimensions: int, _n_faces: int, _n_vertices: int, _mode_size: pt.Size,
-                       _sqrt_cell_area_size: pt.Size, _save_dir: str, _save_name: str, _grid_name: str,
-                       _field_name: str) -> None:
-    """
-    Write the XDMF file referencing the modes resulting from the SVD in the corresponding HDF5 file.
-
-    :param n_dimensions: number of physical dimensions
-    :param _n_faces: number of faces (connections between nodes)
-    :param _n_vertices: number of nodes
-    :param _mode_size: amount of modes
-    :param _sqrt_cell_area_size: amount of cells
-    :param _save_dir: directory in which the file should be saved to
-    :param _save_name: name of the XDMF file
-    :param _grid_name: name of the grid
-    :param _field_name: name of the field for which the SVD should be computed
-    :return: None
-    """
-    # the connectivity format which flowtorch returns only support Mixed topology types
-    _grid_type = "Mixed"
-    _file_name = f"{_save_name}_svd_{_field_name}"
-    _dims = "XY" if n_dimensions == 2 else "XYZ"
-
-    _global_header = f'<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n' \
-                     f'<Domain>\n<Grid Name="{_grid_name}" GridType="Uniform">\n' \
-                     f'<Topology TopologyType="{_grid_type}" NumberOfElements="{_n_faces}">\n' \
-                     f'<DataItem Format="HDF" DataType="Int" Dimensions="{_n_faces}">\n'
-
-    # write the corresponding XDMF file
-    with open(join(_save_dir, f"{_file_name}.xdmf"), "w") as f_out:
-        # write global header
-        f_out.write(_global_header)
-
-        # include the grid data from the HDF5 file
-        f_out.write(f"{_file_name}.h5:/grid/faces\n")
-
-        # write geometry part
-        f_out.write(f'</DataItem>\n</Topology>\n<Geometry GeometryType="{_dims}">\n'
-                    f'<DataItem Rank="2" Dimensions="{_n_vertices} {n_dimensions}" '
-                    f'NumberType="Float" Precision="8" Format="HDF">\n')
-
-        # write coordinates of vertices
-        f_out.write(f"{_file_name}.h5:/grid/vertices\n")
-
-        # write end tags
-        f_out.write("</DataItem>\n</Geometry>\n")
-
-        # write POD modes to the last time step
-        if len(_mode_size) == 2:
-            f_out.write(f'<Attribute Name="mode" AttributeType="Vector" Center="Cell">\n<DataItem NumberType="Float" '
-                        f'Precision="8" Format="HDF" Dimensions="{_mode_size[0]} {_mode_size[-1]}">\n')
-            f_out.write(f"{_file_name}.h5:/mode\n</DataItem>\n</Attribute>\n")
+    for i in range(_modes.size(-1)):
+        if len(_modes.size()) == 2:
+            datawriter.write_data(f"mode_{i + 1}", group="constant", data=_modes[:, i].squeeze())
         else:
-            for d in ["x", "y", "z"]:
-                f_out.write(f'<Attribute Name="mode_{d}" AttributeType="Vector" Center="Cell">\n<DataItem '
-                            f'NumberType="Float" Precision="8" Format="HDF" '
-                            f'Dimensions="{_mode_size[0]} {_mode_size[-1]}">\n')
-                f_out.write(f"{_file_name}.h5:/mode_{d}\n</DataItem>\n</Attribute>\n")
+            datawriter.write_data(f"mode_{i + 1}", group="constant", data=_modes[:, :, i].squeeze())
 
-        # write the sqrt cell area
-        f_out.write(f'<Attribute Name="sqrt_cell_area" AttributeType="Vector" Center="Cell">\n<DataItem '
-                    f'NumberType="Float" Precision="8" Format="HDF" Dimensions='
-                    f'"{_sqrt_cell_area_size[0]} {_sqrt_cell_area_size[-1]}">\n')
-        f_out.write(f"{_file_name}.h5:/sqrt_cell_area\n</DataItem>\n</Attribute>\n</Grid>\n</Domain>\n</Xdmf>")
+    # write the rest as tensor (not referenced in XDMF file anyway)
+    datawriter.write_data("V", group="constant", data=_mode_coefficients)
+    datawriter.write_data("s", group="constant", data=_singular_values)
+
+    # write XDMF file
+    datawriter.write_xdmf_file()
 
 
 if __name__ == "__main__":
@@ -183,7 +118,7 @@ if __name__ == "__main__":
     if not path.exists(join(load_path, f"{grid_file_name}.h5")):
         converter = FOAM2HDF5(load_path)
 
-        # load a dummy field
+        # load a field as placeholder to write the file
         converter.convert(f"{grid_file_name}.h5", [field_name], [write_times[0]])
 
         # remove everything but the mesh
@@ -202,9 +137,5 @@ if __name__ == "__main__":
     if not path.exists(save_path):
         makedirs(save_path)
 
-    # write HDF5 file
+    # write HDF5 & XDMF file
     write_hfd5_for_svd(coord, vertices, faces, U, V, s, cell_area, save_path, save_name, field_name)
-
-    # write XDMF file
-    write_xdmf_for_svd(coord.size(-1), faces.shape[0], vertices.shape[0], U.size(), cell_area.size(), save_path,
-                       save_name, "cube", field_name)

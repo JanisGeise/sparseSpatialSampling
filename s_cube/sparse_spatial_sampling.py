@@ -37,8 +37,8 @@ class SparseSpatialSampling:
                            grid), if 'None' the max. number of cells will be used as stopping criteria
         :param max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
                                 difference of one
-        :param write_times: numerical time steps of the simulation, needs to be provided as list[str]. If 'None', the
-                            time steps need to be provided after refinement (before exporting the fields)
+        :param write_times: numerical time steps of the simulation, needs to be provided as list[int | float | str].
+                            If 'None', the time steps need to be provided after refinement (before exporting the fields)
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning. If 'None' then the value is
                                    set to 1% of the number of vertices in the original grid
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
@@ -106,8 +106,9 @@ class SparseSpatialSampling:
         # reset SamplingTree
         self._sampling = None
 
-        # save everything TODO: not working
-        # pt.save(self, join(self._save_path, f"s_cube_{self._save_name}.pt"))
+        # save the s_cube instance, in case we want to interpolate some other fields later, we can just load it without
+        # the necessity to re-run the grid generation
+        pt.save(self, join(self.save_path, f"s_cube_{self.save_name}.pt"))
 
     def _check_input(self) -> None:
         """
@@ -117,8 +118,8 @@ class SparseSpatialSampling:
         """
         # check if the metric is 1D
         assert len(self.metric.size()) == 1, (f"The size of the metric must be a 1D tensor of the length "
-                                               f"{self.coordinates.size(0)}. The size of the metric given is "
-                                               f"{self.metric.size()}.")
+                                              f"{self.coordinates.size(0)}. The size of the metric given is "
+                                              f"{self.metric.size()}.")
 
         # make sure the target metric is not larger than one (if it should be used as stopping criteria)
         if self._n_cells_max is None:

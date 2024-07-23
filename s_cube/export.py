@@ -17,17 +17,6 @@ logging.basicConfig(level=logging.INFO)
 
 pt.set_default_dtype(pt.float64)
 
-# TODO: - documentation of code
-#       - test all possibilities -> snapshot-wise, in batches, all at once (both for single file and new file for
-#         each field)
-#       - saving of s_cube class currently not working
-#       - nomenclature grid s_cube vs. flowtorch -> vertices vs. centers
-#       - copy datawriter & -loader to data -> more intuitive if everything in data (compare flowtorch)
-#       - del load_data
-#       - refactor remaining examples
-#       - test all examples
-#       - update readme & commit everything
-
 
 class Fields:
     """
@@ -214,6 +203,10 @@ class ExportData:
     @write_times.setter
     def write_times(self, value: list) -> None:
         self._write_times = value
+
+    @property
+    def new_file(self):
+        return self._new_file
 
 
 if __name__ == "__main__":

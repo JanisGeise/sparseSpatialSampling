@@ -15,6 +15,6 @@ source s_cube_venv/bin/activate
 . source_path
 
 # path to the python script
-cd examples/
+cd examples/ || exit
 
 python3 s3_for_surfaceMountedCube_large_hpc.py &> "log.main"

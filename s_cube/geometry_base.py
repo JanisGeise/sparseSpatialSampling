@@ -1,5 +1,8 @@
 """
     implements the base class for geometry objects from which all geometry objects should be derived
+
+    Note: it is expected that the mask passed into the _apply_mask method is always False outside the geometry and
+          always True inside it (independently if it is a geometry or domain)
 """
 import logging
 
@@ -38,6 +41,9 @@ class GeometryObject(ABC):
     def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> bool:
         """
         check if a given cell is valid or invalid based onn a given mask and settings
+
+        Note: it is expected that the mask passed into the _apply_mask method is always False outside the geometry and
+              always True inside it (independently if it is a geometry or domain)
 
         :param mask: mask created by the geometry object
         :type mask: pt.Tensor

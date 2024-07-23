@@ -1,7 +1,7 @@
 """
     compute the error between the generated grid and the original grid wrt space, time and space & time
 """
-import h5py
+import regex as re
 import numpy as np
 import torch as pt
 import matplotlib.pyplot as plt
@@ -13,13 +13,7 @@ from os import path, makedirs
 from matplotlib.patches import Polygon
 from sklearn.neighbors import KNeighborsRegressor
 
-
-def get_cell_area(_load_path: str, _file_name: str, _n_dims: int, levels: pt.Tensor) -> pt.Tensor:
-    file_name_mesh_info = f"mesh_info_{'_'.join(_file_name.split('_')[:-1])}.pt"
-    width_initial_cell = pt.load(join(_load_path, file_name_mesh_info))["size_initial_cell"]
-
-    # A = (1 / 2^N_dimensions) * (initial_width / 2^level)^N_dimensions
-    return 1 / pow(2, _n_dims) * pow(width_initial_cell / pow(2, levels), _n_dims)
+from s_cube.data import Dataloader
 
 
 def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensions: str = "xy"):
@@ -40,29 +34,6 @@ def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensio
     coord_af = np.append(coord_af, np.expand_dims(coord_af[0, :], axis=0), axis=0)
 
     return coord_af
-
-
-def construct_data_matrix_from_hdf5(_load_path: str, _field_name: str) -> dict:
-    hdf_file = h5py.File(_load_path, "r")
-
-    # assemble the data matrix
-    keys = list(hdf_file[f"{_field_name}_center"].keys())
-    shape = hdf_file[f"{_field_name}_center"][keys[0]].shape
-    if len(shape) == 1:
-        data_out = pt.zeros((shape[0], len(keys)))
-    else:
-        data_out = pt.zeros((shape[0], shape[1], len(keys)))
-    for i, k in enumerate(keys):
-        if len(shape) == 1:
-            data_out[:, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
-        else:
-            data_out[:, :, i] = pt.from_numpy(hdf_file.get(f"{_field_name}_center/{k}")[()])
-
-    return {"coordinates": pt.from_numpy(hdf_file.get("grid/centers")[()]),
-            "faces": pt.from_numpy(hdf_file.get("grid/faces")[()]),
-            "vertices": pt.from_numpy(hdf_file.get("grid/vertices")[()]),
-            "levels": pt.from_numpy(hdf_file.get("levels")[()]),
-            _field_name: data_out}
 
 
 def plot_metric_original_grid(coord_x_orig: pt.Tensor, coord_y_orig: pt.Tensor, metric_orig: pt.Tensor,
@@ -206,9 +177,8 @@ if __name__ == "__main__":
     l2_space_orig = pt.linalg.norm(orig_field, ord=2, dim=1)
 
     # get all the generated grids in the directory
-    files_hdf = sorted(glob(join(load_path, f"*_{field_name}.h5")),
-                       key=lambda x: float(x.split("_")[-2].split(".h5")[0]))
-    variances = [f.split("_")[-2].split(".pt")[0] for f in files_hdf]
+    files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
+    variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
 
     # create empty lists for L2-errors vs. metrics
     error_time_vs_metric, error_total_vs_metric = [], []
@@ -218,19 +188,16 @@ if __name__ == "__main__":
 
     for v, h in zip(variances, files_hdf):
         # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix
-        data = construct_data_matrix_from_hdf5(h, field_name)
-
-        # compute the cell areas (2D) / volumes (3D) for the interpolated field
-        cell_area_inter = get_cell_area(load_path, f"OAT15_{area}_area_variance_{v}_{field_name}", xz.size(-1),
-                                        data["levels"]).sqrt()
+        dataloader = Dataloader("/".join(h.split("/")[:-1]), h.split("/")[-1])
+        cell_area_inter = dataloader.weights.sqrt()
 
         # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
-        # plot_grid_and_metric(data["faces"], data["vertices"], xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
-        #                      save_path_results, geometry_=geometry)
+        plot_grid_and_metric(dataloader.faces, dataloader.nodes, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
+                             save_path_results, geometry_=geometry)
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine
-        knn.fit(data["coordinates"], data[f"{field_name}"])
+        knn.fit(dataloader.vertices, dataloader.load_snapshots(field_name))
         fields_fitted = pt.from_numpy(knn.predict(xz)) * cell_area_orig
 
         # compute the L2 error wrt time and normalize it with number of time steps

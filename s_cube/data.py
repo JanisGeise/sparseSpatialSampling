@@ -270,7 +270,7 @@ class Datawriter:
     https://github.com/FlowModelingControl/flowtorch/blob/main/flowtorch/data/hdf5_file.py
     """
 
-    def __init__(self, file_path: str, file_name: str, mode: str = "w"):
+    def __init__(self, file_path: str, file_name: str, mode: str = "w", mixed: bool = False):
         """
         initialize the h5py file writer
 
@@ -278,9 +278,12 @@ class Datawriter:
         :param file_name: name of the HDF5 file (incl. ending, e.g., data.h5)
         :param mode: either 'w' for creating a new file (and overwriting existing files with the same name) or 'a' to
                      append to an existing HDF file. The mode can be changed once the object is instantiated.
+        :param mixed: flag that the grid ist from type 'Mixed' (in case of unstructured grid which wasn't created with
+                      S^3); only relevant for writing the XDMF file
         """
         self._file_name = file_name
         self._mode = mode
+        self._mixed = mixed
         self._file_path = file_path
         self._file = File(join(self._file_path, self._file_name), self._mode)
 
@@ -296,6 +299,17 @@ class Datawriter:
         :return: None
         """
         self._file.close()
+
+    def write_grid(self, loader: Dataloader) -> None:
+        """
+        Write the grid for a new HDF5 file based on a given dataloader
+
+        :param loader: Dataloder instance containing the path to the HDF file from which the grid should be loaded
+        :return: None
+        """
+        self.write_data("centers", group="grid", data=loader.vertices)
+        self.write_data("vertices", group="grid", data=loader.nodes)
+        self.write_data("faces", group="grid", data=loader.faces)
 
     def write_data(self, name: str, data: any, group: str = "constant",
                    time_step: Union[int, float, str] = None) -> None:
@@ -366,7 +380,7 @@ class Datawriter:
 
         # if yes, generate an XDMF file based on the contents of the HDF5 file
         logger.info(f"Writing XDMF file for file {self._file_name}")
-        xdmf_writer = XDMFWriter(self._file_path, self._file_name)
+        xdmf_writer = XDMFWriter(self._file_path, self._file_name, mixed=self._mixed)
         xdmf_writer.write_xdmf()
 
     @property
@@ -387,16 +401,19 @@ class XDMFWriter:
     """
     implements class for generating an XDMF file based on a given HDF5 file from S^3
     """
-    def __init__(self, file_path: str, file_name: str, grid_name: str = "grid_s_cube"):
+    def __init__(self, file_path: str, file_name: str, grid_name: str = "grid_s_cube", mixed: bool = False):
         """
         initializes the XDMFWriter class
 
         :param file_path: path to the HDF5 file for which the XDMF file should be created
         :param file_name: name of the HDF5 file (incl. ending, e.g., data.h5)
         :param grid_name: name of the grid (only used inside the XDMF)
+        :param mixed: flag that the grid ist from type 'Mixed' (in case of unstructured grid which wasn't created with
+                      S^3); only relevant for writing the XDMF file
         """
         self._file_path = file_path
         self._grid_name = grid_name
+        self._mixed = mixed
         self._hdf_file_name = file_name
         self._file = File(join(self._file_path, self._hdf_file_name), "r")
         self._header = '<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n'
@@ -417,7 +434,10 @@ class XDMFWriter:
         self._n_vertices = self._file.get(f"{GRID}/{VERTICES}")[()].shape[0]
 
         # grid type and dimensions
-        self._grid_type = "Quadrilateral" if self._n_dimensions == 2 else "Hexahedron"
+        if self._mixed:
+            self._grid_type = "Mixed"
+        else:
+            self._grid_type = "Quadrilateral" if self._n_dimensions == 2 else "Hexahedron"
         self._dims = "XY" if self._n_dimensions == 2 else "XYZ"
 
     def write_xdmf(self) -> None:
@@ -455,12 +475,14 @@ class XDMFWriter:
 
             # loop over all available time steps and write all specified data to XDMF & HDF5 files, since we have the
             # HDMF5 file written completely for all specified snapshots, we can now iterate over all time steps
-            for i, t in enumerate(self._file.get(DATA).keys()):
+            for i, t in enumerate(sorted(self._file.get(DATA).keys(), key=lambda x: float(x))):
                 # write grid specific header
                 tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
                       f'<Topology TopologyType="{self._grid_type}" NumberOfElements="{self._n_faces}">\n' \
-                      f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
-                      f'{pow(2, self._n_dimensions)}">\n'
+                      f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces}'
+
+                # the number of dimensions depends on the grid type
+                tmp += '>\n' if self._mixed else f' {pow(2, self._n_dimensions)}">\n'
                 f_out.write(tmp)
 
                 # include the grid data from the HDF5 file
@@ -523,9 +545,11 @@ class XDMFWriter:
         :return: None
         """
         _grid_header = f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Uniform">\n' \
-                         f'<Topology TopologyType="{self._grid_type}" NumberOfElements="{self._n_faces}">\n' \
-                         f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces} ' \
-                         f'{pow(2, self._n_dimensions)}">\n'
+                       f'<Topology TopologyType="{self._grid_type}" NumberOfElements="{self._n_faces}">\n' \
+                       f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces}'
+
+        # the number of dimensions depends on the grid type
+        _grid_header += '">\n' if self._mixed else f' {pow(2, self._n_dimensions)}">\n'
 
         # write the corresponding XDMF file
         with open(join(self._file_path, self._xdmf_file_name), "w") as f_out:

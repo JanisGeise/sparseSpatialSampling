@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from os.path import join
 from os import path, makedirs
 
-from post_processing.plot_results_parameter_study_variance import load_results
+from plot_results_parameter_study_variance import load_results
 
 
 def plot_execution_times(_data: list, _save_path: str, case: list, save_name: str = "t_exec_vs_metric") -> None:

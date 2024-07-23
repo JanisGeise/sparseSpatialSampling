@@ -9,7 +9,8 @@ from os import path, makedirs
 from matplotlib.patches import Polygon
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
-from compute_error import load_airfoil_as_stl_file, construct_data_matrix_from_hdf5
+from s_cube.data import Dataloader
+from compute_error import load_airfoil_as_stl_file
 
 # increase resolution
 plt.rcParams['figure.dpi'] = 640
@@ -65,7 +66,9 @@ if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     field_name = "p"
     area = "small"
-    file_name = f"OAT15_{area}_area_variance_0.95_{field_name}.h5"
+    file_name = f"OAT15_{area}_area_variance_0.75.h5"
+
+    # paths to the file and the directory in which the animation should be saved in
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
                      f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
     save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
@@ -90,7 +93,8 @@ if __name__ == "__main__":
 
     # load the field created by S^3. In case the data is not fitting into the RAM all at once, then the data has to be
     # loaded as it is done in the fit method of S^3's export routine
-    data = construct_data_matrix_from_hdf5(join(load_path, file_name), field_name)
+    dataloader = Dataloader(load_path, file_name)
+    data = dataloader.load_snapshots(field_name)
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -100,6 +104,6 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # create animation of fields
-    ani = compare_fields(xz, data["coordinates"], field_orig, data[f"{field_name}"], len(times), geometry_=geometry)
+    ani = compare_fields(xz, dataloader.vertices, field_orig, data, len(times), geometry_=geometry)
     writer = FFMpegWriter(fps=40)
     ani.save(join(save_path_results, f"comparison_flow_fields_{field_name}.mp4"), writer=writer)

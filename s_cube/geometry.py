@@ -72,7 +72,8 @@ class CubeGeometry(GeometryObject):
                                                                f"{cell_nodes.size(-1)} values, found "
                                                                f"{len(self._lower_bound)} for geometry {self.name}.")
 
-        # create a mask
+        # create a mask, the mask is expected to be always False outside the geometry and always True inside it
+        # (independently if it is a geometry or domain)
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
 
         # check if the cell is valid or invalid
@@ -151,7 +152,8 @@ class SphereGeometry(GeometryObject):
                                                             f"{cell_nodes.size(-1)} values, found "
                                                             f"{len(self._position)} for geometry {self.name}.")
 
-        # create a mask
+        # create a mask, the mask is expected to be always False outside the geometry and always True inside it
+        # (independently if it is a geometry or domain)
         mask = mask_sphere(cell_nodes, self._position, self._radius)
 
         # check if the cell is valid or invalid
@@ -214,7 +216,8 @@ class GeometryCoordinates2D(GeometryObject):
         :rtype: bool
         """
         # Create a mask. We can't compute this for all nodes at once, because within() method only returns a single
-        # bool, but we need to have a bool for each node
+        # bool, but we need to have a bool for each node. The mask is expected to be always False outside the geometry
+        # and always True inside it (independently if it is a geometry or domain)
         mask = tensor([Point(cell_nodes[i, :]).within(self._coordinates) for i in range(cell_nodes.size(0))])
 
         # check if the cell is valid or invalid
@@ -274,6 +277,9 @@ class GeometrySTL3D(GeometryObject):
         # for 3D geometries represented by STL files, we need to mask using pyVista; here we don't check for closed
         # surface since we already did that on initialization
         n = PolyData(cell_nodes.tolist())
+
+        # create a mask, the mask is expected to be always False outside the geometry and always True inside it
+        # (independently if it is a geometry or domain)
         mask = tensor(n.select_enclosed_points(self._stl_file, check_surface=False)["SelectedPoints"]).bool()
 
         # check if the cell is valid or invalid

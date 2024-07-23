@@ -7,9 +7,6 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
 ## Getting started
 
-**Note: the code is currently refactored (in progress) to improve its usability.** 
-The documentation as well as the code basis will be updated once the refactoring is completed.
-
 ### Overview
 The repository contains the following directories:
 
@@ -34,9 +31,9 @@ The general workflow will be explained more detailed below. Currently, $S^3$ can
 can be used for loading the cell centers
 
 ### 2. Computing a metric
-- a metric for each cell has to be computed, the metric itself depends on the goal. For example, to capture variances over time,
-the standard deviation of the velocity field with respect to time can be used as a metric (refer to examples in the 
-`examples` directory).
+- a metric for each cell has to be computed, the metric itself depends on the goal. For example, to capture variances 
+over time, the standard deviation of the velocity field with respect to time can be used as a metric (refer to examples 
+in the `examples` directory).
 - the metric has to be a 1D tensor in the shape of `[N_cells, ]`
 
 ### 3. Providing the numerical domain and geometries
@@ -57,8 +54,8 @@ geometry object indicating that the points inside the object should be kept as g
 #### Adding geometries:
 - there can be added as many geometries as required to avoid generating a grid in areas where a geometry in 
 the CFD simulation is present
-- for all geometries, which are not domains, `keep_inside = False` has to be set indicating that there shouldn't be cells
-generated inside these objects
+- for all geometries, which are not domains, `keep_inside = False` has to be set indicating that there shouldn't be 
+cells generated inside these objects
 
 For more information on the required format of the input dicts it is referred to `s_cube.geometry` or the
 provided `examples`.
@@ -99,34 +96,39 @@ Once the numerical domain and optional geometries are defined, we can execute $S
     s_cube.execute_grid_generation()
 
 ### Interpolation of the original CFD data
-- once the grid is generated, the original fields from CFD can be interpolated onto this grid by calling the `fit_data` 
-method of the `DataWriter` instance
-- therefore, each field that should be interpolated has to be provided as tensor with the size `[n_cells, n_dimensions, n_snapshots]`.
+- once the grid is generated, the original fields from CFD can be interpolated onto this grid using the `ExportData` 
+class
+- therefore, each field that should be interpolated has to be provided as tensor with the size 
+`[n_cells, n_dimensions, n_snapshots]`.
 - a scalar field has to be of the size `[n_cells, 1, n_snapshots]`
 - a vector field has to be of the size `[n_cells, n_entries, n_snapshots]`
-- the snapshots can either be passed into `fit_data` method all at once, in batches, or each snapshot separately
+- the snapshots can either be passed into `export` method all at once, in batches, or each snapshot separately
 depending on the size of the dataset and available RAM (refer to section memory requirements). 
+- for data from `OpenFoam`, the function `export_openfoam_fields` in `s_cube.utils` can be used to either 
+export all snapshots for a given list of fields at once or snapshot-by-snapshot (more convenient)
 
 example for interpolating and exporting a field:
 
-    # times are the time steps of the simulation, need to be either a str or a list[str]
-    export.times = times
+    from s_cube.export import ExportData
+
+    # create export instance, export all fields into the same HFD5 file and create single XDMF from it
+    export = ExportData(s_cube, write_new_file_for_each_field=False)
+
+    # write_times are the time steps of the simulation, need to be either a str or a list[int | float | str]
+    export.write_times = times
     export.export(cooridnates, snapshots_original_field, field_name)
 
-
-An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
+After the export of fields is completed, an XDMF file is written automatically for visualizing the results, e.g., in 
+Paraview. An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
 `examples/s3_for_surfaceMountedCube_large.py` (for large datasets, which are not fitting into the RAM all at once).
 
-### Results & output files (TODO: update)
-- once the original fields are interpolated onto the new grid, they can be saved to a HDMF file calling the 
-`export()` method of the `DataWriter` class
-- for data from `OpenFoam`, the function `export_openfoam_fields` in `execute_grid_generation` can be used to either 
-export all snapshots for a given list of fields at once or snapshot-by-snapshot (more convenient)
+### Results & output files
 - the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
-- one HDMF & XDMF file is created for each field
+- either one HDMF & XDMF file is created for each field, or all fields are saved into a single file, which can be set
+via the argument `write_new_file_for_each_field` of the `ExportData` class
 - additionally, a `mesh_info` file containing a summary of the refinement process and mesh characteristics is saved
-- once the grid generation is completed, the `DataWriter`instance is saved. This avoids the necessity to execute the 
-grid generation again in case additional fields should be interpolated afterward
+- once the grid generation is completed, the instance of the `sparseSpatialSampling` class is saved. This avoids the 
+necessity to execute the grid generation again in case additional fields should be interpolated afterward
 
 ### Executing $S^3$
 #### Local machine
@@ -191,25 +193,48 @@ An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation 
 An [example jobscript](https://github.com/JanisGeise/sparseSpatialSampling/blob/main/example_jobscript) for the
 [Barnard](https://compendium.hpc.tu-dresden.de/jobs_and_resources/barnard/) HPC of TU Dresden is provided.
 
-### Performing an SVD (TODO: update)
-Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
+### Performing an SVD
+Once the grid is generated and a field is interpolated, e.g., an SVD from this field can be computed:
+
+    # import function for computing SVD (optional)
+    from s_cube.utils import compute_svd
 
     # instantiate DataLoader
-    loader = DataLoader()
+    dataloader = DataLoader(load_direcotry, file_name)
 
     # load the data matrix from the HDF5 file
-    loader.load_data(path_to_the_hdf5_file, file_name, field_name)
+    data_amtrix = dataloader.load_snapshots(field_name)
 
-    # compute the SVD
-    loader.compute_svd()
+    # compute the SVD using the provided function, alternativley other libraries etc. can be used
+    s, U, V = compute_svd(dm_u, dataloader.weights, rank)
 
-    # write the results of the SVD to HDF5 & XDMF
-    loader.write_data(save_path, save_name)
+    # instantiate a datawriter
+    datawriter = Datawriter(save_directory, file_name)
 
-The modes, singular values and mode coefficients are saved in an extra HDF5 and XDMF file. The singular values and mode 
-coefficients are not referenced in the XDMF file. The singular values as well as the mode coefficients are saved in full
-whereas the modes are only saved up to the optimal rank (if not specified otherwise). Prior to performing the SVD,
-the fields are weighted with the cell areas to improve the accuracy and comparability.
+    # write the grid using the dataloader
+    datawriter.write_grid(dataloader)
+
+    # write the modes (here for a scalar field)
+    for i in range(n_modes):
+      datawriter.write_data(f"mode_{i + 1}", group="constant", data=U[:, i].squeeze())
+
+    # write the rest as tensor (not referenced in XDMF file anyway)
+    datawriter.write_data("V", group="constant", data=V)
+    datawriter.write_data("s", group="constant", data=s)
+
+    # write XDMF file for visualizing the modes
+    datawriter.write_xdmf_file()
+
+Alternatively, a wrapper function located in `examples/s3_for_cylinder2D.py` can be used for convinience as:
+
+    from s3_for_cylinder2D import write_svd_s_cube_to_file
+
+    # compute SVD on grid generated by S^3 and export the results to HDF5 & XDMF
+    write_svd_s_cube_to_file(field_names, save_path, save_name, new_file, n_modes)
+
+In all cases, the singular values and mode coefficients are not referenced in the XDMF file since they don't match the 
+size of the field. Prior to performing the SVD, the fields are weighted with the cell areas to improve the accuracy and 
+comparability. The `Datawriter` class can be used to write other data to HDF5 and XDMF as well (here only shown for an SVD).
 
 ## General notes
 ### Memory requirements
@@ -231,7 +256,7 @@ highly depends on the chosen metric. In most cases, the number of cells will sca
 The available RAM has to be large enough to hold all snapshots of the interpolated field as well as additional memory to
 perform the SVD.
 
-### Reaching the specified target metric (TODO: update)
+### Reaching the specified target metric
 - if the target metric is not reached with sufficient accuracy, the parameter `n_cells_iter_start` and
 `n_cells_iter_end` have to be decreased. If none provided, they are automatically set to:  
   
@@ -240,13 +265,14 @@ perform the SVD.
 
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
-so unless a high resolution of geometries is required, it is recommended to set `_refine_geometry = False`
-- if the error between the original fields and the interpolated ones is still too large (despite `_refine_geometry = True`), 
+so unless a high resolution of geometries is required, it is recommended to leave `refine = False` when instantiating a 
+geometry object
+- if the error between the original fields and the interpolated ones is still too large (despite `refine = True`), 
 the following steps can be performed for improvement:
-  - the refinement level of the geometries can be increased by setting `_min_level_geometry` to a larger value. By default,
-all geometries are refined with the max. cell level present at the geometry after the adaptive refinement. When providing a
-value for the refinement level, all geometry objects will be refined with this level
-  - activate the delta level constraint by setting `_max_delta_level = True`
+  - the refinement level of each geometry can be increased by increasing `min_refinement_level` to a larger value. 
+  By default, all geometries are refined with the max. cell level present at the geometry after the adaptive refinement.
+  When providing a value for the refinement level, all geometry objects will be refined with this specified level
+  - activate the delta level constraint by setting `max_delta_level = True` when instantiating the `sparseSpatialSampling` class
   - additionally, a second metric can be added, increasing the weight of areas near geometries (e.g., adding the influence
   of the shear stress to the existing metric)
 
