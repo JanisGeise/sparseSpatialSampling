@@ -28,7 +28,7 @@ class Fields:
 
 
 class ExportData:
-    def __init__(self, s_cube: SparseSpatialSampling, write_new_file_for_each_field: bool = True):
+    def __init__(self, s_cube: SparseSpatialSampling, write_new_file_for_each_field: bool = False):
         self._new_file = write_new_file_for_each_field
 
         # properties we get from the s_cube object

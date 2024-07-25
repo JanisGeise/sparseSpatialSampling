@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine
-        knn.fit(dataloader.vertices, dataloader.load_snapshots(field_name))
+        knn.fit(dataloader.vertices, dataloader.load_snapshot(field_name))
         fields_fitted = pt.from_numpy(knn.predict(xz)) * cell_area_orig
 
         # compute the L2 error wrt time and normalize it with number of time steps

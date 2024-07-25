@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     # field from generated grid & compute the cell areas (2D) / volumes (3D) for the interpolated field
     dataloader = Dataloader(load_path, file_name)
-    interpolated_field = dataloader.load_snapshots(field_name)
+    interpolated_field = dataloader.load_snapshot(field_name)
     cell_area_inter = dataloader.weights.sqrt().unsqueeze(-1)
 
     # scale with cell area

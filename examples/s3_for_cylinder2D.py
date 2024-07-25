@@ -61,7 +61,7 @@ def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_
         dataloader = Dataloader(load_dir, f"{_name}.h5")
 
         # assemble a datamatrix for computing an SVD
-        dm_u = dataloader.load_snapshots(f)
+        dm_u = dataloader.load_snapshot(f)
 
         # perform an SVD weighted with cell areas
         s, U, V = compute_svd(dm_u, dataloader.weights, rank)

@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     # field from generated grid
     dataloader = Dataloader(load_path, file_name)
-    interpolated_field = dataloader.load_snapshots(field_name)
+    interpolated_field = dataloader.load_snapshot(field_name)
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]

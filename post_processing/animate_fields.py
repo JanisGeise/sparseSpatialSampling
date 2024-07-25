@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # load the field created by S^3. In case the data is not fitting into the RAM all at once, then the data has to be
     # loaded as it is done in the fit method of S^3's export routine
     dataloader = Dataloader(load_path, file_name)
-    data = dataloader.load_snapshots(field_name)
+    data = dataloader.load_snapshot(field_name)
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
