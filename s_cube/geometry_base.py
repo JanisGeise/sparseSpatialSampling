@@ -55,7 +55,7 @@ class GeometryObject(ABC):
         :rtype: bool
         """
         if not refine_geometry:
-            # any(~geometry), because mask returns False if we are outside, but we want True if we are outside
+            # any(~mask), because mask returns False if we are outside, but we want True if we are outside
             if not self._keep_inside:
                 if any(~mask):
                     invalid = False
@@ -69,18 +69,19 @@ class GeometryObject(ABC):
                 else:
                     invalid = True
 
-        # otherwise, we want to refine all cells that have at least one node in the geometry / outside the domain
+        # otherwise, we want to refine all cells that have at least one node in the geometry / outside the domain.
         else:
+            # add all cells that have at least one node inside the geometry
             if not self._keep_inside:
-                if all(~mask):
-                    invalid = False
-                else:
+                if any(mask):
                     invalid = True
+                else:
+                    invalid = False
             else:
-                if all(mask):
-                    invalid = False
-                else:
+                if all(~mask):
                     invalid = True
+                else:
+                    invalid = False
 
         return invalid
 

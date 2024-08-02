@@ -603,16 +603,20 @@ class SamplingTree(object):
             if any(invalid):
                 cells_invalid.add(self._cells[cell])
                 idx.add(cell)
-                self._cells[cell].children, self._cells[cell].gain = [], 0
 
-        # if we didn't find any invalid cells, we are done here, lse we need to reset the nb of the cells affected by
+                # deactivate children by using an empty list, because a cell is seen as leaf cell if children = None
+                # but if we just want to get the idx for refining geometries, we don't want to deactivate the cell
+                self._cells[cell].children = None if _refine_geometry else []
+                self._cells[cell].gain = 0
+
+        # if we didn't find any invalid cells, we are done here, else we need to reset the nb of the cells affected by
         # the removal of the masked cells
         if cells_invalid == set():
             return
         elif _refine_geometry:
             return idx
         else:
-            # loop over all cells and check all neighbors for each cell, if invalid, replace with None
+            # loop over all cells and check all neighbors for each cell, if invalid, replace it with None
             for cell in self._leaf_cells:
                 self._cells[cell].nb = [None if n in cells_invalid else n for n in self._cells[cell].nb]
 
@@ -629,7 +633,7 @@ class SamplingTree(object):
         logger.info("Starting renumbering final mesh.")
         self._times["t_start_renumber"] = time()
 
-        _all_idx = pt.tensor([cell.node_idx for i, cell in enumerate(self._cells) if cell.leaf_cell()]).int()
+        _all_idx = pt.tensor([cell.node_idx for cell in self._cells if cell.leaf_cell()]).int()
         _unique_idx = _all_idx.flatten().unique()
 
         # the initial cell is not in the list, so add it manually
@@ -722,19 +726,23 @@ class SamplingTree(object):
                 self._cells.extend(new_cells)
                 self._update_leaf_cells()
                 self._update_gain()
-                self.remove_invalid_cells([c.index for c in new_cells])
+                _idx_new = [c.index for c in new_cells]
+                self.remove_invalid_cells(_idx_new, _geometry_no=g)
 
-                # update '_all_cells', we can't just use 'new_cells', because we always add the nb to ensure that the nb
-                # have the same level. after every iteration, we need to check again which of the refined cells are in
-                # the vicinity of the geometry
-                _all_cells = set(self.remove_invalid_cells([c.index for c in new_cells if c is not None],
-                                                           _refine_geometry=True, _geometry_no=_geometries))
+                # update '_all_cells' after every iteration, we need to check again which of the refined cells are in
+                # the vicinity of the geometry; we use only valid cells because otherwise we would mark the invalid
+                # cells as leaf cells (because kwarg _refine_geometry)
+                _all_cells = set(self.remove_invalid_cells([i for i in _idx_new if self._cells[i].children is None],
+                                                           _refine_geometry=True, _geometry_no=g))
 
                 # update the min. level
                 _global_min_level += 1
 
         # we need to update the leaf cells, because otherwise the levels are not assigned correctly for some reason
         self._update_leaf_cells()
+
+        # update the global max. level
+        self._current_max_level = max([self._cells[cell].level for cell in self._leaf_cells])
         logger.info("Finished geometry refinement.")
 
     def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor = None, new_idx: int = None,

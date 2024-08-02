@@ -100,7 +100,7 @@ if __name__ == "__main__":
     save_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "cylinder2D", "results")
 
     # how much of the metric within the original grid should be captured at least
-    min_metric = 0.2
+    min_metric = 0.75
     save_name = "metric_{:.2f}".format(min_metric) + "_cylinder_full_domain"
 
     # boundaries of the masked domain for the cylinder
@@ -116,7 +116,7 @@ if __name__ == "__main__":
 
     # create a S^3 instance
     s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
-                                   "cylinder2D", min_metric=min_metric, write_times=write_times, max_delta_level=True)
+                                   "cylinder2D", min_metric=min_metric, write_times=write_times)
 
     # execute S^3
     s_cube.execute_grid_generation()

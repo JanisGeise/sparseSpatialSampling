@@ -58,7 +58,7 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
 
         # in case the time steps are not provided as list[str], convert them into list[str]
         if type(_write_times[0]) is not str:
-            _write_times = map(str, _write_times)
+            _write_times = list(map(str, _write_times))
 
         # in case there are no fields specified, take all available fields
         if _field_names is None:

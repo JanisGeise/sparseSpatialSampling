@@ -49,9 +49,8 @@ def plot_reconstructed_fields(coord_orig: pt.tensor, coord_inter: pt.Tensor, fie
 
     fig, ax = plt.subplots(3, 2, sharex="all", sharey="all")
     tcf1 = ax[0][0].tricontourf(coord_orig[:, 0], coord_orig[:, 1], field_orig[:, t_i], levels=levels)
-    tcf2 = ax[1][0].tricontourf(coord_orig[:, 0], coord_orig[:, 1], field_dmd_orig[:, t_i], levels=levels)
-    tcf3 = ax[2][0].tricontourf(coord_orig[:, 0], coord_orig[:, 1], field_orig[:, t_i] - field_dmd_orig[:, t_i],
-                                levels=levels)
+    ax[1][0].tricontourf(coord_orig[:, 0], coord_orig[:, 1], field_dmd_orig[:, t_i], levels=levels)
+    ax[2][0].tricontourf(coord_orig[:, 0], coord_orig[:, 1], field_orig[:, t_i] - field_dmd_orig[:, t_i], levels=levels)
     ax[0][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], field_inter[:, t_i], levels=levels)
     ax[1][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], field_dmd_inter[:, t_i], levels=levels)
     ax[2][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], field_inter[:, t_i] - field_dmd_inter[:, t_i],
@@ -77,7 +76,7 @@ if __name__ == "__main__":
     # which fields and settings to use
     field_name = "p"
     area = "small"
-    metric = "0.75"
+    metric = 0.95
 
     # parameter for scaling the reconstructed fields, e.g., pressure / Mach number of free stream
     param_infinity = 75229.6
@@ -85,7 +84,7 @@ if __name__ == "__main__":
 
     # path to the HDF5 file
     load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint_TEST")
     file_name = f"OAT15_{area}_area_variance_{metric}.h5"
 
     # path to the directory to which the plots should be saved to
@@ -126,14 +125,19 @@ if __name__ == "__main__":
     if not path.exists(save_path_results):
         makedirs(save_path_results)
 
-    # perform DMD, note: the modes are not sorted based on their integral contribution (yet)
+    # perform DMD
     rank = 50
     dmd_orig = DMD(orig_field, dt=times[1] - times[0], rank=rank)
     dmd_inter = DMD(interpolated_field, dt=times[1] - times[0], rank=rank)
 
+    # sort the modes based on their integral contribution (every 2nd because we have complex-conjugated pairs and start
+    # at 1 to ignore the mean)
+    modes_orig_sorted = dmd_orig.modes[:, pt.argsort(dmd_orig.integral_contribution, descending=True)].real[:, 1::2]
+    modes_inter_sorted = dmd_inter.modes[:, pt.argsort(dmd_inter.integral_contribution, descending=True)].real[:, 1::2]
+
     # plot the first few modes
-    plot_dmd_modes(xz, dataloader.vertices, dmd_orig.modes.real, dmd_inter.modes.real, save_path_results,
-                   f"comparison_dmd_modes_metric_{metric}_rank_{rank}", _geometry=geometry)
+    plot_dmd_modes(xz, dataloader.vertices, modes_orig_sorted, modes_inter_sorted, save_path_results,
+                   f"comparison_dmd_modes_metric_{metric}_rank_{rank}_TEST", _geometry=geometry)
 
     # plot original, reconstructed data and their error and scale with free stream quantity
     orig_field /= param_infinity
@@ -145,4 +149,4 @@ if __name__ == "__main__":
                               dmd_orig.reconstruction.real / cell_area_orig,
                               dmd_inter.reconstruction.real / cell_area_inter,
                               save_path_results, f"comparison_reconstructed_fields_dmd_metric_{metric}_rank_{rank}_t_"
-                              + "{:.4f}.png".format(times[100]), t_i=100, label=r"$p / p_{\infty}$", _geometry=geometry)
+                              + "{:.4f}_TEST.png".format(times[100]), t_i=100, label=r"$p / p_{\infty}$", _geometry=geometry)
