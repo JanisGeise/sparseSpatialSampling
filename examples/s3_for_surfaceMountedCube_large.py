@@ -65,18 +65,14 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
             # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
             mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
 
-            # allocate empty tensors for avg. field and avg. TKE
+            # allocate empty tensors for avg. field
             avg_field = pt.zeros((xyz.size(0), 3))
-            avg_tke = pt.zeros((xyz.size(0),))
         else:
             avg_field = pt.zeros((xyz.size(0),))
 
-        # the std. tensor is always 1D
-        std_field = pt.zeros((xyz.size(0),))
-
         # compute the avg. wrt time
         for t_i in write_times:
-            logger.info(f"Loading time step {t_i} for computing the avg.")
+            logger.info(f"Loading time step {t_i} / {write_times[-1]} for computing the avg. field")
 
             # load the specified field
             if scalar:
@@ -86,28 +82,29 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
                 avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask).reshape(mask.size())
         avg_field /= len(write_times)
 
-        # compute the avg. TKE
+        # compute the TKE (vector field) or the std. dev. of the field (scalar field)
         if not scalar:
+            avg_tke = pt.zeros((xyz.size(0),))
             for t_i in write_times:
-                logger.info(f"Loading time step {t_i} for computing the avg. TKE")
+                logger.info(f"Loading time step {t_i} / {write_times[-1]} for computing the TKE")
+                # TKE = 0.5 * (u'^2 + v'^2 + w'^2), with U' = 1 / N sum_i_N((U_i - U_mean)^2)
                 avg_tke += 0.5 * (pt.masked_select(loader.load_snapshot(_field_name, t_i),
                                                    mask).reshape(mask.size()) - avg_field).pow(2).sum(1)
             avg_tke /= len(write_times)
 
-        # compute the standard deviation wrt time
-        for t_i in write_times:
-            logger.info(f"Loading time step {t_i} for computing the std.")
+            return xyz, avg_tke, write_times
 
-            # load the specified field
-            if scalar:
+        else:
+            # the std. tensor is always 1D
+            std_field = pt.zeros((xyz.size(0),))
+
+            # compute the standard deviation wrt time
+            for t_i in write_times:
+                logger.info(f"Loading time step {t_i} for computing the std. dev.")
                 std_field += (pt.masked_select(loader.load_snapshot(_field_name, t_i), mask) - avg_field).pow(2)
-            else:
-                tke_i = 0.5 * (pt.masked_select(loader.load_snapshot(_field_name, t_i), mask).reshape(mask.size())
-                               - avg_field).pow(2).sum(1)
-                std_field += (tke_i - avg_tke).pow(2)
-        std_field /= len(write_times)
+            std_field /= len(write_times)
 
-        return xyz, std_field.sqrt(), write_times
+            return xyz, std_field.sqrt(), write_times
 
     else:
         return xyz, write_times
@@ -162,7 +159,7 @@ if __name__ == "__main__":
     load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
     # load_path = join("..", "data", "3D", "surfaceMountedCube", "fullCase")
     # save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
-    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_test_TKE_new")
+    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_TKE")
 
     # for which field should we compute the metric?
     field_name = "U"
@@ -179,7 +176,7 @@ if __name__ == "__main__":
     compute_metric = True
     save_name_metric = "metric_std_TKE" if field_name == "U" else "metric_std_pressure"
 
-    # load the CFD data in the given boundaries (full domain) and compute the metric (std(p)) snapshot-by-snapshot
+    # load the CFD data in the given boundaries (full domain) and compute the metric snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
 
     # load the vertices and write times, compute / load the metric
