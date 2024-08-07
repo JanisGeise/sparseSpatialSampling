@@ -31,9 +31,10 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
     Load the vertices within the given boundaries and write times of the original simulation. If specified, compute the
     metric as standard deviation wrt time of the loaded field as:
 
-        std = sqrt(1/N sum(x_i - mu)^2)
+        std = sqrt(1/N sum((x_i - mu)^2))
 
-    If the loaded field is a vector field, the standard deviation of its L2-norm (wrt to dimensions) will be computed.
+    If the loaded field is a vector field, the turbulent kinetic energy will be computed (it is assumed that the only
+    available vector field is the velocity field)
 
     :param load_dir: path to the simulation data
     :param boundaries: list with list containing the upper and lower boundaries of the mask
@@ -60,13 +61,18 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
     del vertices
 
     if _compute_metric:
-        # allocate empty tensors for avg. and std.
-        avg_field = pt.zeros((xyz.size(0),))
-        std_field = pt.zeros((xyz.size(0),))
-
         if not scalar:
             # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
             mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
+
+            # allocate empty tensors for avg. field and avg. TKE
+            avg_field = pt.zeros((xyz.size(0), 3))
+            avg_tke = pt.zeros((xyz.size(0),))
+        else:
+            avg_field = pt.zeros((xyz.size(0),))
+
+        # the std. tensor is always 1D
+        std_field = pt.zeros((xyz.size(0),))
 
         # compute the avg. wrt time
         for t_i in write_times:
@@ -77,9 +83,16 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
                 avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask)
             else:
                 # for vector fields, we use the magnitude
-                avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i),
-                                              mask).reshape(mask.size()).pow(2).sum(1).sqrt()
+                avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask).reshape(mask.size())
         avg_field /= len(write_times)
+
+        # compute the avg. TKE
+        if not scalar:
+            for t_i in write_times:
+                logger.info(f"Loading time step {t_i} for computing the avg. TKE")
+                avg_tke += 0.5 * (pt.masked_select(loader.load_snapshot(_field_name, t_i),
+                                                   mask).reshape(mask.size()) - avg_field).pow(2).sum(1)
+            avg_tke /= len(write_times)
 
         # compute the standard deviation wrt time
         for t_i in write_times:
@@ -89,9 +102,9 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
             if scalar:
                 std_field += (pt.masked_select(loader.load_snapshot(_field_name, t_i), mask) - avg_field).pow(2)
             else:
-                _mag_field = pt.masked_select(loader.load_snapshot(_field_name, t_i),
-                                              mask).reshape(mask.size()).pow(2).sum(1).sqrt()
-                std_field += (_mag_field - avg_field).pow(2)
+                tke_i = 0.5 * (pt.masked_select(loader.load_snapshot(_field_name, t_i), mask).reshape(mask.size())
+                               - avg_field).pow(2).sum(1)
+                std_field += (tke_i - avg_tke).pow(2)
         std_field /= len(write_times)
 
         return xyz, std_field.sqrt(), write_times
@@ -147,7 +160,9 @@ if __name__ == "__main__":
     # -----------------------------------------   execute for cube   -----------------------------------------
     # path to original surfaceMountedCube simulation
     load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
-    save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
+    # load_path = join("..", "data", "3D", "surfaceMountedCube", "fullCase")
+    # save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
+    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_test_TKE_new")
 
     # for which field should we compute the metric?
     field_name = "U"
@@ -162,7 +177,7 @@ if __name__ == "__main__":
 
     # compute the metric or load an existing one (we only have the velocity and pressure fields for this simulation)
     compute_metric = True
-    save_name_metric = "metric_std_mag_velocity" if field_name == "U" else "metric_std_pressure"
+    save_name_metric = "metric_std_TKE" if field_name == "U" else "metric_std_pressure"
 
     # load the CFD data in the given boundaries (full domain) and compute the metric (std(p)) snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -203,4 +218,4 @@ if __name__ == "__main__":
         export_fields_snapshot_wise(load_path, export, fields, bounds, times)
 
         # compute SVD on grid generated by S^3 and export the results to HDF5 & XDMF
-        write_svd_s_cube_to_file(["p", "U"], save_path, save_name, export.new_file, 50)
+        write_svd_s_cube_to_file([f for f in fields if "Mean" not in f], save_path, save_name, export.new_file, 50)

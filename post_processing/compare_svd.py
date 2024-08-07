@@ -32,7 +32,7 @@ def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: lis
         ax[0].plot(s[0][:n_values], label=legend[i])
         ax[1].plot(s[1])
     ax[1].set_xlabel(r"$no. \#$")
-    ax[0].set_ylabel(r"$\%$ $\sqrt{\sigma_i^2}$")
+    ax[0].set_ylabel(r"$\sqrt{\sigma_i^2}$")
     ax[1].set_ylabel(r"$cumulative$ $\%$")
     ax[1].set_xlim(0, n_values)
     ax[0].set_ylim(0, max([s[:n_values].max() for s in s_var]))
@@ -124,23 +124,25 @@ def plot_mode_coefficients(write_times, V: list, _save_path: str, _save_name: st
 
 if __name__ == "__main__":
     # which fields and settings to use
-    field_name = "p"
-    area = "small"
-    metric = "0.75"
+    field_name = "Ma"
+    area = "large"
+    metric = 0.95
 
     # path to the HDF5 file
-    load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                     "results_no_geometry_refinement_no_dl_constraint")
+    file_name = f"OAT15_{area}_area_variance_{metric}.h5"
 
     # path to the directory to which the plots should be saved to
-    file_name = f"OAT15_{area}_area_variance_{metric}.h5"
-    save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                             "plots_no_geometry_refinement_no_dl_constraint")
 
     # load the field of the original CFD data
-    # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-    #                           f"ma_{area}_every10.pt"))
-    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    if area == "large":
+        orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+                                  f"ma_{area}_every10.pt"))
+    else:
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
@@ -153,8 +155,10 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
-    # geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
-    #                 dimensions="xz"))
+
+    if area == "large":
+        geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+                        dimensions="xz"))
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
@@ -183,7 +187,8 @@ if __name__ == "__main__":
 
     # plot frequency spectrum
     plot_psd([svd_orig.V.numpy(), svd_inter.V.numpy()], (times[1] - times[0]).item(), len(times),
-             save_path_results, f"comparison_psd_metric_{metric}_weighted", legend=["$original$", "$interpolated$"])
+             save_path_results, f"comparison_psd_metric_{metric}_weighted", legend=["$original$", "$interpolated$"],
+             xlim=(0, 0.5))
 
     # plot singular values
     plot_singular_values([svd_orig.s, svd_inter.s], save_path_results,

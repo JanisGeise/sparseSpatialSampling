@@ -128,12 +128,12 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
-    field_name = "p"
-    area = "small"
-    load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
-    save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+    field_name = "Ma"
+    area = "large"
+    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                     "results_no_geometry_refinement_no_dl_constraint")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                             "plots_no_geometry_refinement_no_dl_constraint")
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
@@ -142,20 +142,22 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
-    # geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
-    #                 dimensions="xz"))
+    if area == "large":
+        geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+                        dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
-    # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-    # orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    if area == "large":
+        load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+        orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+    else:
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
     # compute the metric
     metric = pt.std(orig_field, dim=1)
 
     # scale both fields with free stream quantities
-    param_infinity = 75229.6        # free stream pressure
-    # param_infinity = 0.72         # free stream mach number
+    param_infinity = 75229.6 if field_name == "p" else 0.72
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -165,8 +167,8 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # plot the metric of the original grid
-    plot_metric_original_grid(xz[:, 0], xz[:, 1], metric / param_infinity, save_path_results, geometry_=geometry,
-                              field_=field_name)
+    # plot_metric_original_grid(xz[:, 0], xz[:, 1], metric / param_infinity, save_path_results, geometry_=geometry,
+    #                           field_=field_name)
 
     # weigh the field with its cell area
     orig_field *= cell_area_orig
@@ -192,8 +194,8 @@ if __name__ == "__main__":
         cell_area_inter = dataloader.weights.sqrt()
 
         # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
-        plot_grid_and_metric(dataloader.faces, dataloader.nodes, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
-                             save_path_results, geometry_=geometry)
+        # plot_grid_and_metric(dataloader.faces, dataloader.nodes, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
+        #                      save_path_results, geometry_=geometry)
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine
@@ -206,11 +208,18 @@ if __name__ == "__main__":
         error_total_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2) / l2_total_orig)
 
         # compute the L2-error of the metric for each cell (= wrt space) and normalize it with the number of cells
-        error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1) / l2_space_orig
+        if field_name == "Ma":
+            error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1)
+        else:
+            error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1) / l2_space_orig
 
         # plot the L2-error wrt each cell
-        plot_error_in_space(xz[:, 0], xz[:, 1], error_space_vs_metric, f"error_metric_{v}_{field_name}",
+        plot_error_in_space(xz[:, 0], xz[:, 1], error_space_vs_metric, f"error_metric_{v}_{field_name}_unscaled",
                             save_path_results, geometry_=geometry)
+
+    # save the errors
+    pt.save({"L2_error_time": error_time_vs_metric, "L2_error_total": error_total_vs_metric},
+            join(load_path, "l2_errors.pt"))
 
     # plot L2 error vs. time (each variance is a different line)
     plot_error_in_time(range(orig_field.size(-1)), error_time_vs_metric, variances, f"error_vs_t_and_metric_{field_name}",

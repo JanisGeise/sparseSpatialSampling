@@ -88,12 +88,12 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
                     if len(_field_size) == 1:
                         data[:, i] = pt.masked_select(loader.load_snapshot(field, t), mask)
                     else:
-                        # we always need to export all dimensions of a vector, because for 2D we don't know in which
+                        # we always need to export all dimensions of a vector, because for 2D we don't know on which
                         # plane the flow problem is defined
                         data[:, :, i] = pt.masked_select(loader.load_snapshot(field, t), mask).reshape([coord.size(0),
                                                                                                         _field_size[1]])
 
-            # if fields are written out only for specific parts of the domain, this leads to dimension mismatch between
+            # If fields are written out only for specific parts of the domain, this leads to dimension mismatch between
             # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
             # in a part of this mask.
             except RuntimeError:
@@ -132,7 +132,7 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
                     E.g.:
                             times = [0.1, 0.2, 0.3] \n
                             export = execute_grid_generation(...) \n
-                            export.times = times    # times needs to be a list of str\n
+                            export.write_times = times                  # times needs to be a list of str\n
                             export.export_data(...) \n
 
     :param datawriter: Datawriter object resulting from the refinement with S^3

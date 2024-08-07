@@ -63,7 +63,7 @@ def plot_results_parameter_study(_data: dict, save_path: str, save_name: str = "
 
     ax.set_ylim(0, 1)
     ax.set_xlim(min(_data["final_metric"]) - 0.01, max(_data["final_metric"]) + 0.01)
-    ax.set_xlabel(r"$\sigma(" + str(field) + ") \, / \, \sigma(" + str(field) + "_{orig})$")
+    ax.set_xlabel(r"$\sigma(" + str(field) + r") \, / \, \sigma(" + str(field) + "_{orig})$")
     fig.legend(ncols=3, loc="upper center")
     fig.subplots_adjust(top=0.82)
     plt.savefig(join(save_path, f"{save_name}.png"), dpi=340)

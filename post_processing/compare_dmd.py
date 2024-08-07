@@ -74,27 +74,28 @@ def plot_reconstructed_fields(coord_orig: pt.tensor, coord_inter: pt.Tensor, fie
 
 if __name__ == "__main__":
     # which fields and settings to use
-    field_name = "p"
-    area = "small"
+    field_name = "Ma"
+    area = "large"
     metric = 0.95
 
     # parameter for scaling the reconstructed fields, e.g., pressure / Mach number of free stream
-    param_infinity = 75229.6
-    # param_infinity = 0.72
+    param_infinity = 75229.6 if field_name == "p" else 0.72
 
     # path to the HDF5 file
-    load_path = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                     f"results_metric_based_on_{field_name}_stl_{area}_no_dl_constraint_TEST")
+    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                     "results_with_geometry_refinement_with_dl_constraint")
     file_name = f"OAT15_{area}_area_variance_{metric}.h5"
 
     # path to the directory to which the plots should be saved to
-    save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "OAT15",
-                             f"plots_metric_based_on_{field_name}_stl_{area}_no_dl_constraint")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+                             "plots_with_geometry_refinement_with_dl_constraint")
 
     # load the field of the original CFD data
-    # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-    #                           f"ma_{area}_every10.pt"))
-    orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+    if area == "large":
+        orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+                                  f"ma_{area}_every10.pt"))
+    else:
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
@@ -112,8 +113,10 @@ if __name__ == "__main__":
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
-    # geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
-    #                 dimensions="xz"))
+
+    if area == "large":
+        geometry.append(load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "naca_airfoil_no_TE.stl"),
+                        dimensions="xz"))
 
     # load the corresponding write times and stack the coordinates
     times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
@@ -126,27 +129,28 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # perform DMD
-    rank = 50
-    dmd_orig = DMD(orig_field, dt=times[1] - times[0], rank=rank)
-    dmd_inter = DMD(interpolated_field, dt=times[1] - times[0], rank=rank)
+    dmd_orig = DMD(orig_field, dt=times[1] - times[0], optimal=True)
+    dmd_inter = DMD(interpolated_field, dt=times[1] - times[0], optimal=True)
+    opt_rank = dmd_orig.svd.opt_rank
 
-    # sort the modes based on their integral contribution (every 2nd because we have complex-conjugated pairs and start
-    # at 1 to ignore the mean)
-    modes_orig_sorted = dmd_orig.modes[:, pt.argsort(dmd_orig.integral_contribution, descending=True)].real[:, 1::2]
-    modes_inter_sorted = dmd_inter.modes[:, pt.argsort(dmd_inter.integral_contribution, descending=True)].real[:, 1::2]
+    # sort the modes based on their integral contribution, omit the mean value
+    idx_orig = dmd_orig.top_modes(integral=True, f_min=0)[1:]
+    idx_inter = dmd_inter.top_modes(integral=True, f_min=0)[1:]
 
     # plot the first few modes
-    plot_dmd_modes(xz, dataloader.vertices, modes_orig_sorted, modes_inter_sorted, save_path_results,
-                   f"comparison_dmd_modes_metric_{metric}_rank_{rank}_TEST", _geometry=geometry)
+    plot_dmd_modes(xz, dataloader.vertices, dmd_orig.modes[:, idx_orig].real, dmd_inter.modes[:, idx_inter].real,
+                   save_path_results, f"comparison_dmd_modes_metric_{metric}_opt_rank{opt_rank}", _geometry=geometry)
 
     # plot original, reconstructed data and their error and scale with free stream quantity
     orig_field /= param_infinity
     interpolated_field /= param_infinity
 
     # plot the original and reconstructed fields along with the reconstruction error
+    label = f"${field_name}$ / $" + field_name + r"_{\infty}$"
     plot_reconstructed_fields(xz, dataloader.vertices, orig_field / cell_area_orig,
                               interpolated_field / cell_area_inter,
                               dmd_orig.reconstruction.real / cell_area_orig,
                               dmd_inter.reconstruction.real / cell_area_inter,
-                              save_path_results, f"comparison_reconstructed_fields_dmd_metric_{metric}_rank_{rank}_t_"
-                              + "{:.4f}_TEST.png".format(times[100]), t_i=100, label=r"$p / p_{\infty}$", _geometry=geometry)
+                              save_path_results, f"comparison_reconstructed_fields_dmd_metric_{metric}_opt_"
+                                                 f"rank{opt_rank}_t_"
+                              + "{:.4f}".format(times[100]), t_i=100, label=label, _geometry=geometry)

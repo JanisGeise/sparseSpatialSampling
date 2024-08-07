@@ -35,7 +35,7 @@ class SparseSpatialSampling:
                             will be used
         :param min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
                            grid), if 'None' the max. number of cells will be used as stopping criteria
-        :param max_delta_level: flag for setting the constraint that two adjacent cell should have a max. level
+        :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
                                 difference of one
         :param write_times: numerical time steps of the simulation, needs to be provided as list[int | float | str].
                             If 'None', the time steps need to be provided after refinement (before exporting the fields)
