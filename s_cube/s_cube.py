@@ -161,7 +161,8 @@ class SamplingTree(object):
         # and computing the dominant width of the domain
         del self._vertices
 
-        # overwrite the metric with its L2-Norm, because the metric itself is not needed anymore
+        # overwrite the metric with its L2-Norm, because the metric itself is not needed anymore (Frobenius norm here
+        # same as L2, because the metric is always a vector)
         self._target_norm = pt.linalg.norm(self._target).item()
 
     def _update_gain(self) -> None:
@@ -183,6 +184,8 @@ class SamplingTree(object):
                 # compute the cell center of the cell
                 centers.append(self._compute_cell_centers(i))
 
+        # predict the gain at all cells and child cells simultaneously (faster than loop), then assign each cell its
+        # value for the gain
         if len(indices) > 0:
             # create tensor with all centers of all leaf cells and their potential children
             all_centers = pt.cat(centers, dim=0)
@@ -190,18 +193,20 @@ class SamplingTree(object):
             # predict the target function at the cell centers (interpolated based on the original grid)
             metric = self._knn.predict(all_centers.numpy())
             metric = pt.from_numpy(metric).reshape(int(metric.shape[0] / centers[0].size()[0]), centers[0].size()[0])
+
+            # loop over all leaf cells for which we haven't computed the gain yet
             for i, index in enumerate(indices):
                 cell = self._cells[index]
 
-                # cell center of original cell
+                # metric at the cell center of the current cell
                 cell.metric = metric[i, 0]
 
                 # sum of the delta (target function) -> in which direction (left, right, ...) child changes
                 # the target function the most relative to the original cell center to each newly created cell center
-                sum_delta_metric = sum([abs(metric[i, 0] - metric[i, j]) for j in range(1, metric.size()[1])])
+                sum_delta_metric = sum([abs(metric[i, 0] - metric[i, j]) for j in range(1, metric.size(1))])
 
-                # scale with the cell size (the cell size is computed based on the cell level and the size of the
-                # original cell)
+                # scale with the cell size of the children (the cell size is computed based on the cell level and the
+                # size of the original cell)
                 cell.gain = (1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, cell.level), self._n_dimensions)
                              * sum_delta_metric)
 

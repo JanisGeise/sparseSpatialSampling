@@ -50,7 +50,7 @@ def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tenso
     return _modes, svd.V, svd.s
 
 
-def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients, _singular_values, _sqrt_cell_area,
+def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients, _singular_values, _cell_area,
                        _save_dir, _save_name, _field_name: str) -> None:
     """
         Write the HDF5 file storing the results from the SVD.
@@ -61,7 +61,7 @@ def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients
         :param _modes: modes from the SVD
         :param _mode_coefficients: mode coefficients from the SVD
         :param _singular_values: singular values from the SVD
-        :param _sqrt_cell_area: sqrt of the cell area
+        :param _cell_area: cell area / volume
         :param _save_dir: directory in which the file should be saved to
         :param _save_name: name of the hdf5 file
         :param _field_name: name of the field for which the SVD should be computed
@@ -85,6 +85,7 @@ def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients
     # write the rest as tensor (not referenced in XDMF file anyway)
     datawriter.write_data("V", group="constant", data=_mode_coefficients)
     datawriter.write_data("s", group="constant", data=_singular_values)
+    datawriter.write_data("cell_area", group="constant", data=_cell_area)
 
     # write XDMF file
     datawriter.write_xdmf_file()

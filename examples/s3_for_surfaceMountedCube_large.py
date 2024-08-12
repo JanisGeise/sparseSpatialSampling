@@ -127,10 +127,7 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
     :return: None
     """
     for f in field_names:
-        # in our setup, the write times differ for the p & U field and the prime2Mean fields
-        if f.endswith("Prime2Mean"):
-            datawriter.write_times = [str(i.item()) for i in pt.arange(40, 140, 10).int()]
-        elif f.endswith("Mean"):
+        if f.endswith("Mean"):
             # int, because in OpenFoam only significant decimal points are written, e.g., t = 30 is not written as 30.0
             # tolist, because otherwise we would have to call _write_times=t.item()
             datawriter.write_times = [str(i.item()) for i in pt.arange(30, 140, 10).int()]
@@ -159,7 +156,11 @@ if __name__ == "__main__":
     load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
     # load_path = join("..", "data", "3D", "surfaceMountedCube", "fullCase")
     # save_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
-    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_TKE")
+    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_TKE",
+                     "results_no_geometry_refinement_no_dl_constraint")
+
+    # load an exiting s_cube object or start new
+    load_existing = True
 
     # for which field should we compute the metric?
     field_name = "U"
@@ -174,7 +175,7 @@ if __name__ == "__main__":
 
     # compute the metric or load an existing one (we only have the velocity and pressure fields for this simulation)
     compute_metric = True
-    save_name_metric = "metric_std_TKE" if field_name == "U" else "metric_std_pressure"
+    save_name_metric = "metric_TKE" if field_name == "U" else "metric_std_pressure"
 
     # load the CFD data in the given boundaries (full domain) and compute the metric snapshot-by-snapshot
     bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
@@ -203,10 +204,15 @@ if __name__ == "__main__":
     for m in min_metric:
         # overwrite save name
         save_name = f"surfaceMountedCube_{save_name_metric}" + "_{:.2f}".format(m)
-        s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m)
 
-        # execute S^3
-        s_cube.execute_grid_generation()
+        if load_existing:
+            logger.info(f"Loading s_cube object for metric {m}.")
+            s_cube = pt.load(join(save_path, f"s_cube_{save_name}.pt"))
+        else:
+            s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m)
+
+            # execute S^3
+            s_cube.execute_grid_generation()
 
         # create export instance, export all fields into the same HFD5 file and create single XDMF from it
         export = ExportData(s_cube, write_new_file_for_each_field=False)

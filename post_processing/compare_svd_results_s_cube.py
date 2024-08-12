@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 from os.path import join
 from os import path, makedirs
 
-from compare_svd import plot_mode_coefficients, plot_singular_values, plot_psd
+from compare_svd_OAT import plot_mode_coefficients, plot_singular_values, plot_psd
+
+# use latex fonts
+plt.rcParams.update({"text.usetex": True})
 
 
 def load_svd_from_hdf5(_load_path: str, _file_name: str):
@@ -48,9 +51,6 @@ if __name__ == "__main__":
         results_svd["U"].append(U)
         results_svd["V"].append(V)
     del s, U, V
-
-    # use latex fonts
-    plt.rcParams.update({"text.usetex": True})
 
     # create directory for plots
     if not path.exists(save_path_results):

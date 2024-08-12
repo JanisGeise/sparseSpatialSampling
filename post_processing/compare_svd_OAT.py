@@ -1,5 +1,6 @@
 """
     Compute an SVD of the interpolated field (generated grid with S^3) and compare it to the original field from CFD
+    for the OAT airfoil
 
     this script is adopted from the flowtorch tutorial:
 
@@ -19,7 +20,10 @@ from flowtorch.analysis import SVD
 from matplotlib.patches import Polygon
 
 from s_cube.data import Dataloader
-from post_processing.compute_error import load_airfoil_as_stl_file
+from post_processing.compute_error_OAT import load_airfoil_as_stl_file
+
+# use latex fonts
+plt.rcParams.update({"text.usetex": True})
 
 
 def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: list, n_values: int = 100) -> None:
@@ -27,10 +31,12 @@ def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: lis
     s_var = [s * (100 / s.sum()) for s in sv]
     s_cum = [pt.cumsum(s, dim=0) for s in s_var]
 
-    fig, ax = plt.subplots(nrows=2, figsize=(6, 4), sharex="col")
+    ls = ["-", "--", "-.", ":"]
+
+    fig, ax = plt.subplots(nrows=2, figsize=(6, 3), sharex="col")
     for i, s in enumerate(zip(s_var, s_cum)):
-        ax[0].plot(s[0][:n_values], label=legend[i])
-        ax[1].plot(s[1])
+        ax[0].plot(s[0][:n_values], label=legend[i], color="black", ls=ls[i])
+        ax[1].plot(s[1], color="black", ls=ls[i])
     ax[1].set_xlabel(r"$no. \#$")
     ax[0].set_ylabel(r"$\sqrt{\sigma_i^2}$")
     ax[1].set_ylabel(r"$cumulative$ $\%$")
@@ -81,18 +87,19 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
     for row in range(n_modes):
         ax[row][0].tricontourf(coord_original[:, 0], coord_original[:, 1], U_orig[:, row], vmin=vmin, vmax=vmax,
                                levels=levels, cmap="seismic", extend="both")
-        if row == 2:
-            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row], vmin=vmin, vmax=vmax,
+        # flip sign of modes so it is consistent
+        if row > 0:
+            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row] * -1, vmin=vmin, vmax=vmax,
                                    levels=levels, cmap="seismic", extend="both")
         else:
-            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row] * -1, vmin=vmin, vmax=vmax,
+            ax[row][1].tricontourf(coord_inter[:, 0], coord_inter[:, 1], U_inter[:, row], vmin=vmin, vmax=vmax,
                                    levels=levels, cmap="seismic", extend="both")
         if _geometry is not None:
             for g in _geometry:
                 ax[row][0].add_patch(Polygon(g, facecolor="black"))
                 ax[row][1].add_patch(Polygon(g, facecolor="black"))
-    ax[0][0].set_title("$original$")
-    ax[0][1].set_title("$interpolated$")
+    # ax[0][0].set_title("$original$")
+    # ax[0][1].set_title("$interpolated$")
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
@@ -108,9 +115,12 @@ def plot_mode_coefficients(write_times, V: list, _save_path: str, _save_name: st
     for row in range(n_modes):
         for i, v in enumerate(V):
             if row == 0:
-                ax[row].plot(write_times, v[:, row], color=color[row], label=legend[i], ls=ls[i])
+                ax[row].plot(write_times, v[:, row], color="black", label=legend[i], ls=ls[i])
+            # flip sign of modes so it is consistent
+            elif row > 0 and i == 1:
+                ax[row].plot(write_times, v[:, row] * -1, color="black", ls=ls[i])
             else:
-                ax[row].plot(write_times, v[:, row], color=color[row], ls=ls[i])
+                ax[row].plot(write_times, v[:, row], color="black", ls=ls[i])
         ax[row].text(write_times.max() + 1e-3, 0, f"$mode$ ${row}$", va="center")
         ax[row].set_xlim(write_times.min(), write_times.max())
     fig.legend(loc="upper center", framealpha=1.0, ncols=3)
@@ -126,21 +136,22 @@ if __name__ == "__main__":
     # which fields and settings to use
     field_name = "Ma"
     area = "large"
-    metric = 0.95
+    metric = "0.75"
 
     # path to the HDF5 file
     load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
-                     "results_no_geometry_refinement_no_dl_constraint")
+                     "results_with_geometry_refinement_no_dl_constraint")
     file_name = f"OAT15_{area}_area_variance_{metric}.h5"
 
     # path to the directory to which the plots should be saved to
     save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
-                             "plots_no_geometry_refinement_no_dl_constraint")
+                             "plots_with_geometry_refinement_no_dl_constraint")
 
     # load the field of the original CFD data
     if area == "large":
-        orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-                                  f"ma_{area}_every10.pt"))
+        # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+        #                           f"ma_{area}_every10.pt"))
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", f"ma_{area}_every10.pt"))
     else:
         orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
 
@@ -178,28 +189,26 @@ if __name__ == "__main__":
     interpolated_field -= pt.mean(interpolated_field, dim=1).unsqueeze(-1)
     svd_inter = SVD(interpolated_field, rank=orig_field.size(-1))
 
-    # use latex fonts
-    plt.rcParams.update({"text.usetex": True})
-
     # create directory for plots
     if not path.exists(save_path_results):
         makedirs(save_path_results)
 
     # plot frequency spectrum
     plot_psd([svd_orig.V.numpy(), svd_inter.V.numpy()], (times[1] - times[0]).item(), len(times),
-             save_path_results, f"comparison_psd_metric_{metric}_weighted", legend=["$original$", "$interpolated$"],
+             save_path_results, f"comparison_psd_metric_{metric}_weighted", legend=["$original$", f"$metric = {metric}$"],
              xlim=(0, 0.5))
 
     # plot singular values
     plot_singular_values([svd_orig.s, svd_inter.s], save_path_results,
-                         f"comparison_singular_values_metric_{metric}_weighted",
-                         legend=["$original$", "$interpolated$"])
+                         f"comparison_singular_values_metric_{metric}",
+                         legend=["$original$", f"$metric = {metric}$"])
 
     # plot the first N POD modes (left singular vectors)
     plot_pod_modes(xz, dataloader.vertices, svd_orig.U / cell_area_orig, svd_inter.U / cell_area_inter,
-                   save_path_results, f"comparison_pod_modes_metric_{metric}_weighted", _geometry=geometry)
+                   save_path_results, f"comparison_pod_modes_metric_{metric}", _geometry=geometry,
+                   n_modes=6)
 
     # plot POD mode coefficients (right singular vectors)
     plot_mode_coefficients(times, [svd_orig.V, svd_inter.V], save_path_results,
-                           f"comparison_pod_mode_coefficients_metric_{metric}_weighted",
-                           legend=["$original$", "$interpolated$"])
+                           f"comparison_pod_mode_coefficients_metric_{metric}",
+                           legend=["$original$", f"$metric = {metric}$"], n_modes=6)

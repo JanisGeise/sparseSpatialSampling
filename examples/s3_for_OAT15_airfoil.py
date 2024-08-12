@@ -83,9 +83,11 @@ if __name__ == "__main__":
     xz = pt.load(join(load_path, "vertices_and_masks.pt"))
 
     # load the pressure field of the original CFD data
-    field = pt.load(join(load_path, f"p_{area}_every10.pt"))
-    # field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-    #                 f"ma_{area}_every10.pt"))
+    if area == "small":
+        field = pt.load(join(load_path, f"p_{area}_every10.pt"))
+    else:
+        field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
+                        f"ma_{area}_every10.pt"))
 
     # compute the metric
     metric = pt.std(field, dim=1)
@@ -104,8 +106,7 @@ if __name__ == "__main__":
     # if we use the large domain, load the rear airfoil of the tandem configuration as well (NACA airfoil)
     if area == "large":
         naca = load_airfoil_from_stl_file(join(load_path, "naca_airfoil_no_TE.stl"), dimensions="xz")
-        geometry.append(GeometryCoordinates2D("NACA", False, naca, refine=True,
-                                              min_refinement_level=7))
+        geometry.append(GeometryCoordinates2D("NACA", False, naca, refine=True))
 
     # load the corresponding write times and stack the coordinates, the field is available for all time steps sow can
     # pass it to execute_grid_generation directly. If the field to export is only available at certain time steps, we

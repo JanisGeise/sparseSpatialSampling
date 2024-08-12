@@ -10,7 +10,7 @@ from matplotlib.patches import Polygon
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
 from s_cube.data import Dataloader
-from compute_error import load_airfoil_as_stl_file
+from compute_error_OAT import load_airfoil_as_stl_file
 
 # increase resolution
 plt.rcParams['figure.dpi'] = 640

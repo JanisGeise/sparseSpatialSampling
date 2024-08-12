@@ -9,14 +9,32 @@
 """
 import torch as pt
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
+from matplotlib.patches import Polygon, Circle
 
 from os.path import join
 from os import path, makedirs
 from flowtorch.analysis import DMD
 
 from s_cube.data import Dataloader
-from post_processing.compute_error import load_airfoil_as_stl_file
+from post_processing.compute_error_OAT import load_airfoil_as_stl_file
+
+
+def plot_eigenvalues(sv: list, _save_path: str, _save_name: str, legend: list, n_values: int = 10) -> None:
+    styles = ["o", "x", "+", "*", "p", "s"]
+    fig, ax = plt.subplots(figsize=(4, 4))
+    for i, s in enumerate(sv):
+        ax.scatter(s[:n_values].real, s[:n_values].imag, label=legend[i], facecolor=None, marker=styles[i])
+
+    ax.add_patch(Circle((0.0, 0.0), radius=1.0, color="k", alpha=0.2, ec="k", lw=2, ls="--"))
+    ax.set_xlabel(r"$Re(\lambda_i)$")
+    ax.set_ylabel(r"$Im(\lambda_i)$")
+    ax.set_xlim(0.96, 1.02)
+    ax.set_ylim(-0.02, 0.2)
+    ax.legend(loc="upper right", framealpha=1.0, ncols=1)
+    fig.tight_layout()
+    fig.subplots_adjust()
+    plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
+    plt.close("all")
 
 
 def plot_dmd_modes(coord_orig: pt.tensor, coord_inter: pt.Tensor, modes_orig, modes_inter, _save_path: str,
@@ -136,6 +154,10 @@ if __name__ == "__main__":
     # sort the modes based on their integral contribution, omit the mean value
     idx_orig = dmd_orig.top_modes(integral=True, f_min=0)[1:]
     idx_inter = dmd_inter.top_modes(integral=True, f_min=0)[1:]
+
+    # plot eigenvalues
+    plot_eigenvalues([dmd_orig.eigvals[idx_orig], dmd_inter.eigvals[idx_inter]], save_path_results,
+                     f"comparison_eigenvalues_metric_{metric}_weighted", legend=["$original$", "$interpolated$"])
 
     # plot the first few modes
     plot_dmd_modes(xz, dataloader.vertices, dmd_orig.modes[:, idx_orig].real, dmd_inter.modes[:, idx_inter].real,

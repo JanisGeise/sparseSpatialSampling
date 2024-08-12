@@ -81,18 +81,24 @@ def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_ori
     plt.close("all")
 
 
-def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: pt.Tensor, save_name: str, save_dir: str,
-                        geometry_: list = None) -> None:
-    fig, ax = plt.subplots(figsize=(6, 3))
-    vmin, vmax = 1.2 * error_field.min().item(), 0.8 * error_field.max().item()
-    tcf = ax.tricontourf(coord_x, coord_y, error_field, vmin=vmin, vmax=vmax, levels=pt.linspace(vmin, vmax, 100))
-    fig.colorbar(tcf, shrink=0.75, label=r"$\Delta L_2 / L_{2, orig}$", format="{x:.2f}")
-    if geometry_ is not None:
-        for g in geometry_:
-            ax.add_patch(Polygon(g, facecolor="white"))
-    ax.set_xlabel("$x$")
-    ax.set_ylabel("$z$")
-    ax.set_aspect("equal")
+def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: list, save_name: str, save_dir: str,
+                        geometry_: list = None, field: str = "p") -> None:
+
+    size = (6, 2) if field == "p" else (5, 3)
+    label = [rf"$\mu(\Delta {field}) / {field}_" + r"{\infty}$", rf"$\sigma(\Delta {field}) / {field}_" + r"{\infty}$"]
+    fig, ax = plt.subplots(nrows=2, sharex="col", figsize=size)
+    for i in range(2):
+        vmin, vmax = error_field[i].min().item(), error_field[i].max().item()
+        tcf = ax[i].tricontourf(coord_x, coord_y, error_field[i], vmin=vmin, vmax=vmax,
+                                levels=pt.linspace(vmin, vmax, 100))
+        fig.colorbar(tcf, ax=ax[i], shrink=0.75, label=label[i], format="{x:.1e}")
+
+        if geometry_ is not None:
+            [ax[i].add_patch(Polygon(g, facecolor="white")) for g in geometry_]
+
+        ax[i].set_ylabel("$z$")
+        ax[i].set_aspect("equal")
+    ax[-1].set_xlabel("$x$")
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
@@ -131,9 +137,9 @@ if __name__ == "__main__":
     field_name = "Ma"
     area = "large"
     load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
-                     "results_no_geometry_refinement_no_dl_constraint")
+                     "results_with_geometry_refinement_no_dl_constraint")
     save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
-                             "plots_no_geometry_refinement_no_dl_constraint")
+                             "plots_with_geometry_refinement_no_dl_constraint")
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
@@ -148,7 +154,8 @@ if __name__ == "__main__":
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
     if area == "large":
-        load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+        # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
+        load_path_ma_large = join("..", "data", "2D", "OAT15")
         orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
     else:
         orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
@@ -176,7 +183,6 @@ if __name__ == "__main__":
     # compute the normalized L2-norms
     l2_total_orig = pt.linalg.norm(orig_field, ord=2)
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
-    l2_space_orig = pt.linalg.norm(orig_field, ord=2, dim=1)
 
     # get all the generated grids in the directory
     files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
@@ -207,15 +213,15 @@ if __name__ == "__main__":
         # compute the total L2-error and normalize it with l2 norm of the original field
         error_total_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2) / l2_total_orig)
 
-        # compute the L2-error of the metric for each cell (= wrt space) and normalize it with the number of cells
-        if field_name == "Ma":
-            error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1)
-        else:
-            error_space_vs_metric = pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=1) / l2_space_orig
+        # compute the avg. & std. error of the metric for each cell (= wrt space) and scale it with the free stream
+        # parameter
+        error_space_vs_metric_avg = pt.mean(fields_fitted - orig_field, dim=1) / param_infinity
+        error_space_vs_metric_std = pt.std(fields_fitted - orig_field, dim=1) / param_infinity
 
         # plot the L2-error wrt each cell
-        plot_error_in_space(xz[:, 0], xz[:, 1], error_space_vs_metric, f"error_metric_{v}_{field_name}_unscaled",
-                            save_path_results, geometry_=geometry)
+        plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],
+                            f"error_metric_{v}_{field_name}", save_path_results, geometry_=geometry,
+                            field=field_name)
 
     # save the errors
     pt.save({"L2_error_time": error_time_vs_metric, "L2_error_total": error_total_vs_metric},

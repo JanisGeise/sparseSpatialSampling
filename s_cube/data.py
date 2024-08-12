@@ -508,7 +508,7 @@ class XDMFWriter:
                       f'<DataItem Format="HDF" DataType="Int" Dimensions="{self._n_faces}'
 
                 # the number of dimensions depends on the grid type
-                tmp += '>\n' if self._mixed else f' {pow(2, self._n_dimensions)}">\n'
+                tmp += '">\n' if self._mixed else f' {pow(2, self._n_dimensions)}">\n'
                 f_out.write(tmp)
 
                 # include the grid data from the HDF5 file
@@ -676,15 +676,15 @@ class XDMFWriter:
         :return: None
         """
         if GRID in self._file.keys():
-            if not FACES in self._file[GRID].keys():
+            if FACES not in self._file[GRID].keys():
                 logger.error(f"Unable to find cell faces in group {GRID}. Make sure the key to the cell faces is "
                              f"present and named {FACES}.")
                 exit(0)
-            if not CENTERS in self._file[GRID].keys():
+            if CENTERS not in self._file[GRID].keys():
                 logger.error(f"Unable to find cell centers in group {GRID}. Make sure the key to the cell centers is "
                              f"present and named {CENTERS}.")
                 exit(0)
-            if not VERTICES in self._file[GRID].keys():
+            if VERTICES not in self._file[GRID].keys():
                 logger.error(f"Unable to find cell vertices in group {GRID}. Make sure the key to the cell vertices is"
                              f"present and named {VERTICES}.")
                 exit(0)

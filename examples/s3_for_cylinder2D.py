@@ -89,6 +89,7 @@ def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_
         # write the rest as tensor (not referenced in XDMF file anyway)
         datawriter.write_data("V", group="constant", data=V)
         datawriter.write_data("s", group="constant", data=s)
+        datawriter.write_data("cell_area", group="constant", data=dataloader.weights)
 
         # write XDMF file
         datawriter.write_xdmf_file()
