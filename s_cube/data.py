@@ -220,8 +220,7 @@ class Dataloader:
 
         :return: None
         """
-        self._weights = (1 / pow(2, self._n_dimensions) * pow(self._size_initial_cell / pow(2, self.levels),
-                                                              self._n_dimensions)).squeeze()
+        self._weights = (pow(self._size_initial_cell / pow(2, self.levels), self._n_dimensions)).squeeze()
 
     def load_snapshot(self, field_name: Union[List[str], str],
                       write_times: Union[str, List[str]] = None) -> Union[List[pt.Tensor], pt.Tensor]:
