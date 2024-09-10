@@ -47,7 +47,7 @@ The following sections will provide a more comprehensive guide on this repositor
 ### Overview
 The repository contains the following directories:
 
-1. `s_cube`: implementation of the *sparseSpatialSampling* algorithm
+1. `sparseSpatialSampling`: implementation of the *sparseSpatialSampling* algorithm
 2. `tests`: unit tests
 3. `examples`: example scripts for executing $S^3$ for different test cases
 4. `post_processing`: scripts for analysis and visualization of the results
@@ -189,6 +189,8 @@ version is $>= 1.22$ (requirement for numba).
     # once everything is installed, leave the environment
     deactivate
 
+To check if the installation was successful activate the Python environment and type `s_cube.__version__` 
+(should display the current version).
 For executing the example scripts in `examples/`, the CFD data must be provided. Further the paths to the data as well
 as the setup needs to be adjusted accordingly. A script can then be executed as
     

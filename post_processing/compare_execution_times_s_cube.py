@@ -64,39 +64,43 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     ls = ["-", "--", "-.", ":"]
 
     # plot variance vs N_cells
-    fig, ax = plt.subplots(figsize=(6, 3), ncols=2, sharey="row")
+    fig, ax = plt.subplots(figsize=(6, 3), ncols=2)
     for i, d in enumerate(_data):
         ax[0].plot(d["final_metric"], pt.tensor(d["n_cells"]) / pt.tensor(d["n_cells_orig"]), marker="x",
                    label=fr"{case[i]}", color=color[i], ls=ls[0])
 
         t_tot = pt.tensor(d["t_total"])
         if i == 0:
-            ax[1].plot(d["final_metric"], pt.tensor(d["t_uniform"]) / t_tot, marker="x",
-                       label=r"$t_{u}$", color=color[i], ls=ls[0])
             ax[1].plot(d["final_metric"], pt.tensor(d["t_adaptive"]) / t_tot, marker="x",
-                       label=r"$t_{a}$", color=color[i], ls=ls[1])
-            ax[1].plot(d["final_metric"], pt.tensor(d["t_renumbering"]) / t_tot, marker="x",
-                       label=r"$t_{rn}$", color=color[i], ls=ls[2])
+                       label=r"$t_{\mathrm{a}}$", color=color[i], ls=ls[0])
+
             # only plot execution time of geometry refinement if available for all cases
             if d["t_geometry"][0] is not None:
                 ax[1].plot(d["final_metric"], pt.tensor(d["t_geometry"]) / t_tot, marker="x",
-                           label=r"$t_{g}$", color=color[i], ls=ls[3])
+                           label=r"$t_{\mathrm{g}}$", color=color[i], ls=ls[2])
+
+            # combine execution times for renumbering & uniform because they are very small
+            ax[1].plot(d["final_metric"], (pt.tensor(d["t_renumbering"]) + pt.tensor(d["t_uniform"])) / t_tot,
+                       marker="x", label=r"other", color=color[i], ls=ls[1])
         else:
-            ax[1].plot(d["final_metric"], pt.tensor(d["t_uniform"]) / t_tot, marker="x", color=color[i], ls=ls[0])
-            ax[1].plot(d["final_metric"], pt.tensor(d["t_adaptive"]) / t_tot, marker="x", color=color[i], ls=ls[1])
-            ax[1].plot(d["final_metric"], pt.tensor(d["t_renumbering"]) / t_tot, marker="x", color=color[i], ls=ls[2])
+            ax[1].plot(d["final_metric"], pt.tensor(d["t_adaptive"]) / t_tot, marker="x", color=color[i], ls=ls[0])
+
             # only plot execution time of geometry refinement if available for all cases
             if d["t_geometry"][0] is not None:
-                ax[1].plot(d["final_metric"], pt.tensor(d["t_geometry"]) / t_tot, marker="x", color=color[i], ls=ls[3])
+                ax[1].plot(d["final_metric"], pt.tensor(d["t_geometry"]) / t_tot, marker="x", color=color[i], ls=ls[2])
 
-    ax[0].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{orig}$")
-    ax[1].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{orig}$")
-    ax[0].set_ylabel(r"$N_{cells} \, / \, N_{cells, orig}$")
-    ax[1].set_ylabel(r"$t \, / \, t_{tot}$")
+            ax[1].plot(d["final_metric"], (pt.tensor(d["t_renumbering"]) + pt.tensor(d["t_uniform"])) / t_tot,
+                       marker="x", color=color[i], ls=ls[1])
+
+    ax[0].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{\mathrm{orig}}$")
+    ax[1].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{\mathrm{orig}}$")
+    ax[0].set_ylabel(r"$N_{\mathrm{cells}} \, / \, N_{\mathrm{cells, orig}}$")
+    ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
+    ax[1].set_yscale("log")
     ax[0].legend(ncols=1, loc="upper left")
     ax[1].legend(ncols=1)
     fig.tight_layout()
-    fig.subplots_adjust()
+    fig.subplots_adjust(top=0.88)
     plt.savefig(join(_save_path, f"{save_name}.png"), dpi=340)
     plt.close("all")
 
@@ -104,10 +108,10 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
 if __name__ == "__main__":
     # -------------------------------------------- cylinder --------------------------------------------
     load_path = join("..", "run", "final_benchmarks")
-    save_path = join("..", "run", "final_benchmarks", "plots")
+    save_path = join("..", "run", "final_benchmarks", "plots_comparison_cpu")
     cases = [join("OAT15_large", "results_with_geometry_refinement_no_dl_constraint"),
              join("surfaceMountedCube_local_TKE", "results_no_geometry_refinement_no_dl_constraint")]
-    legend = [r"$OAT$", r"$SurfaceMountedCube$"]
+    legend = [r"$OAT$", r"$Cube$"]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

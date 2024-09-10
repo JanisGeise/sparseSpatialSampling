@@ -17,7 +17,7 @@ class SparseSpatialSampling:
     def __init__(self, coordinates: pt.Tensor, metric: pt.Tensor, geometry_objects: list, save_path: str,
                  save_name: str, grid_name: str = "grid_s_cube", level_bounds: tuple = (3, 25), n_cells_max: int = None,
                  min_metric: float = 0.9, max_delta_level: bool = False, write_times: list = None,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None):
+                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1):
         """
         Class for executing the S^3 algorithm.
 
@@ -43,8 +43,10 @@ class SparseSpatialSampling:
                                    set to 1% of the number of vertices in the original grid
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
+        :param n_jobs: number of CPUs to use for the KNN prediction
         :return: None
         """
+        self.n_jobs = n_jobs
         self.coordinates = coordinates
         self.metric = metric
         self.save_path = save_path
@@ -77,7 +79,7 @@ class SparseSpatialSampling:
         self._sampling = SamplingTree(self.coordinates, self.metric, self._geometries, n_cells=self._n_cells_max,
                                       level_bounds=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
-                                      n_cells_iter_start=self._n_cells_iter_start)
+                                      n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs)
 
     def execute_grid_generation(self) -> None:
         """

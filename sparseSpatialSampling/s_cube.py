@@ -95,7 +95,7 @@ class SamplingTree(object):
 
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  level_bounds: Tuple = (3, 25), min_metric: float = 0.75, max_delta_level: bool = False,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None):
+                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -110,6 +110,7 @@ class SamplingTree(object):
                                 difference of one (important for computing gradients across cells)
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning
         :param n_cells_iter_end: number of cells to refine per iteration at the end
+        :param n_jobs: number of CPUs to use for the KNN prediction
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -131,7 +132,8 @@ class SamplingTree(object):
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
-        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance")
+        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance",
+                                        n_jobs=n_jobs)
         self._knn.fit(self._vertices, self._target)
         self._cells = None
         self._leaf_cells = None

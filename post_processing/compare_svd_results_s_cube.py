@@ -26,19 +26,20 @@ def load_svd_from_hdf5(_load_path: str, _file_name: str):
 
 if __name__ == "__main__":
     # path to the data and to the directory the results should be saved to
-    load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_s_cube_Janis")
-    save_path_results = join("..", "run", "parameter_study_variance_as_stopping_criteria", "surfaceMountedCube",
-                             "plots_surfaceMountedCube_s_cube_2000_snapshots", "comparison_psd_metrics")
+    load_path = join("/media", "janis", "Elements", "FOR_data", "results_s_cube_Janis")
+    save_path_results = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_TKE",
+                             "plots_no_geometry_refinement_no_dl_constraint")
 
     # field name and flag if scalar or vector field
-    field = "p"
-    scalar = True
+    field = "U"
+    metric = "0.50"
+    scalar = False
     cases = [f"cube_2000_snapshots_svd_{field}",
-             join("hpc", "results_metric_0.50", f"surfaceMountedCube_metric_std_pressure_0.50_svd_{field}"),
-             join("hpc", "results_metric_0.50", f"surfaceMountedCube_metric_std_mag_velocity_0.50_svd_{field}")]
+             join("surfaceMountedCube_local_TKE", "results_no_geometry_refinement_no_dl_constraint",
+                  f"surfaceMountedCube_metric_TKE_0.50_{field}_svd")]
 
     # list with legend entries
-    legend = ["$original$", r"$\sigma(p) = 66.54\%$", r"$\sigma(L_2(U)) = 50.16\%$"]
+    legend = ["$original$", r"$\mathcal{M} = 0.51$"]
 
     # time step and number of time steps for computing the PSD
     dt, n_dt = 0.05, 2001
@@ -57,7 +58,7 @@ if __name__ == "__main__":
         makedirs(save_path_results)
 
     # plot the singular values
-    plot_singular_values(results_svd["s"], save_path_results, f"comparison_singular_values_field_{field}", legend)
+    plot_singular_values(results_svd["s"], save_path_results, f"comparison_singular_values_field_{field}_{metric}", legend)
 
     # compare the PSD
     plot_psd(results_svd["V"], dt, n_dt, save_path_results, f"comparison_psd_field_{field}", chord=1, u_inf=1,
@@ -65,4 +66,4 @@ if __name__ == "__main__":
 
     # compare mode coefficients
     plot_mode_coefficients(pt.linspace(30, 130, n_dt), results_svd["V"], save_path_results,
-                           f"comparison_mode_coefficients_field_{field}", legend)
+                           f"comparison_mode_coefficients_field_{field}", legend, chord=1, u_inf=1)

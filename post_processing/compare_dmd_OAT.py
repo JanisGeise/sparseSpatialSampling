@@ -15,7 +15,7 @@ from os.path import join
 from os import path, makedirs
 from flowtorch.analysis import DMD
 
-from s_cube.data import Dataloader
+from sparseSpatialSampling.data import Dataloader
 from post_processing.compute_error_OAT import load_airfoil_as_stl_file
 
 
@@ -39,8 +39,8 @@ def plot_eigenvalues(sv: list, _save_path: str, _save_name: str, legend: list, n
 
 def plot_dmd_modes(coord_orig: pt.tensor, coord_inter: pt.Tensor, modes_orig, modes_inter, _save_path: str,
                    _save_name: str, n_modes: int = 4, _geometry: list = None) -> None:
-    vmin = min(modes_orig[:, :n_modes].min().item(), modes_inter[:, :n_modes].min().item())
     vmax = max(modes_orig[:, :n_modes].max().item(), modes_inter[:, :n_modes].max().item())
+    vmin = -vmax
     levels = pt.linspace(vmin, vmax, 100)
 
     fig, ax = plt.subplots(n_modes, 2, sharex="all", sharey="all")
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # which fields and settings to use
     field_name = "Ma"
     area = "large"
-    metric = 0.95
+    metric = "0.95"
 
     # parameter for scaling the reconstructed fields, e.g., pressure / Mach number of free stream
     param_infinity = 75229.6 if field_name == "p" else 0.72

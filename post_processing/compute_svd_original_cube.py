@@ -11,8 +11,8 @@ from os import path, makedirs
 from flowtorch.analysis import SVD
 from flowtorch.data import FOAM2HDF5
 
-from s_cube.data import Datawriter
-from s_cube.utils import load_cfd_data
+from sparseSpatialSampling.data import Datawriter
+from sparseSpatialSampling.utils import load_cfd_data
 
 
 def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:

@@ -11,7 +11,7 @@ from typing import Union, Tuple
 from flowtorch.analysis import SVD
 from flowtorch.data import FOAMDataloader, mask_box
 
-from s_cube.export import ExportData
+from sparseSpatialSampling.export import ExportData
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -229,10 +229,7 @@ def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int =
         else:
             data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())
 
-    # get the cell area
-    _cell_area = _loader.weights.sqrt().unsqueeze(-1)
-
-    return data, xyz, _cell_area, write_time
+    return data, xyz, _loader.weights, write_time
 
 
 def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
@@ -257,7 +254,7 @@ def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt
         data_matrix *= cell_area.sqrt().unsqueeze(-1)
 
         # save either everything until the optimal rank or up to a user specified rank
-        svd = SVD(data_matrix, rank=rank if rank is not None else data_matrix.size(-1))
+        svd = SVD(data_matrix, rank=rank)
 
         return svd.s, svd.U / cell_area.sqrt().unsqueeze(-1), svd.V
 
@@ -270,7 +267,7 @@ def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt
         data_matrix = data_matrix.reshape((orig_shape[1] * orig_shape[0], orig_shape[-1]))
 
         # save either everything until the optimal rank or up to a user specified rank
-        svd = SVD(data_matrix, rank=rank if rank is not None else data_matrix.size(-1))
+        svd = SVD(data_matrix, rank=rank)
 
         # reshape the data back to ux, uy, uz
         new_shape = (orig_shape[0], orig_shape[1], svd.rank)

@@ -3,7 +3,7 @@
 """
 import pytest
 
-from s_cube.data import Dataloader
+from sparseSpatialSampling.data import Dataloader
 
 FILENAME = r"s_cube_test_dataset.h5"
 

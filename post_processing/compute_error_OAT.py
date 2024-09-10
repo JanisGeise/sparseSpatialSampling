@@ -13,7 +13,7 @@ from os import path, makedirs
 from matplotlib.patches import Polygon
 from sklearn.neighbors import KNeighborsRegressor
 
-from s_cube.data import Dataloader
+from sparseSpatialSampling.data import Dataloader
 
 
 def load_airfoil_as_stl_file(_load_path: str, _name: str = "oat15.stl", dimensions: str = "xy"):
@@ -82,23 +82,28 @@ def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_ori
 
 
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: list, save_name: str, save_dir: str,
-                        geometry_: list = None, field: str = "p") -> None:
-
-    size = (6, 2) if field == "p" else (5, 3)
+                        geometry_: list = None, field: str = "p", chord: float = 0.15) -> None:
     label = [rf"$\mu(\Delta {field}) / {field}_" + r"{\infty}$", rf"$\sigma(\Delta {field}) / {field}_" + r"{\infty}$"]
-    fig, ax = plt.subplots(nrows=2, sharex="col", figsize=size)
+    fig, ax = plt.subplots(ncols=2, sharey="row", figsize=(6, 2))
+
+    # set ticks for colorbar manually because otherwise the format is messed up
+    ticks = [pt.linspace(-2e-4, 1e-4, 7).tolist(), pt.linspace(0, 8e-5, 9).tolist()]
     for i in range(2):
         vmin, vmax = error_field[i].min().item(), error_field[i].max().item()
-        tcf = ax[i].tricontourf(coord_x, coord_y, error_field[i], vmin=vmin, vmax=vmax,
+        tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i], vmin=vmin, vmax=vmax,
                                 levels=pt.linspace(vmin, vmax, 100))
-        fig.colorbar(tcf, ax=ax[i], shrink=0.75, label=label[i], format="{x:.1e}")
+        cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, label=label[i], location="bottom", pad=0.3, ticks=ticks[i])
+
+        # force scientific notation, taken from:
+        # https://stackoverflow.com/questions/25983218/scientific-notation-colorbar
+        cbar.formatter.set_powerlimits((0, 0))
 
         if geometry_ is not None:
-            [ax[i].add_patch(Polygon(g, facecolor="white")) for g in geometry_]
+            [ax[i].add_patch(Polygon(g / chord, facecolor="white")) for g in geometry_]
 
-        ax[i].set_ylabel("$z$")
         ax[i].set_aspect("equal")
-    ax[-1].set_xlabel("$x$")
+        ax[i].set_xlabel("$x / c$")
+    ax[0].set_ylabel("$z / c$")
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
@@ -192,7 +197,7 @@ if __name__ == "__main__":
     error_time_vs_metric, error_total_vs_metric = [], []
 
     # create KNN for interpolating the generated field back to the original one
-    knn = KNeighborsRegressor(n_neighbors=8 if xz.size(-1) == 2 else 26, weights="distance")
+    knn = KNeighborsRegressor(n_neighbors=8 if xz.size(-1) == 2 else 26, weights="distance", n_jobs=6)
 
     for v, h in zip(variances, files_hdf):
         # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix

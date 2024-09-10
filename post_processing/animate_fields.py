@@ -9,7 +9,7 @@ from os import path, makedirs
 from matplotlib.patches import Polygon
 from matplotlib.animation import FFMpegWriter, FuncAnimation
 
-from s_cube.data import Dataloader
+from sparseSpatialSampling.data import Dataloader
 from compute_error_OAT import load_airfoil_as_stl_file
 
 # increase resolution
