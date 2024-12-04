@@ -12,7 +12,7 @@ from flowtorch.analysis import SVD
 from flowtorch.data import FOAM2HDF5
 
 from sparseSpatialSampling.data import Datawriter
-from sparseSpatialSampling.utils import load_cfd_data
+from sparseSpatialSampling.utils import load_foam_data
 
 
 def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
@@ -108,8 +108,8 @@ if __name__ == "__main__":
 
     # load the CFD data in the given boundaries
     bounds = [[0, 0, 0], [14.5, 9, 2]]  # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
-    field, coord, cell_area, write_times = load_cfd_data(load_path, bounds, n_dims=3, field_name=field_name,
-                                                         scalar=scalar_field)
+    field, coord, cell_area, write_times = load_foam_data(load_path, bounds, n_dims=3, field_name=field_name,
+                                                          scalar=scalar_field)
 
     # perform SVD of the pressure field
     U, V, s = compute_svd(field, cell_area)

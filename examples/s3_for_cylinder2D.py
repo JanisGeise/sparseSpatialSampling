@@ -29,7 +29,7 @@ from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.data import Datawriter, Dataloader
 from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
-from sparseSpatialSampling.utils import load_cfd_data, export_openfoam_fields, compute_svd
+from sparseSpatialSampling.utils import load_foam_data, export_openfoam_fields, compute_svd
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], 0.05]  # [[x, y], r]
 
     # load the CFD data
-    field, coord, _, write_times = load_cfd_data(load_path, bounds)
+    field, coord, _, write_times = load_foam_data(load_path, bounds)
 
     # create geometry objects for the domain and the cylinder
     domain = CubeGeometry("domain", True, bounds[0], bounds[1])

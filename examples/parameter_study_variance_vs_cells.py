@@ -9,7 +9,7 @@ from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry
 from examples.s3_for_cylinder2D import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
-from sparseSpatialSampling.utils import export_openfoam_fields, load_cfd_data
+from sparseSpatialSampling.utils import export_openfoam_fields, load_foam_data
 
 
 def execute_parameter_study(coordinates: pt.Tensor, metric: pt.Tensor, geometries: list, boundaries: list,
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     cylinder = [[0.2, 0.2], 0.05]  # [[x, y], [r]]
 
     # load the CFD data
-    pressure, coord, _, _ = load_cfd_data(load_path_cylinder, bounds)
+    pressure, coord, _, _ = load_foam_data(load_path_cylinder, bounds)
 
     # create geometry objects for the domain and the cylinder
     domain = CubeGeometry("domain", True, bounds[0], bounds[1])
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     bounds = [[0, 0, 0], [9, 14.5, 2]]
 
     # load the CFD data
-    pressure, coord, _, _ = load_cfd_data(load_path_cube, bounds, n_dims=3)
+    pressure, coord, _, _ = load_foam_data(load_path_cube, bounds, n_dims=3)
 
     # define the geometry object for the domain and cube
     domain = CubeGeometry("domain", True, bounds[0], bounds[1])

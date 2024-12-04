@@ -180,8 +180,8 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
             counter += 1
 
 
-def load_cfd_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
-                  scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
+def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
+                   scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
     """
     load the specified field, mask out the defined area.
 

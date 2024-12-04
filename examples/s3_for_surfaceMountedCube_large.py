@@ -208,7 +208,7 @@ if __name__ == "__main__":
             s_cube = pt.load(join(save_path, f"s_cube_{save_name}.pt"))
 
             # set the (new) save path within the s_cube object
-            s_cube.save_path = save_path
+            s_cube.train_path = save_path
         else:
             pass
             s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m,

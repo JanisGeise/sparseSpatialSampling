@@ -24,7 +24,7 @@ from os.path import join
 
 from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.geometry import CubeGeometry, GeometrySTL3D
-from sparseSpatialSampling.utils import export_openfoam_fields, load_cfd_data
+from sparseSpatialSampling.utils import export_openfoam_fields, load_foam_data
 from examples.s3_for_cylinder2D import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     # load the CFD data in the given boundaries, [[xmin, ymin, zmin], [xmax, ymax, zmax]]
     bounds = [[0, 0, 0], [15, 9, 2]]
-    field, coord, _, write_times = load_cfd_data(load_path, bounds, n_dims=3)
+    field, coord, _, write_times = load_foam_data(load_path, bounds, n_dims=3)
 
     # create a setup for geometry objects for the domain
     domain = CubeGeometry("domain", True, bounds[0], bounds[1])
