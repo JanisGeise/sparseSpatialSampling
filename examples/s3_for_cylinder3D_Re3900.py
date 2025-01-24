@@ -1,53 +1,68 @@
 """
     Execute the sparse spatial sampling algorithm on 3D CFD data, export the resulting mesh as XDMF and HDF5 files.
-    The test case here is the OpenFoam tutorial
+    The test case here is a 3D flow past a cylinder at Re = 3900, which can be found in the flow_data repository:
 
-        - surfaceMountedCube, located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/LES/
+    https://github.com/AndreWeiner/flow_data/
 
-    In this example, the cube is executed for a long time span, generating a large amount of data. Since these data are
-    not fitting into the RAM all at once, the computation of the metric as well as the interpolation and export is
-    performed snapshot-by-snapshot
+    In this example, the cylinder is executed for a long time span, generating a large amount of data.
+    Since these data are not fitting into the RAM all at once, the computation of the metric as well as the
+    interpolation and export is performed snapshot-by-snapshot
+
+    TODO: - once flowtorch contains the implementation for loading tensors
+                -> replace avg. TKE computation with loading UPrime2Mean field of specified time step
+                -> much lower computational costs
+          - once parallel SVD is implemented -> use to compute SVD for large datasets
 """
+
 import logging
 import torch as pt
 
 from os.path import join
+from typing import Union
 from os import path, makedirs
 
 from flowtorch.data import FOAMDataloader, mask_box
 
 from sparseSpatialSampling.export import ExportData
-from sparseSpatialSampling.geometry import CubeGeometry
+from sparseSpatialSampling.geometry import CubeGeometry, CylinderGeometry3D
 from sparseSpatialSampling.utils import load_original_Foam_fields
-from examples.s3_for_cylinder2D import write_svd_s_cube_to_file
+from examples.s3_for_cylinder2D_Re100 import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 
 logger = logging.getLogger(__name__)
 
 
 def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: bool = True, _compute_metric: bool = True,
-                                    _field_name: str = "p"):
+                                    _field_name: str = "p", time_boundaries: list = None):
     """
     Load the vertices within the given boundaries and write times of the original simulation. If specified, compute the
     metric as standard deviation wrt time of the loaded field as:
 
         std = sqrt(1/N sum((x_i - mu)^2))
 
-    If the loaded field is a vector field, the turbulent kinetic energy will be computed (it is assumed that the only
-    available vector field is the velocity field)
+    If the loaded field is a vector field, the mean turbulent kinetic energy will be computed (it is assumed that the
+    defined vector field (arg 'field_name') is the velocity field)
 
     :param load_dir: path to the simulation data
     :param boundaries: list with list containing the upper and lower boundaries of the mask
     :param scalar: flag if the field is a scalar field or a vector field
     :param _compute_metric: flag if the metric should be computed
     :param _field_name: name of the field, which should be loaded
+    :param time_boundaries: start and end time of the sequence to load, if 'None' all available fields except zero are
+                            loaded
     :return: x-, y- & z-coordinates of the cells, all write times and the metric if specified
     """
     # create foam loader object
     loader = FOAMDataloader(load_dir)
 
-    # all times steps but zero
-    write_times = loader.write_times[1:]
+    # get the defined boundaries for start and end time to use if provided
+    if time_boundaries is not None:
+        idx = sorted([i for i, t in enumerate(loader.write_times) if t in time_boundaries])
+        write_times = loader.write_times[idx[0]:idx[1]+1]
+
+    # else use all times steps but zero
+    else:
+        write_times = loader.write_times[1:]
 
     # load vertices
     vertices = loader.vertices
@@ -78,7 +93,6 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
             if scalar:
                 avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask)
             else:
-                # for vector fields, we use the magnitude
                 avg_field += pt.masked_select(loader.load_snapshot(_field_name, t_i), mask).reshape(mask.size())
         avg_field /= len(write_times)
 
@@ -111,7 +125,7 @@ def load_cube_coordinates_and_times(load_dir: str, boundaries: list, scalar: boo
 
 
 def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_names: list, boundaries: list,
-                                write_times: list, batch_size: int = 25) -> None:
+                                write_times: Union[str, list], batch_size: int = 25) -> None:
     """
     For each field specified, interpolate all snapshots onto the generated grid and export it to HDF5 & XDMF. The
     interpolation and export of the data is performed snapshot-by-snapshot (batch_size = 1) or in batches to avoid out
@@ -126,10 +140,12 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
     :param batch_size: batch size, number of snapshots which should be interpolated and exported at once
     :return: None
     """
+    write_times = [write_times] if type(write_times) is str else write_times
     for f in field_names:
         if f.endswith("Mean"):
             # int, because in OpenFoam only significant decimal points are written, e.g., t = 30 is not written as 30.0
             # tolist, because otherwise we would have to call _write_times=t.item()
+            # TODO: adjust times for mean fields
             datawriter.write_times = [str(i.item()) for i in pt.arange(30, 140, 10).int()]
         else:
             datawriter.write_times = write_times
@@ -151,11 +167,12 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
 
 
 if __name__ == "__main__":
-    # -----------------------------------------   execute for cube   -----------------------------------------
-    # path to original surfaceMountedCube simulation
-    load_path = join("/media", "janis", "Elements", "FOR_data", "surfaceMountedCube_Janis", "fullCase")
-    save_path = join("..", "run", "final_benchmarks", "surfaceMountedCube_local_TKE",
-                     "results_no_geometry_refinement_no_dl_constraint")
+    # -----------------------------------------   execute for cylinder3D   -----------------------------------------
+    # path to original cylinder3D simulation
+    load_path = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests", "cylinder_3D_Re3900")
+    save_path = join("..", "run", "final_benchmarks", "cylinder3D_Re3900_local_TKE",
+                     "results_with_geometry_refinement_with_dl_constraint")
+    save_name = "cylinder3D_Re3900"
 
     # load an exiting s_cube object or start new
     load_existing = False
@@ -166,23 +183,30 @@ if __name__ == "__main__":
 
     # fields which should be exported, the write times for the fields can be adjusted in the function
     # export_fields_snapshot_wise
-    fields = ["p", "U", "pMean", "UMean", "pPrime2Mean"]
+    # fields = ["p", "U", "pMean", "UMean", "pPrime2Mean"]
+    fields = ["U"]
 
     # how much of the metric within the original grid should be captured at least
     min_metric = pt.arange(0.25, 1.05, 0.05)
 
     # compute the metric or load an existing one (we only have the velocity and pressure fields for this simulation)
-    compute_metric = True
-    save_name_metric = "metric_TKE" if field_name == "U" else "metric_std_pressure"
+    compute_metric = False
+    save_name_metric = "metric_avg_TKE" if field_name == "U" else "metric_std_pressure"
 
     # load the CFD data in the given boundaries (full domain) and compute the metric snapshot-by-snapshot
-    bounds = [[0, 0, 0], [14.5, 9, 2]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+    d = 0.1
+    bounds = [[0, 0, 0], [2.4, 2.0, pt.pi * d]]              # [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+
+    # boundaries for the time steps to load, if None all available time steps except the zero time step are used;
+    # the boundaries are included and have to be strings
+    time_bounds = ["0.19225", "0.49225"]
 
     # load the vertices and write times, compute / load the metric
     if compute_metric:
         logger.info("Loading coordinates and computing metric.")
         coord, metric, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=True,
-                                                               _field_name=field_name, scalar=scalar_field)
+                                                               _field_name=field_name, scalar=scalar_field,
+                                                               time_boundaries=time_bounds)
 
         # save the metric, so we don't need to compute it again
         if not path.exists(save_path):
@@ -194,24 +218,26 @@ if __name__ == "__main__":
         coord, times = load_cube_coordinates_and_times(load_path, bounds, _compute_metric=False)
         metric = pt.load(join(save_path, f"{save_name_metric}.pt"))
 
-    # define the geometries for the domain and the cube
+    # define the geometries for the domain and the cylinder, increase the height of the cylinder to make sure it is
+    # masked out completely
     geometry = [CubeGeometry("domain", True, bounds[0], bounds[1]),
-                CubeGeometry("cube", False, [3.5, 4, -1], [4.5, 5, 1])]
+                CylinderGeometry3D("cylinder", False, [(0.8, 1.0, -1), (0.8, 1.0, 1)], d / 2,
+                                   refine=True)
+                ]
 
     # execute the S^3 algorithm and export the specified fields
     for m in min_metric:
         # overwrite save name
-        save_name = f"surfaceMountedCube_{save_name_metric}" + "_{:.2f}".format(m)
+        new_save_name = f"{save_name}_{save_name_metric}" + "_{:.2f}".format(m)
 
         if load_existing:
             logger.info(f"Loading s_cube object for metric {m}.")
-            s_cube = pt.load(join(save_path, f"s_cube_{save_name}.pt"))
+            s_cube = pt.load(join(save_path, f"s_cube_{new_save_name}.pt"))
 
             # set the (new) save path within the s_cube object
             s_cube.train_path = save_path
         else:
-            pass
-            s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, save_name, "cube", min_metric=m,
+            s_cube = SparseSpatialSampling(coord, metric, geometry, save_path, new_save_name, "cylinder", min_metric=m,
                                            n_jobs=6)
 
             # execute S^3
@@ -221,8 +247,9 @@ if __name__ == "__main__":
         export = ExportData(s_cube, write_new_file_for_each_field=False)
 
         # export the fields snapshot-by-snapshot (batch_size = 1) or in batches
-        export_fields_snapshot_wise(load_path, export, fields, bounds, times)
+        # TODO: change times back once full time series should be exported
+        export_fields_snapshot_wise(load_path, export, fields, bounds, times[0], batch_size=10)
 
         # compute SVD on grid generated by S^3 and export the results to HDF5 & XDMF
-        write_svd_s_cube_to_file([f for f in fields if "Mean" not in f], save_path, save_name, export.new_file, 50,
-                                 rank=int(1e5))
+        # write_svd_s_cube_to_file([f for f in fields if "Mean" not in f], save_path, save_name, export.new_file, 50,
+        #                          rank=int(1e5))

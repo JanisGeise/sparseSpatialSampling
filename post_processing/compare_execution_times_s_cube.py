@@ -108,10 +108,10 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
 if __name__ == "__main__":
     # -------------------------------------------- cylinder --------------------------------------------
     load_path = join("..", "run", "final_benchmarks")
-    save_path = join("..", "run", "final_benchmarks", "plots_comparison_cpu")
+    save_path = join("..", "run", "final_benchmarks", "plots_final")
     cases = [join("OAT15_large", "results_with_geometry_refinement_no_dl_constraint"),
-             join("surfaceMountedCube_local_TKE", "results_no_geometry_refinement_no_dl_constraint")]
-    legend = [r"$OAT$", r"$Cube$"]
+             join("cylinder3D_Re3900_local_TKE", "results_no_geometry_refinement_no_dl_constraint")]
+    legend = [r"$OAT$", r"$Cylinder3D$"]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

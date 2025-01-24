@@ -5,7 +5,8 @@
     The test case here is an OpenFoam tutorial with some adjustments to the number of cells and Reynolds number,
     currently:
 
-        - cylinder2D (at Re = 1000), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/laminar/
+        - cylinder2D (at Re = 100), located under: $FOAM_TUTORIALS/incompressible/pimpleFoam/laminar/
+          or in the flow_data repository under: https://github.com/AndreWeiner/flow_data
 
     IMPORTANT: the size of the data matrix (from the original CFD data) provided for interpolation onto the generated
                coarser grid must be

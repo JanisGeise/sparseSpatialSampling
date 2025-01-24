@@ -40,10 +40,11 @@ class GeometryObject(ABC):
 
     def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> bool:
         """
-        check if a given cell is valid or invalid based onn a given mask and settings
+        check if a given cell is invalid based on a given mask and settings,
+        will return 'False' if the cell is valid, else 'True'
 
-        Note: it is expected that the mask passed into the _apply_mask method is always False outside the geometry and
-              always True inside it (independently if it is a geometry or domain)
+        note: it is expected that the mask passed into the _apply_mask method is always 'False' outside the mask and
+              always 'True' inside it (independently if it is a geometry or domain)
 
         :param mask: mask created by the geometry object
         :type mask: pt.Tensor
@@ -51,18 +52,18 @@ class GeometryObject(ABC):
                                 to check if a cell is located in the vicinity of the geometry surface (True) to refine
                                 it subsequently. S^3 will provide this parameter.
         :type refine_geometry: bool
-        :return: flag if the cell is valid or invalid based on the defined settings
+        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
         :rtype: bool
         """
         if not refine_geometry:
-            # any(~mask), because mask returns False if we are outside, but we want True if we are outside
+            # any(~mask), because mask returns 'False' if we are outside, but we want 'True' if we are outside
             if not self._keep_inside:
                 if any(~mask):
                     invalid = False
                 else:
                     invalid = True
 
-            # if we are outside the domain, we want to return False
+            # if we are outside the domain, we want to return 'False'
             else:
                 if any(mask):
                     invalid = False

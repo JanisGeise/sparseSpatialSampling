@@ -13,7 +13,7 @@ def test_assignment_nodes_uniform_grid_2d():
     metric = pt.ones(xy.size(0))
 
     # instantiate sampling tree
-    sampling = SamplingTree(xy, metric, level_bounds=(2, 2))
+    sampling = SamplingTree(xy, metric, level_bounds=(2, 2), geometry_obj=[])
 
     # do two uniform refinement cycles, so we get a 4x4 uniform grid, cell 0 is the initial cell, cell 1-4 are its
     # child cells and cells 5-20 are the child cells of the child cells
@@ -89,7 +89,7 @@ def test_assignment_nodes_uniform_grid_3d_single_level():
     metric = pt.ones(xy.size(0))
 
     # instantiate sampling tree, test for one level
-    sampling = SamplingTree(xy, metric, level_bounds=(1, 1))
+    sampling = SamplingTree(xy, metric, level_bounds=(1, 1), geometry_obj=[])
 
     # do two uniform refinement cycles, so we get a 2x2x2 uniform grid with 8 cells
     sampling._refine_uniform()

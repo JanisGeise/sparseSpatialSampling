@@ -95,12 +95,14 @@ class SamplingTree(object):
 
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  level_bounds: Tuple = (3, 25), min_metric: float = 0.75, max_delta_level: bool = False,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1):
+                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
+                 n_neighbors: int = None):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
         :param vertices: node coordinates of the original mesh (from CFD)
         :param target: the metric based on which the grid should be created, e.g., std. deviation of pressure wrt time
+        :param geometry_obj: a list containing possible geometry objects, such as the numerical domain
         :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically once the
                         target metric is reached
         :param level_bounds: min. and max. number of levels of the final grid
@@ -111,6 +113,8 @@ class SamplingTree(object):
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning
         :param n_cells_iter_end: number of cells to refine per iteration at the end
         :param n_jobs: number of CPUs to use for the KNN prediction
+        :param n_neighbors: number of neighbors to use for the KNN, if 'None' then 8 and 26 will be used for 2 and 3
+                            dimensions, respectively
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -132,8 +136,9 @@ class SamplingTree(object):
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size()[-1]
-        self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance",
-                                        n_jobs=n_jobs)
+        if n_neighbors is None:
+            n_neighbors = 8 if self._n_dimensions == 2 else 26
+        self._knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance", n_jobs=n_jobs)
         self._knn.fit(self._vertices, self._target)
         self._cells = None
         self._leaf_cells = None

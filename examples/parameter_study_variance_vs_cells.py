@@ -7,7 +7,7 @@ from os.path import join
 
 from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry
-from examples.s3_for_cylinder2D import write_svd_s_cube_to_file
+from examples.s3_for_cylinder2D_Re100 import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 from sparseSpatialSampling.utils import export_openfoam_fields, load_foam_data
 

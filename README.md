@@ -78,8 +78,9 @@ in the `examples` directory).
 The $S^3$ package currently provides the following shapes representing numerical domains or geometries:
 1. `CubeGeometry`: rectangles (2D) or cubes (3D)
 2. `SphereGeometry`: circles (2D) or spheres (3D)
-3. `GeometryCoordinates2D`: arbitrary 2D geometries, the coordinates must be provided as an enclosed area
-4. `GeometrySTL3D`: arbitrary 3D geometries, an STL file with a manifold and closed surface must be provided
+3. `CylinderGeometry3D`: cylinders (3D)
+4. `GeometryCoordinates2D`: arbitrary 2D geometries, the coordinates must be provided as an enclosed area
+5. `GeometrySTL3D`: arbitrary 3D geometries, an STL file with a manifold and closed surface must be provided
 
 These geometry classes are located in `s_cube.geometry`.
 
@@ -157,7 +158,7 @@ example for interpolating and exporting a field:
 
 After the export of fields is completed, an XDMF file is written automatically for visualizing the results, e.g., in 
 Paraview. An example for exporting the fields snapshot-by-snapshot or in batches can be found in 
-`examples/s3_for_surfaceMountedCube_large.py` (for large datasets, which are not fitting into the RAM all at once).
+`examples/s3_for_cylinder3D_Re3900.py` (for large datasets, which are not fitting into the RAM all at once).
 
 ### Results & output files
 - the data is saved as temporal grid structure in an HDMF & XDMF file for analysis, e.g., in ParaView
@@ -264,7 +265,7 @@ Once the grid is generated and a field is interpolated, e.g., an SVD from this f
     # write XDMF file for visualizing the modes
     datawriter.write_xdmf_file()
 
-Alternatively, a wrapper function located in `examples/s3_for_cylinder2D.py` can be used for convinience as:
+Alternatively, a wrapper function located in `examples/s3_for_cylinder2D.py` can be used for convenience as:
 
     from s3_for_cylinder2D import write_svd_s_cube_to_file
 
@@ -354,3 +355,5 @@ The fields as well as the SVD are still performed in single precision to reduce 
   - **D. Fernex, A. Weiner, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
   processing of big simulation data*, DOI: https://doi.org/10.2514/6.2021-1484 (January, 2021).
 - Idea & 1D implementation of the current version taken from [Andre Weiner](https://github.com/AndreWeiner)
+- the [flow_data](https://github.com/AndreWeiner/flow_data/) repository containing the implementation of the 
+*cylinder2D_Re100* and *cylinder3D_Re3900* test cases
