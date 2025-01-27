@@ -2,8 +2,9 @@
  class for testing the s_cube_dataloader
 """
 import pytest
+from os.path import join
 
-from sparseSpatialSampling.data import Dataloader
+from ..data import Dataloader
 
 FILENAME = r"s_cube_test_dataset.h5"
 
@@ -18,7 +19,7 @@ def test_dataloader():
     field_names = {'0.4': ['p']}
 
     # instantiate dataloader
-    dataloader = Dataloader(".", FILENAME)
+    dataloader = Dataloader(join("sparseSpatialSampling", "tests"), FILENAME)
 
     # check if everything is present and can be loaded correctly
     assert len(dataloader.write_times) == 1

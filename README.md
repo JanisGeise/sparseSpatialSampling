@@ -321,9 +321,24 @@ the following steps can be performed for improvement:
 orientation of the original CFD data 
 
 ## Unit tests
-- tests can be executed with `pytest` inside the `tests` directory
-- `pytest` can be installed via: `pip install pytest`
+To perform unit tests, `pytest` has to be installed via
 
+```
+pip install pytest
+```
+To perform all available unit tests, execute
+
+```
+pytest sparseSpatialSampling/tests/
+```
+
+To execute a specific unit test, e.g., for the `Dataloader` module, execute
+
+```
+pytest sparseSpatialSampling/tests/test_s_cube_dataloader.py
+```
+
+Note that these commands have to be executed from the top-level of the repository.
 ## Issues
 If you have any questions or something is not working as expected, fell free to open up a new 
 [issue](https://github.com/JanisGeise/sparseSpatialSampling/issues). There are some known issues, which are listed below.

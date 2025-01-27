@@ -5,7 +5,7 @@
 import pytest
 import torch as pt
 
-from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D
+from ..geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D
 
 
 def test_cubic_domain_2d():

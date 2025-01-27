@@ -5,7 +5,7 @@
 import pytest
 import torch as pt
 
-from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D, GeometrySTL3D
+from ..geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D
 
 
 def test_spherical_geometry_2d():

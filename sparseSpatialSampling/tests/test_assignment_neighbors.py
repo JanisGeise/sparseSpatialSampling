@@ -4,7 +4,7 @@
 import pytest
 import torch as pt
 
-from sparseSpatialSampling.s_cube import SamplingTree
+from ..s_cube import SamplingTree
 
 
 def test_assignment_nb_uniform_grid_2d():

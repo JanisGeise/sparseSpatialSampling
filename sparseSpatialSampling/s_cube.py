@@ -135,7 +135,7 @@ class SamplingTree(object):
         self._cells_per_iter_end = int(0.0005 * vertices.size(0)) if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
-        self._n_dimensions = self._vertices.size()[-1]
+        self._n_dimensions = self._vertices.size(-1)
         if n_neighbors is None:
             n_neighbors = 8 if self._n_dimensions == 2 else 26
         self._knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance", n_jobs=n_jobs)
@@ -245,7 +245,7 @@ class SamplingTree(object):
     def _check_stopping_criteria(self) -> bool:
         """
         Check if the stopping criteria for ending the refinement process is met; either based on the captured metric
-        wrt to the original grid, or the max. number of cells specified
+        wrt to the original grid or the max. number of cells specified
 
         :return: None
         """
@@ -310,8 +310,8 @@ class SamplingTree(object):
         :return: None
         """
         # determine the main dimensions of the domain (cells are all rectangular, so len_x == len_y == len_z)
-        self._width = max([self._vertices[:, i].max() - self._vertices[:, i].min() for i in
-                           range(self._n_dimensions)]).item()
+        self._width = max([(self._vertices[:, i].max() - self._vertices[:, i].min()).item() for i in
+                           range(self._n_dimensions)])
 
         # compute the cell centers of the first cell and its child cells,
         # we can't use '_compute_cell_centers()', because we don't have any cells yet

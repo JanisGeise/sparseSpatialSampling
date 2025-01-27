@@ -4,8 +4,9 @@
 """
 import pytest
 import torch as pt
+from os.path import join
 
-from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D
+from ..geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D
 
 
 def test_cubic_geometry_3d():
@@ -35,7 +36,7 @@ def test_cubic_geometry_3d():
 
 def test_geometry_3d_stl():
     # load the STL file of the cube and create a geometry object from it
-    cube = GeometrySTL3D("cube", False, "cube.stl")
+    cube = GeometrySTL3D("cube", False, join("sparseSpatialSampling", "tests", "cube.stl"))
 
     # generate cell completely inside the cube
     cell_inside = pt.tensor([[3.75, 4.25, 0.25], [3.75, 4.75, 0.25], [3.75, 4.25, 0.75], [3.75, 4.75, 0.75],

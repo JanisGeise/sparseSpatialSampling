@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75
-    save_name = "metric_{:.2f}".format(min_metric) + "_cylinder_full_domain"
+    save_name = "metric_{:.2f}".format(min_metric)
 
     # boundaries of the masked domain for the cylinder
     bounds = [[0, 0], [2.2, 0.41]]  # [[xmin, ymin], [xmax, ymax]]

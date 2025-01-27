@@ -171,7 +171,7 @@ if __name__ == "__main__":
     # path to original cylinder3D simulation
     load_path = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests", "cylinder_3D_Re3900")
     save_path = join("..", "run", "final_benchmarks", "cylinder3D_Re3900_local_TKE",
-                     "results_with_geometry_refinement_with_dl_constraint")
+                     "results_no_geometry_refinement_no_dl_constraint")
     save_name = "cylinder3D_Re3900"
 
     # load an exiting s_cube object or start new
