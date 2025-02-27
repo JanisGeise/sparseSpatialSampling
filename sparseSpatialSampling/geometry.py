@@ -6,19 +6,19 @@
         - SphereGeometry: circles (2D), spheres (3D)
         - CylinderGeometry3D: cylinders (3D)
         - GeometryCoordinates2D: arbitrary 2D geometries; coordinates must be provided
-        - GeometrySTL3D: arbitrary 3D geometries; STL file must be provided
+        - GeometrySTL3D: arbitrary 3D geometries; an STL file must be provided
 """
 import logging
 
-from pyvista import PolyData
+from numpy import ndarray
+from pyvista import PolyData, read
 from typing import Union, List
 from shapely import Point, Polygon
-from torch import Tensor, tensor, cross, logical_and, where
+from torch import Tensor, tensor, cross, logical_and, where, float64
 
 from flowtorch.data import mask_sphere, mask_box
 
 from .geometry_base import GeometryObject
-
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -54,7 +54,7 @@ class CubeGeometry(GeometryObject):
         # check the user input based on the specified settings
         self._check_geometry()
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
         method to check if a cell is valid or invalid based on the specified settings
 
@@ -73,12 +73,11 @@ class CubeGeometry(GeometryObject):
                                                                f"number of given bounds. Expected "
                                                                f"{cell_nodes.size(-1)} values, found "
                                                                f"{len(self._lower_bound)} for geometry {self.name}.")
-
         # create a mask, the mask is expected to be always 'False' outside the geometry and always 'True' inside it
         # (independently if it is a geometry or domain)
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
 
-        # check if the cell is valid or invalid
+        # check if the cell is valid or invali
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
     def _check_geometry(self) -> None:
@@ -134,7 +133,7 @@ class SphereGeometry(GeometryObject):
         # check the user input based on the specified settings
         self._check_geometry()
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
         method to check if a cell is valid or invalid based on the specified settings
 
@@ -149,10 +148,10 @@ class SphereGeometry(GeometryObject):
         """
         # check if the number of boundaries matches the number of physical dimensions;
         # this can't be done beforehand because we don't know the number of physical dimensions yet
-        assert cell_nodes.size(-1) == len(self._position), (f"Number of dimensions of the cell does not match the "
-                                                            f"number of dimensions for the position. Expected "
-                                                            f"{cell_nodes.size(-1)} values, found "
-                                                            f"{len(self._position)} for geometry {self.name}.")
+        assert cell_nodes.size(1) == len(self._position), (f"Number of dimensions of the cell does not match the "
+                                                           f"number of dimensions for the position. Expected "
+                                                           f"{cell_nodes.size(-1)} values, found "
+                                                           f"{len(self._position)} for geometry {self.name}.")
 
         # create a mask, the mask is expected to be always 'False' outside the geometry and always 'True' inside it
         # (independently if it is a geometry or domain)
@@ -216,12 +215,12 @@ class CylinderGeometry3D(GeometryObject):
         self._position = tensor(self._position).float()
 
         # compute direction vector of cylinder centerline
-        self._axis = self._position[1, :] - self._position[0, :]
+        self._axis = (self._position[1, :] - self._position[0, :]).type(float64)
 
         # compute the norm of the axis vector
         self._norm = self._axis.norm()
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
         method to check if a cell is valid or invalid based on the specified settings
 
@@ -237,7 +236,7 @@ class CylinderGeometry3D(GeometryObject):
         # create a mask, the mask is expected to be always 'False' outside the geometry and always 'True' inside it
         # (independently if it is a geometry or domain);
         # cast cell to tensor of floats just to make sure that the cross-product works
-        mask = self._mask_cylinder(cell_nodes.float())
+        mask = self._mask_cylinder(cell_nodes)
 
         # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
@@ -274,7 +273,8 @@ class CylinderGeometry3D(GeometryObject):
         :rtype: pt.Tensor
         """
         # computer the normal distance of the point to an arbitrary (here starting point) point on the centerline
-        direction_vec = vertices - self._position[0, :]
+        # has to be converted to SP, because apparently cross() dosen't support DP
+        direction_vec = (vertices - self._position[0, :]).type(self._axis.dtype)
         normal_distance = (cross(self._axis.expand_as(direction_vec), direction_vec, 1)).norm(dim=1) / self._norm
 
         # project the vertices onto the cylinder centerline and scale with the cylinder length to get information about
@@ -290,7 +290,7 @@ class CylinderGeometry3D(GeometryObject):
 
 
 class GeometryCoordinates2D(GeometryObject):
-    def __init__(self, name: str, keep_inside: bool, coordinates: any, refine: bool = False,
+    def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
                  min_refinement_level: int = None):
         """
         implements a class for using coordinates as geometry objects representing the numerical
@@ -318,7 +318,7 @@ class GeometryCoordinates2D(GeometryObject):
         # check the user input based on the specified settings
         self._check_geometry()
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
         method to check if a cell is valid or invalid based on the specified settings
 
@@ -350,7 +350,7 @@ class GeometryCoordinates2D(GeometryObject):
 
 class GeometrySTL3D(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
-                 min_refinement_level: int = None):
+                 min_refinement_level: int = None, reduce_by: Union[int, float] = 0):
         """
         implements a class for using an STL file as geometry objects representing the numerical domain or geometries
         inside the domain for a 3D case
@@ -369,15 +369,29 @@ class GeometrySTL3D(GeometryObject):
                                      resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
                                      refinement level present at its surface after S^3 has generated the grid
         :type min_refinement_level: int
+        :param reduce_by: reduce the STL file by a factor, recommended for larger STL files since the number of points
+                          within the STL file increases the runtime significantly.
+                          A value of zero means no compression, a value of 0.9 ... 0.98 should work for most STL files.
+                          Note: this factor has to be 0 <= reduce_by < 1
+        :type min_refinement_level: Union[int, float]
         """
+        # make sure the compression factor is in a valid range
+        if reduce_by < 0:
+            logger.warning(f"Found invalid negative value for 'reduce_by' of {reduce_by}. Disabling compression.")
+            reduce_by = 0
+        elif reduce_by >= 1:
+            logger.warning(f"Found invalid value for 'reduce_by ' of {reduce_by}. Compression factor needs to be "
+                           f"0 <= reduce_by < 1. Correcting 'reduce_by' to reduce_by=0.99")
+            reduce_by = 0.99
+
         super().__init__(name, keep_inside, refine, min_refinement_level)
-        self._stl_file = PolyData(path_stl_file)
+        self._stl_file = read(path_stl_file).decimate(reduce_by)
         self._type = "STL"
 
         # check the user input based on the specified settings
         self._check_geometry()
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
         method to check if a cell is valid or invalid based on the specified settings
 
@@ -392,7 +406,7 @@ class GeometrySTL3D(GeometryObject):
         """
         # for 3D geometries represented by STL files, we need to mask using pyVista; here we don't check for closed
         # surface since we already did that on initialization
-        n = PolyData(cell_nodes.tolist())
+        n = PolyData(cell_nodes.numpy())
 
         # create a mask, the mask is expected to be always 'False' outside the geometry and always 'True' inside it
         # (independently if it is a geometry or domain)

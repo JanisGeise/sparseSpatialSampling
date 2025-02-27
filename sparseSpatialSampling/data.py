@@ -239,12 +239,12 @@ class Dataloader:
         if write_times is None:
             write_times = self.write_times
 
-        if type(write_times) is str:
+        if isinstance(write_times, str):
             write_times = [write_times]
-        if type(field_name) is str:
+        if isinstance(field_name, str):
             field_name = [field_name]
 
-        # create fiel object and empty list for storing the data matrices
+        # create a file object and empty list for storing the data matrices
         _file = File(join(self._load_path, self._file_name), "r")
         _dm = []
 

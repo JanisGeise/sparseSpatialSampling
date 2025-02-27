@@ -344,6 +344,15 @@ If you have any questions or something is not working as expected, fell free to 
 [issue](https://github.com/JanisGeise/sparseSpatialSampling/issues). There are some known issues, which are listed below.
 
 ### Known issues
+
+#### Significant increase in runtime when using STL files as geometry objects
+
+- when having STL files with many points, this will lead to a significant increase in runtime of $S^3$
+- to counter this problem, the `GeometrySTL3D` geometry object provides a compression functionality using the keyword `reduce_by`, which 
+decreases the number of points within the STL file
+- since the final grid will only be an approximation of the geometry, this factor can be set very high (depending on the STL file),
+values of `reduce_by=0.9 ... 0.98` were tested successfully (`0` means no compression)
+
 #### Visibility of internal nodes in ParaView
 - for 3D cases, the internal nodes are not or only partially displayed in Paraview, although they are present in the 
 HDF5 file

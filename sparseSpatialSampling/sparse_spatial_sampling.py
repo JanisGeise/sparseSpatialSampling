@@ -5,6 +5,7 @@ import logging
 import torch as pt
 
 from os.path import join
+from typing import Union
 from os import path, makedirs
 
 from .s_cube import SamplingTree
@@ -15,8 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 class SparseSpatialSampling:
     def __init__(self, coordinates: pt.Tensor, metric: pt.Tensor, geometry_objects: list, save_path: str,
-                 save_name: str, grid_name: str = "grid_s_cube", level_bounds: tuple = (3, 25), n_cells_max: int = None,
-                 min_metric: float = 0.9, max_delta_level: bool = False, write_times: list = None,
+                 save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5, n_cells_max: int = None,
+                 min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  n_neighbors: int = None):
         """
@@ -31,15 +32,16 @@ class SparseSpatialSampling:
         :param save_path: path where the interpolated grid and data should be saved to
         :param save_name: name of the files (grid & data)
         :param grid_name: name of the grid (used in XDMF file)
-        :param level_bounds: Tuple with (min., max.) refinement level
+        :param uniform_levels: number of uniform refinement cycles to perform
         :param n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
                             will be used
         :param min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
                            grid), if 'None' the max. number of cells will be used as stopping criteria
         :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
                                 difference of one
-        :param write_times: numerical time steps of the simulation, needs to be provided as list[int | float | str].
-                            If 'None', the time steps need to be provided after refinement (before exporting the fields)
+        :param write_times: numerical time steps of the simulation, needs to be provided as
+                            Union[int | float | str, list[int | float | str]].
+                            If 'None', the time steps need to be passed when calling the export method
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning. If 'None' then the value is
                                    set to 1% of the number of vertices in the original grid
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
@@ -56,7 +58,9 @@ class SparseSpatialSampling:
         self.save_path = save_path
         self.save_name = save_name
         self.grid_name = grid_name
-        self.write_times = write_times
+
+        # TODO: check that write times is not a tensor / convert tensors / arrays to list
+        self.write_times = write_times if isinstance(write_times, list) else [write_times]
 
         # results we get from SamplingTree
         self.centers = None
@@ -68,20 +72,19 @@ class SparseSpatialSampling:
 
         # properties only required by SamplingTree
         self._geometries = geometry_objects
-        self._level_bounds = level_bounds
-        self._n_cells_max = n_cells_max
+        self._level_bounds = int(uniform_levels)
+        self._n_cells_max = n_cells_max if n_cells_max is None else int(n_cells_max)
         self._min_metric = min_metric
         self._max_delta_level = max_delta_level
-        self._n_cells_iter_start = n_cells_iter_start
-        self._n_cells_iter_end = n_cells_iter_end
-        self._sampling = None
+        self._n_cells_iter_start = n_cells_iter_start if n_cells_iter_start is None else int(n_cells_iter_start)
+        self._n_cells_iter_end = n_cells_iter_end if n_cells_iter_end is None else int(n_cells_iter_end)
 
         # check if the dicts for the geometry objects are correct
         self._check_input()
 
         # create SamplingTree
         self._sampling = SamplingTree(self.coordinates, self.metric, self._geometries, n_cells=self._n_cells_max,
-                                      level_bounds=self._level_bounds, min_metric=self._min_metric,
+                                      uniform_level=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
                                       n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs,
                                       n_neighbors=self.n_neighbors)
@@ -144,14 +147,10 @@ class SparseSpatialSampling:
                                                                 "representing the numerical domain.")
 
         # correct invalid level bounds
-        if self._level_bounds[0] == 0:
-            assert self._level_bounds[0] < self._level_bounds[1], (f"The given level_bounds of {self._level_bounds}"
-                                                                   f"are invalid. The lower level must be smaller than "
-                                                                   f"the upper level.")
-
+        if self._level_bounds <= 0:
             # we need lower level >= 1, because otherwise the stopping criteria is not working
-            logger.warning(f"Lower level bound of {self._level_bounds[0]} is invalid. Changed lower level bound to 1.")
-            self._level_bounds = (1, self._level_bounds[1])
+            logger.warning(f"Lower level bound of {self._level_bounds} is invalid. Changed lower level bound to 1.")
+            self._level_bounds = 1
 
 
 if __name__ == "__main__":

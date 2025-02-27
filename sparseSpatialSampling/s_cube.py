@@ -94,7 +94,7 @@ class SamplingTree(object):
     """
 
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
-                 level_bounds: Tuple = (3, 25), min_metric: float = 0.75, max_delta_level: bool = False,
+                 uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  n_neighbors: int = None):
         """
@@ -105,7 +105,7 @@ class SamplingTree(object):
         :param geometry_obj: a list containing possible geometry objects, such as the numerical domain
         :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically once the
                         target metric is reached
-        :param level_bounds: min. and max. number of levels of the final grid
+        :param uniform_level: number of uniform refinement cycles to perform
         :param min_metric: percentage the metric the generated grid should capture (wrt the original grid), if 'None'
                             the max. number of cells will be used as stopping criteria
         :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
@@ -125,8 +125,7 @@ class SamplingTree(object):
         self._n_cells = 0
         self._min_metric = min_metric
         self._n_cells_max = 1e9 if n_cells is None else n_cells
-        self._min_level = level_bounds[0]
-        self._max_level = level_bounds[1]
+        self._min_level = uniform_level
         self._current_min_level = 0
         self._current_max_level = 0
         # starting value = 1% of original grid size
@@ -141,7 +140,7 @@ class SamplingTree(object):
         self._knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance", n_jobs=n_jobs)
         self._knn.fit(self._vertices, self._target)
         self._cells = None
-        self._leaf_cells = None
+        self._leaf_cells = set()
         self._n_cells_after_uniform = None
         self._N_cells_per_iter = []
         self.all_nodes = []
@@ -172,58 +171,47 @@ class SamplingTree(object):
         # same as L2, because the metric is always a vector)
         self._target_norm = pt.linalg.norm(self._target).item()
 
-    def _update_gain(self) -> None:
+    def _update_gain(self, new_cells: Union[set, list]) -> None:
         """
         Update the gain of all (new) leaf cells, the gain is composed of the improvement wrt the target metric and the
         cell size.
-        This means that first cells with a high metric are preferred for refinement while later the cell size is the
-        main driver
+        Within the first iterations, cells with a high metric are preferred for refinement while later the cell size is
+        the main driver
 
+        :param new_cells: Indices of cells for which the gain should be updated
         :return: None
         """
-        # loop over all leaf cells
-        indices, centers = ([], [])
-        for i in self._leaf_cells:
-            # if we haven't computed the gain or metric yet, append
-            if self._cells[i].gain is None or self._cells[i].metric is None:
-                indices.append(i)
+        # compute cell centers of all leaf cells and their potential children
+        _centers = self._compute_cell_centers(new_cells)
 
-                # compute the cell center of the cell
-                centers.append(self._compute_cell_centers(i))
+        # predict the target function (metric) at the cell centers (interpolated based on the original grid)
+        _metric = self._knn.predict(_centers.permute(-1, 0, 1).flatten(0, 1).numpy())
+        _metric = pt.from_numpy(_metric).reshape(int(_metric.shape[0] / _centers.size(0)), _centers.size(0))
 
-        # predict the gain at all cells and child cells simultaneously (faster than loop), then assign each cell its
-        # value for the gain
-        if len(indices) > 0:
-            # create tensor with all centers of all leaf cells and their potential children
-            all_centers = pt.cat(centers, dim=0)
+        # sum of the delta (target function) -> in which direction (left, right, ...) child changes
+        # the target function the most relative to the original cell center to each newly created cell center
+        sum_delta_metric = (_metric[:, [0]] - _metric[:, 1:]).abs().sum(dim=1)
 
-            # predict the target function at the cell centers (interpolated based on the original grid)
-            metric = self._knn.predict(all_centers.numpy())
-            metric = pt.from_numpy(metric).reshape(int(metric.shape[0] / centers[0].size()[0]), centers[0].size()[0])
+        # assign the values for metric and gain to the cells
+        _n_children = 1 / (2 ** self._n_dimensions)
+        for i, idx in enumerate(new_cells):
+            cell = self._cells[idx]
 
-            # loop over all leaf cells for which we haven't computed the gain yet
-            for i, index in enumerate(indices):
-                cell = self._cells[index]
+            # metric at the cell center of the current cell
+            cell.metric = _metric[i, 0]
 
-                # metric at the cell center of the current cell
-                cell.metric = metric[i, 0]
+            # scale with the cell size of the children (the cell size is computed based on the cell level and the
+            # size of the original cell)
+            cell.gain = _n_children * ((self._width / (2 ** cell.level)) ** self._n_dimensions) * sum_delta_metric[i]
 
-                # sum of the delta (target function) -> in which direction (left, right, ...) child changes
-                # the target function the most relative to the original cell center to each newly created cell center
-                sum_delta_metric = sum([abs(metric[i, 0] - metric[i, j]) for j in range(1, metric.size(1))])
-
-                # scale with the cell size of the children (the cell size is computed based on the cell level and the
-                # size of the original cell)
-                cell.gain = (1 / pow(2, self._n_dimensions) * pow(self._width / pow(2, cell.level), self._n_dimensions)
-                             * sum_delta_metric)
-
-    def _update_leaf_cells(self) -> None:
+    def _update_leaf_cells(self, idx_parents: set, idx_children: set) -> None:
         """
         Update the leaf cells, make sure all parent cells are removed as leaf cell
 
         :return: None
         """
-        self._leaf_cells = [cell.index for cell in self._cells if cell.leaf_cell()]
+        self._leaf_cells -= idx_parents
+        self._leaf_cells.update(idx_children)
 
     def _update_min_ref_level(self) -> None:
         """
@@ -231,7 +219,7 @@ class SamplingTree(object):
 
         :return: None
         """
-        min_level = min([self._cells[index].level for index in self._leaf_cells])
+        min_level = min({self._cells[index].level for index in self._leaf_cells})
         self._current_min_level = max(self._current_min_level, min_level)
 
     def leaf_cells(self) -> list:
@@ -315,10 +303,10 @@ class SamplingTree(object):
 
         # compute the cell centers of the first cell and its child cells,
         # we can't use '_compute_cell_centers()', because we don't have any cells yet
-        centers_ = pt.zeros((pow(2, self._n_dimensions) + 1, self._n_dimensions))
+        centers_ = pt.zeros((2 ** self._n_dimensions + 1, self._n_dimensions))
 
         # we can't use tensor operations to compute the centers_ tensor all at once, so we need to fill it element-wise
-        for node in range(pow(2, self._n_dimensions) + 1):
+        for node in range(2 ** self._n_dimensions + 1):
             for d in range(self._n_dimensions):
                 centers_[node, d] = (pt.max(self._vertices[:, d]).item() + pt.min(self._vertices[:, d]).item()) / 2.0
 
@@ -346,13 +334,13 @@ class SamplingTree(object):
                             dimensions=self._n_dimensions, idx=list(range(nodes.size()[0])))]
 
         # update the leaf cells, so the initial cell is now seen as leaf cell
-        self._update_leaf_cells()
+        self._leaf_cells.add(0)
 
-    def _compute_cell_centers(self, _idx: int = None, _factor: float = 0.25, _keep_parent_center: bool = True,
-                              _cell: Cell = None) -> pt.Tensor:
+    def _compute_cell_centers(self, _idx: Union[int, list, set] = None, _factor: float = 0.25,
+                              _keep_parent_center: bool = True, _cell: Cell = None) -> pt.Tensor:
         """
         Computes either the cell centers of the child cells for a given parent cell ('factor_' = 0.25) or the nodes of
-        a given cell, ('factor_' = 0.5)
+        a given cell ('factor_' = 0.5)
 
         Note:   although this method is called '_compute_cell_centers()', it computes the vertices of a cell if
                 'factor_=0.5', not the cell center.
@@ -364,24 +352,28 @@ class SamplingTree(object):
         :param _keep_parent_center: if the cell center of the parent cell should be deleted from the tensor prior return
         :return: either cell centers of child cells (factor_=0.25) or nodes of current cell (factor_=0.5)
         """
-        # get the correct cell center and cell level
-        center_ = self._cells[_idx].center if _cell is None else _cell.center
-        level_ = self._cells[_idx].level if _cell is None else _cell.level
+        if _cell is None:
+            _idx = [_idx] if type(_idx) is int else _idx
+            centers = pt.cat(list(map(lambda i: self._cells[i].center.unsqueeze(-1), _idx)), -1)
+            levels = pt.tensor(list(map(lambda i: self._cells[i].level, _idx))).int()
+        else:
+            centers = _cell.center.unsqueeze(-1)
+            levels = _cell.level
 
-        # allocate empty tensor with size of (parent_cell + n_children, n_dims)
-        coord_ = pt.zeros((pow(2, self._n_dimensions) + 1, self._n_dimensions))
+        # allocate empty tensor with size of (parent_cell + n_children, n_dims, n_cells)
+        _coord = pt.zeros(((2 ** self._n_dimensions) + 1, self._n_dimensions, centers.size(-1)))
 
-        # fill with cell centers of parent & child cells, the first row corresponds to parent cell
-        coord_[0, :] = center_
+        # fill with cell centers of parent and child cells, the first row corresponds to parent cell
+        _coord[0, :, :] = centers
 
         # compute the cell centers of the children relative to the parent cell center location
         # -> offset in each direction is +- 0.25 * cell_width;
         # in case the cell center of each cell should be computed, it is 0.5 * cell_width
-        coord_[1:, :] = center_ + self._directions * _factor * self._width / pow(2, level_)
+        _coord[1:, :, :] = centers + self._directions.unsqueeze(-1) * _factor * self._width / (2 ** levels)
 
         # remove the parent cell center if the flag is set (no parent cell center if we just want to compute the cell
         # centers of each cell, but we need the parent cell center, e.g., for computing the gain)
-        return coord_[1:, :] if not _keep_parent_center else coord_
+        return _coord[1:, :, :].squeeze(-1) if not _keep_parent_center else _coord.squeeze(-1)
 
     def _check_nb(self, _cell_no: int) -> list:
         """
@@ -445,9 +437,10 @@ class SamplingTree(object):
         :return: None
         """
         self._times["t_start_uniform"] = time()
-        for _ in range(self._min_level):
+        for j in range(self._min_level):
+            logger.info(f"\r\tStarting iteration no. {j}, N_cells = {len(self._leaf_cells)}")
             new_cells = []
-            new_index = len(self._cells)
+            new_index, all_parents, all_children = len(self._cells), set(), set()
             for i in self._leaf_cells:
                 cell = self._cells[i]
 
@@ -456,13 +449,15 @@ class SamplingTree(object):
 
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = list(self._assign_neighbors(cell, loc_center, new_index))
+                all_children.update(list(range(new_index, new_index + len(cell.children))))
+                all_parents.add(cell.index)
 
                 # assign idx for the newly created nodes
                 self._assign_indices(cell.children)
 
                 new_cells.extend(cell.children)
-                self._n_cells += pow(2, self._n_dimensions)
-                new_index += pow(2, self._n_dimensions)
+                self._n_cells += 2 ** self._n_dimensions
+                new_index += 2 ** self._n_dimensions
 
             # update all nb
             for cell in range(len(new_cells)):
@@ -470,15 +465,15 @@ class SamplingTree(object):
                                                                          children=new_cells[cell].parent.children)
 
             self._cells.extend(new_cells)
-            self._update_leaf_cells()
-            self._update_gain()
+            self._update_leaf_cells(all_parents, all_children)
+            self._update_gain(all_children)
             self._current_min_level += 1
             self._current_max_level += 1
 
             # delete cells which are outside the domain or inside a geometry (here we update all cells every iteration)
-            self.remove_invalid_cells([c.index for c in new_cells])
+            self._remove_invalid_cells({c.index for c in new_cells})
 
-        logger.info("Finished uniform refinement.")
+        logger.info(f"Finished uniform refinement.")
         self._times["t_end_uniform"] = time()
 
     def refine(self) -> None:
@@ -509,10 +504,9 @@ class SamplingTree(object):
             if len(self._metric) >= 2:
                 self._compute_n_cells_per_iter()
 
-            self._update_gain()
-            self._leaf_cells.sort(key=lambda x: self._cells[x].gain, reverse=True)
+            _leaf_cells_sorted = sorted(list(self._leaf_cells), key=lambda x: self._cells[x].gain, reverse=True)
             to_refine = set()
-            for i in self._leaf_cells[:min(self._cells_per_iter, self._n_cells)]:
+            for i in _leaf_cells_sorted[:min(self._cells_per_iter, self._n_cells)]:
                 cell = self._cells[i]
                 to_refine.add(cell.index)
 
@@ -528,7 +522,7 @@ class SamplingTree(object):
                     # constraint violations between a nb and its nb cells
                     to_refine.update(self._check_constraint(nb_to_refine_as_well))
 
-            new_cells = []
+            new_cells, all_parents, all_children = [], set(), set()
             new_index = len(self._cells)
             for i in to_refine:
                 cell = self._cells[i]
@@ -538,35 +532,44 @@ class SamplingTree(object):
 
                 # assign the neighbors of current cell and add all new cells as children
                 cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
+                all_children.update(list(range(new_index, new_index + len(cell.children))))
+                all_parents.add(cell.index)
 
                 # assign idx for the newly created nodes
                 self._assign_indices(cell.children)
 
                 new_cells.extend(cell.children)
-                self._n_cells += pow(2, self._n_dimensions)
+                self._n_cells += 2 ** self._n_dimensions
                 self._current_max_level = max(self._current_max_level, cell.level + 1)
 
                 # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
-                new_index += pow(2, self._n_dimensions)
+                new_index += 2 ** self._n_dimensions
 
             # add the newly generated cell to the list of all existing cells and update everything
             self._cells.extend(new_cells)
-            self._update_leaf_cells()
-            self._update_gain()
-            self._update_min_ref_level()
+            self._update_leaf_cells(all_parents, all_children)
+            self._update_gain(all_children)
 
             # check the newly generated cells if they are outside the domain or inside a geometry, if so, delete them
-            self.remove_invalid_cells([c.index for c in new_cells])
+            self._remove_invalid_cells({c.index for c in new_cells})
 
             # compute global gain after refinement to check if we can stop the refinement
             self._compute_captured_metric()
             iteration_count += 1
+
+        try:
+            del _leaf_cells_sorted
+        except UnboundLocalError:
+            pass
 
         # refine the grid near geometry objects is specified
         logger.info("Finished adaptive refinement.")
 
         # refine geometries if specified
         self._refine_geometries()
+
+        # update the min. refinement level for logging info and grid statistics
+        self._update_min_ref_level()
 
         # assemble the final grid
         self._resort_nodes_and_indices_of_grid()
@@ -583,8 +586,8 @@ class SamplingTree(object):
         logger.info("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
         logger.info(self)
 
-    def remove_invalid_cells(self, _refined_cells, _refine_geometry: bool = False,
-                             _geometry_no: Union[int, list] = None) -> None or list:
+    def _remove_invalid_cells(self, _refined_cells: set, _refine_geometry: bool = False,
+                              _geometry_no: Union[int, list] = None) -> None or list:
         """
         Check if any of the generated cells are located inside a geometry or outside a domain, if so they are removed.
 
@@ -600,40 +603,44 @@ class SamplingTree(object):
 
         # determine for which geometries we should check -> important for geometry refinement at the end
         _geometries = [self._geometry[g] for g in _geometry_no] if _geometry_no is not None else self._geometry
+        _idx = set()
 
-        # check for each cell if it is located outside the domain or inside a geometry
-        cells_invalid, idx = set(), set()
-        for cell in _refined_cells:
-            # compute the node locations of the current cell
-            nodes = self._compute_cell_centers(cell, _factor=0.5, _keep_parent_center=False)
+        # compute the node locations of the current cell
+        nodes = self._compute_cell_centers(_refined_cells, _factor=0.5, _keep_parent_center=False)
 
+        # loop over all new cells and check if they are valid
+        for i, cell in enumerate(_refined_cells):
             # check for each geometry object if the cell is inside the geometry or outside the domain
-            invalid = [g.check_cell(nodes, _refine_geometry) for g in _geometries]
+            for g in _geometries:
+                # save the index of the invalid cell, set the gain to zero and make sure this cell is not changed back
+                # to a leaf cell in future iterations resulting from delta level constraint
+                if g.check_cell(nodes[:, :, i], _refine_geometry):
+                    _idx.add(cell)
 
-            # save the cell and corresponding index, set the gain to zero and make sure this cell is not changed to
-            # leaf cell in future iterations resulting from delta level
-            if any(invalid):
-                cells_invalid.add(self._cells[cell])
-                idx.add(cell)
+                    # deactivate children by using an empty list, because a cell is seen as leaf cell if children = None
+                    # but if we just want to get the idx for refining geometries, we don't want to deactivate the cell
+                    self._cells[cell].children = None if _refine_geometry else []
+                    self._cells[cell].gain = 0
 
-                # deactivate children by using an empty list, because a cell is seen as leaf cell if children = None
-                # but if we just want to get the idx for refining geometries, we don't want to deactivate the cell
-                self._cells[cell].children = None if _refine_geometry else []
-                self._cells[cell].gain = 0
+                    # once the cell is removed, we don't need to check it for the remaining geometry objects
+                    break
 
         # if we didn't find any invalid cells, we are done here, else we need to reset the nb of the cells affected by
         # the removal of the masked cells
-        if cells_invalid == set():
+        if _idx == set():
             return
         elif _refine_geometry:
-            return idx
+            return _idx
         else:
-            # loop over all cells and check all neighbors for each cell, if invalid, replace it with None
-            for cell in self._leaf_cells:
-                self._cells[cell].nb = [None if n in cells_invalid else n for n in self._cells[cell].nb]
+            # for each invalid cell, loop over their neighbors, find the invalid cell and deactivate it as a neighbor
+            for cell in _idx:
+                for nb in self._cells[cell].nb:
+                    if nb is not None:
+                        self._cells[nb.index].nb = [None if nb.nb[n] is not None and nb.nb[n].index == cell else
+                                                    nb.nb[n] for n in range(len(nb.nb))]
 
-            # remove all invalid cells as leaf cells if we have any
-            self._leaf_cells = [i for i in self._leaf_cells if i not in idx]
+            # remove all invalid cells from the leaf cells
+            self._leaf_cells -= _idx
 
     def _resort_nodes_and_indices_of_grid(self) -> None:
         """
@@ -649,7 +656,7 @@ class SamplingTree(object):
         _unique_idx = _all_idx.flatten().unique()
 
         # the initial cell is not in the list, so add it manually
-        _idx_initial_cell = pt.arange(0, pow(2, self._n_dimensions))
+        _idx_initial_cell = pt.arange(0, 2 ** self._n_dimensions)
 
         # add the remaining indices to get all available indices present in the current grid
         _all_available_idx = pt.cat([_idx_initial_cell, pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)])
@@ -688,7 +695,7 @@ class SamplingTree(object):
         # newly created cells
         for g in _geometries:
             logger.info(f"Starting refining geometry {self._geometry[g].name}.")
-            _all_cells = set(self.remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
+            _all_cells = set(self._remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
             _global_min_level = min([self._cells[cell].level for cell in _all_cells])
 
             # determine the max. refinement level for the geometries:
@@ -699,7 +706,6 @@ class SamplingTree(object):
                 _global_max_level = self._geometry[g].min_refinement_level
 
             while _global_max_level > _global_min_level:
-                self._update_gain()
                 to_refine, checked = set(), set()
 
                 for i in _all_cells:
@@ -724,37 +730,36 @@ class SamplingTree(object):
                         to_refine.update(nb_to_refine_as_well)
                         checked.update(nb_to_refine_as_well)
 
-                new_cells = []
+                new_cells, all_parents, all_children = [], set(), set()
                 new_index = len(self._cells)
                 for i in to_refine:
                     cell = self._cells[i]
                     loc_center = self._compute_cell_centers(i, _keep_parent_center=False)
                     cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
+                    all_children.update(list(range(new_index, new_index + len(cell.children))))
+                    all_parents.add(cell.index)
                     self._assign_indices(cell.children)
                     new_cells.extend(cell.children)
-                    self._n_cells += (pow(2, self._n_dimensions) - 1)
-                    new_index += pow(2, self._n_dimensions)
+                    self._n_cells += (2 ** self._n_dimensions - 1)
+                    new_index += 2 ** self._n_dimensions
 
                 self._cells.extend(new_cells)
-                self._update_leaf_cells()
-                self._update_gain()
-                _idx_new = [c.index for c in new_cells]
-                self.remove_invalid_cells(_idx_new, _geometry_no=g)
+                self._update_leaf_cells(all_parents, all_children)
+                self._update_gain(all_children)
+                _idx_new = {c.index for c in new_cells}
+                self._remove_invalid_cells(_idx_new, _geometry_no=g)
 
                 # update '_all_cells' after every iteration, we need to check again which of the refined cells are in
                 # the vicinity of the geometry; we use only valid cells because otherwise we would mark the invalid
                 # cells as leaf cells (because kwarg _refine_geometry)
-                _all_cells = set(self.remove_invalid_cells([i for i in _idx_new if self._cells[i].children is None],
-                                                           _refine_geometry=True, _geometry_no=g))
+                _all_cells = set(self._remove_invalid_cells({i for i in _idx_new if self._cells[i].children is None},
+                                                            _refine_geometry=True, _geometry_no=g))
 
                 # update the min. level
                 _global_min_level += 1
 
-        # we need to update the leaf cells, because otherwise the levels are not assigned correctly for some reason
-        self._update_leaf_cells()
-
         # update the global max. level
-        self._current_max_level = max([self._cells[cell].level for cell in self._leaf_cells])
+        self._current_max_level = max({self._cells[cell].level for cell in self._leaf_cells})
         logger.info("Finished geometry refinement.")
 
     def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor = None, new_idx: int = None,
@@ -1042,7 +1047,7 @@ class SamplingTree(object):
             self.all_centers.append(cells[i].center)
 
             # initialize an empty list
-            cells[i].node_idx = [0] * pow(2, self._n_dimensions)
+            cells[i].node_idx = [0] * 2 ** self._n_dimensions
 
             # compute the node locations of the current cell
             nodes = self._compute_cell_centers(_factor=0.5, _keep_parent_center=False, _cell=cells[i])

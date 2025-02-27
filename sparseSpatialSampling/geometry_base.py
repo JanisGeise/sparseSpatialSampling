@@ -38,7 +38,7 @@ class GeometryObject(ABC):
         # check the arguments which should be present for all geometry objects
         self._check_common_arguments()
 
-    def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> bool:
+    def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> Tensor:
         """
         check if a given cell is invalid based on a given mask and settings,
         will return 'False' if the cell is valid, else 'True'
@@ -58,31 +58,19 @@ class GeometryObject(ABC):
         if not refine_geometry:
             # any(~mask), because mask returns 'False' if we are outside, but we want 'True' if we are outside
             if not self._keep_inside:
-                if any(~mask):
-                    invalid = False
-                else:
-                    invalid = True
+                invalid = mask.all(0)
 
             # if we are outside the domain, we want to return 'False'
             else:
-                if any(mask):
-                    invalid = False
-                else:
-                    invalid = True
+                invalid = ~mask.any(0)
 
         # otherwise, we want to refine all cells that have at least one node in the geometry / outside the domain.
         else:
             # add all cells that have at least one node inside the geometry
             if not self._keep_inside:
-                if any(mask):
-                    invalid = True
-                else:
-                    invalid = False
+                invalid = mask.any(0)
             else:
-                if all(~mask):
-                    invalid = True
-                else:
-                    invalid = False
+                invalid = ~mask.all(0)
 
         return invalid
 

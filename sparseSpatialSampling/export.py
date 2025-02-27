@@ -72,8 +72,7 @@ class ExportData:
         self._n_snapshots_total = None
         self._t_start = time()
 
-    def export(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str,
-               _n_snapshots_total: int = None) -> None:
+    def export(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:
         """
         interpolate the provided (original) CFD data onto the generated grid by S^3 and write it to a HDF5 and XDMF
         file for all given time steps.
@@ -86,10 +85,15 @@ class ExportData:
                                    that the provided data are all available snapshots
         :return: None
         """
+        # check if new write times were provided before loading any fields, if not exit
+        if self._write_times is None:
+            logger.error("Couldn't find any write_times for export. Make sure to pass the write times to S^3 on "
+                         "instantiation or set a value for the write times before calling the export method.")
+
         # make sure the field name is always up to date
         self._field_name = _field_name
         self._fit_data(_coord, _data, _field_name, _n_snapshots_total)
-        self._write_data_to_hdmf5()
+        self._write_data_to_hdf5()
 
     def _fit_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:
         """
@@ -140,7 +144,7 @@ class ExportData:
         # update the number of snapshots we already interpolated
         self._snapshot_counter += _data.size()[-1]
 
-    def _write_data_to_hdmf5(self) -> None:
+    def _write_data_to_hdf5(self) -> None:
         """
         Write the generated grid and the fields, interpolated at the cell centers and nodes, respectively, to an HDF5
         file for the given number of snapshots.

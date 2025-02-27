@@ -91,7 +91,7 @@ if __name__ == "__main__":
     # compute the metric
     metric = pt.std(field, dim=1)
 
-    # load the airfoil geometry of the leading airfoil from STL file
+    # load the airfoil geometry of the leading airfoil from an STL file
     oat15 = load_airfoil_from_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
 
     # define the boundaries for the domain and assemble the geometry objects

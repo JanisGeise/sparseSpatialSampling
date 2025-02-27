@@ -21,13 +21,13 @@ def test_spherical_geometry_2d():
     cell_part = pt.tensor([[0.2, 0.2], [0.2, 0.5], [0.5, 0.5], [0.5, 0.2]])
 
     # valid if point is outside the geometry
-    assert cylinder.check_cell(cell_outside) is False
+    assert cylinder.check_cell(cell_outside).item() is False
 
     # invalid if point is inside the geometry
-    assert cylinder.check_cell(cell_inside) is True
+    assert cylinder.check_cell(cell_inside).item() is True
 
     # valid if point is partially inside the geometry
-    assert cylinder.check_cell(cell_part) is False
+    assert cylinder.check_cell(cell_part).item() is False
 
 
 def test_cubic_geometry_2d():
@@ -43,13 +43,13 @@ def test_cubic_geometry_2d():
     cell_part = pt.tensor([[0.5, 0.5], [0.5, 1.5], [1.5, 1.5], [1.5, 0.5]])
 
     # valid if point is outside the geometry
-    assert domain.check_cell(cell_outside) is False
+    assert domain.check_cell(cell_outside).item() is False
 
     # invalid if point is inside the geometry
-    assert domain.check_cell(cell_inside) is True
+    assert domain.check_cell(cell_inside).item() is True
 
     # valid if point is partially inside the geometry
-    assert domain.check_cell(cell_part) is False
+    assert domain.check_cell(cell_part).item() is False
 
 
 def test_geometry_2d_stl():
@@ -65,10 +65,10 @@ def test_geometry_2d_stl():
     cell_part = pt.tensor([[0.5, 0.5], [0.5, 1.5], [1.5, 1.5], [1.5, 0.5]])
 
     # valid if point is outside the geometry
-    assert rectangle.check_cell(cell_outside) is False
+    assert rectangle.check_cell(cell_outside).item() is False
 
     # invalid if point is inside the geometry
-    assert rectangle.check_cell(cell_inside) is True
+    assert rectangle.check_cell(cell_inside).item() is True
 
     # valid if point is partially inside the geometry
-    assert rectangle.check_cell(cell_part) is False
+    assert rectangle.check_cell(cell_part).item() is False
