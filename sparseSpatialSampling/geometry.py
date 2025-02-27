@@ -273,7 +273,6 @@ class CylinderGeometry3D(GeometryObject):
         :rtype: pt.Tensor
         """
         # computer the normal distance of the point to an arbitrary (here starting point) point on the centerline
-        # has to be converted to SP, because apparently cross() dosen't support DP
         direction_vec = (vertices - self._position[0, :]).type(self._axis.dtype)
         normal_distance = (cross(self._axis.expand_as(direction_vec), direction_vec, 1)).norm(dim=1) / self._norm
 

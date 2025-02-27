@@ -79,10 +79,6 @@ if __name__ == "__main__":
     # load an exiting s_cube object or start new
     load_existing = False
 
-    vec1 = pt.tensor([1, 1, 1]).type(pt.float64)
-    vec2 = pt.tensor([1, 2, 3]).type(pt.float64)
-    res = pt.cross(vec1, vec2)
-
     # for which field should we compute the metric?
     field_name = "UPrime2Mean"
 
@@ -91,8 +87,7 @@ if __name__ == "__main__":
     fields = ["pMean", "p", "U", "UMean", "pPrime2Mean", "UPrime2Mean"]
 
     # how much of the metric within the original grid should be captured at least
-    # min_metric = pt.arange(0.25, 1.05, 0.05)
-    min_metric = [0.01]
+    min_metric = pt.arange(0.25, 1.05, 0.05)
 
     # load the CFD data in the given boundaries (full domain) and compute the metric snapshot-by-snapshot
     d = 0.1
