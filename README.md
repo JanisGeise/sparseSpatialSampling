@@ -5,6 +5,9 @@ over time. The $S^3$ algorithm then generates a grid which captures *x%* of the 
 a specified max. number of cells, depending on the setup given by the user. After generating the grid, the original CFD 
 data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
+**Note:** There are some issues, which may arise when visualizing the results of $S^3$ in Paraview. 
+See section [issues](#Issues) for know issues and their solution.
+
 ## Getting started
 The following code snipped shows how to execute $S^3$, a more detailed explanation is given below.
         
@@ -297,11 +300,11 @@ The available RAM has to be large enough to hold all snapshots of the interpolat
 perform the SVD.
 
 ### Reaching the specified target metric
-- if the target metric is not reached with sufficient accuracy, the parameter `n_cells_iter_start` and
-`n_cells_iter_end` have to be decreased. If none provided, they are automatically set to:  
+- if the target metric is not reached with sufficient accuracy, the parameters `n_cells_iter_start` and
+`n_cells_iter_end` have to be decreased. If `None` provided, they are automatically set to:  
   
-&emsp;&emsp; `n_cells_iter_start` = 1% of original grid size  
-&emsp;&emsp; `n_cells_iter_end` = 5% of `n_cells_iter_start` 
+&emsp;&emsp; `n_cells_iter_start` = $0.1%$ of original grid size  
+&emsp;&emsp; `n_cells_iter_end` = `n_cells_iter_start` 
 
 
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
@@ -343,7 +346,12 @@ Note that these commands have to be executed from the top-level of the repositor
 If you have any questions or something is not working as expected, fell free to open up a new 
 [issue](https://github.com/JanisGeise/sparseSpatialSampling/issues). There are some known issues, which are listed below.
 
-### Known issues
+### Known issues and possible solutions
+
+#### Incorrect assignment of values to the grid when displaying the results in ParaView
+
+- when opening the `XDMF` file in Paraview, it is important to select the `Xdmf3 ReaderS`, all other readers
+will lead to an incorrect assignment of the values to the respective cells
 
 #### Significant increase in runtime when using STL files as geometry objects
 

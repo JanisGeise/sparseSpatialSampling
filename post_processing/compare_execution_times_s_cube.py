@@ -4,13 +4,35 @@
 import torch as pt
 import matplotlib.pyplot as plt
 
+from glob import glob
 from os.path import join
 from os import path, makedirs
 
-from plot_results_parameter_study_variance import load_results
 
 # use latex fonts
-plt.rcParams.update({"text.usetex": True, "text.latex.preamble": [r'\usepackage{amsmath}']})
+plt.rcParams.update({"text.usetex": True, "text.latex.preamble": r'\usepackage{amsmath}'})
+
+
+def load_results(_load_path: str) -> dict:
+    """
+    loads and re-sorts results from S^3 refinement
+
+    :param _load_path: path to the results from the refinements with S^3
+    :return: the loaded and sorted data
+    """
+    file_names = sorted(glob(join(_load_path, "mesh_info_*.pt")),
+                        key=lambda x: float(x.split("_")[-1].split(".pt")[0]))
+    _data = [pt.load(f, weights_only=False) for f in file_names]
+
+    # re-sort results from list(dict) to dict(list) in order to plot the results easier / more efficient
+    data_out = {}
+    for key in list(_data[0].keys()):
+        data_out[key] = [i[key] for i in _data]
+
+    # add extra key for final variance of grid
+    data_out["final_metric"] = [i[-1] for i in data_out["metric_per_iter"]]
+
+    return data_out
 
 
 def plot_execution_times(_data: list, _save_path: str, case: list, save_name: str = "t_exec_vs_metric") -> None:
@@ -98,7 +120,7 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
     ax[1].set_yscale("log")
     ax[0].legend(ncols=1, loc="upper left")
-    ax[1].legend(ncols=1)
+    ax[1].legend(ncols=2)
     fig.tight_layout()
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(_save_path, f"{save_name}.png"), dpi=340)
@@ -110,8 +132,8 @@ if __name__ == "__main__":
     load_path = join("..", "run", "final_benchmarks")
     save_path = join("..", "run", "final_benchmarks", "plots_final")
     cases = [join("OAT15_large", "results_with_geometry_refinement_no_dl_constraint"),
-             join("cylinder3D_Re3900_local_TKE", "results_no_geometry_refinement_no_dl_constraint")]
-    legend = [r"$OAT$", r"$Cylinder3D$"]
+             join("cylinder3D_Re3900_local_TKE", "results_with_geometry_refinement_no_dl_constraint")]
+    legend = [r"$OAT$", r"$Cylinder3D$",]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

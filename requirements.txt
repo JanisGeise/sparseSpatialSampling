@@ -2,7 +2,7 @@ numpy>=1.22
 torch
 numba
 scikit-learn
-git+https://github.com/FlowModelingControl/flowtorch
+git+https://github.com/FlowModelingControl/flowtorch.git@aweiner
 shapely
 h5py
 matplotlib

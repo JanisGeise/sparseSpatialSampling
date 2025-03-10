@@ -73,11 +73,11 @@ if __name__ == "__main__":
     load_path = join("..", "data", "2D", "OAT15")
     field_name = "Ma"
     area = "large"
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
-                             "results_with_geometry_refinement_with_dl_constraint")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
+                             "results_with_geometry_refinement_no_dl_constraint")
 
     # execute S^3 for range of variances (for parameter study)
-    min_variance = pt.arange(0.25, 1.05, 0.05)
+    min_variance = pt.arange(0.2, 1.05, 0.05)
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join(load_path, "vertices_and_masks.pt"))
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
         # instantiate an S^3 object
         s_cube = SparseSpatialSampling(xz, metric, geometry, save_path_results, save_name, "OAT15", min_metric=v,
-                                       write_times=times.tolist(), n_jobs=6)
+                                       write_times=times.tolist(), n_jobs=8, max_delta_level=False)
 
         # execute S^3
         s_cube.execute_grid_generation()

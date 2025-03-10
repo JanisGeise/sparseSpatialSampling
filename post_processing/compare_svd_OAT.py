@@ -56,7 +56,7 @@ def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: lis
 def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: str, legend: list, chord: float = 0.15,
              u_inf: float = 238.59, xlim: Union[Tuple, list] = (0, 1), n_modes: int = 4) -> None:
     # adapted from @AndreWeiner
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(6, 3))
 
     # use default color cycle
     color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
@@ -73,9 +73,10 @@ def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: st
     ax.set_ylabel("$PSD$")
     ax.set_xlim(xlim)
     ax.legend()
+    ax.legend(loc="upper right", ncols=3)
     fig.legend(legend, loc="upper center", ncols=4)
     fig.tight_layout()
-    fig.subplots_adjust(top=0.9)
+    fig.subplots_adjust(top=0.82)
     plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
     plt.close("all")
 
@@ -91,7 +92,7 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
         ax[row][0].tricontourf(coord_original[:, 0] / chord, coord_original[:, 1] / chord, U_orig[:, row], vmin=vmin,
                                vmax=vmax, levels=levels, cmap="seismic", extend="both")
         # flip sign of modes so it is consistent
-        if row > 0:
+        if 0 < row < n_modes-2:
             ax[row][1].tricontourf(coord_inter[:, 0] / chord, coord_inter[:, 1] / chord, U_inter[:, row] * -1,
                                    vmin=vmin, vmax=vmax, levels=levels, cmap="seismic", extend="both")
         else:
@@ -118,10 +119,10 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
     color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
     ls = 10 * ["-", "--", "-.", ":"]
 
-    # reverse sign, so it is consistent with [0] = original
-    # V[1][:, [3, 4, 5]] *= -1
-    # V[2][:, [3, 4]] *= -1
-    # V[3][:, [2]] *= -1
+    # reverse sign, so it is consistent with V[0] = original
+    V[1][:, [1, 2, 3]] *= -1
+    V[2][:, [0, 1, 2, 3]] *= -1
+    V[3][:, [0, 4, 5]] *= -1
 
     # non-dimensionalize the time steps
     write_times = write_times * (u_inf / chord)
@@ -133,7 +134,6 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
                 ax[row].plot(write_times, v[:, row], color=color[i], label=legend[i], ls=ls[i])
             else:
                 ax[row].plot(write_times, v[:, row], color=color[i], ls=ls[i])
-        # ax[row].text(write_times.max() + 1, 0, f"$mode$ ${row + 1}$", va="center")
         ax[row].set_xlim(write_times.min(), write_times.max())
     fig.legend(loc="upper center", framealpha=1.0, ncols=4)
     ax[-1].set_xlabel(r"$\tau$")
@@ -151,24 +151,22 @@ if __name__ == "__main__":
     metric = ["0.25", "0.50", "0.75"]
 
     # path to the HDF5 file
-    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                      "results_with_geometry_refinement_no_dl_constraint")
     file_name = [f"OAT15_{area}_area_variance_{m}.h5" for m in metric]
 
     # path to the directory to which the plots should be saved to
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                              "plots_with_geometry_refinement_no_dl_constraint")
 
     # the actual metric may differ from the filename
-    legend = ["$original$"] + [r"$\mathcal{M} = " + f"{m}$" for m in ["0.27", "0.52", "0.75"]]
+    legend = ["$original$"] + [r"$\mathcal{M} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
 
     # load the field of the original CFD data
     if area == "large":
-        # orig_field = pt.load(join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes",
-        #                           f"ma_{area}_every10.pt"))
-        orig_field = pt.load(join("..", "data", "2D", "OAT15", f"ma_{area}_every10.pt"))
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", f"ma_{area}_every10.pt"), weights_only=False)
     else:
-        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"), weights_only=False)
 
     # load the airfoil(s) as overlay for contourf plots
     geometry = [load_airfoil_as_stl_file(join("..", "data", "2D", "OAT15", "oat15_airfoil_no_TE.stl"), dimensions="xz")]
@@ -178,10 +176,10 @@ if __name__ == "__main__":
                         dimensions="xz"))
 
     # load the corresponding write times and stack the coordinates
-    times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"))[::10]
+    times = pt.load(join("..", "data", "2D", "OAT15", "oat15_tandem_times.pt"), weights_only=False)[::10]
 
     # load the coordinates of the original grid used in CFD
-    xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
+    xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"), weights_only=False)
     cell_area_orig = xz[f"area_{area}"].unsqueeze(-1).sqrt()
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 

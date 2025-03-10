@@ -128,10 +128,10 @@ class SamplingTree(object):
         self._min_level = uniform_level
         self._current_min_level = 0
         self._current_max_level = 0
-        # starting value = 1% of original grid size
-        self._cells_per_iter_start = int(0.01 * vertices.size(0)) if n_cells_iter_start is None else n_cells_iter_start
-        # end value = 5% of start value
-        self._cells_per_iter_end = int(0.0005 * vertices.size(0)) if n_cells_iter_end is None else n_cells_iter_end
+        # starting value = 0.1% of original grid size
+        self._cells_per_iter_start = int(0.001 * vertices.size(0)) if n_cells_iter_start is None else n_cells_iter_start
+        # end value = same as start value
+        self._cells_per_iter_end = self._cells_per_iter_start if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
         self._width = None
         self._n_dimensions = self._vertices.size(-1)

@@ -59,7 +59,6 @@ class SparseSpatialSampling:
         self.save_name = save_name
         self.grid_name = grid_name
 
-        # TODO: check that write times is not a tensor / convert tensors / arrays to list
         self.write_times = write_times if isinstance(write_times, list) else [write_times]
 
         # results we get from SamplingTree

@@ -86,16 +86,23 @@ def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: lis
     label = [rf"$\mu(\Delta {field}) / {field}_" + r"{\infty}$", rf"$\sigma(\Delta {field}) / {field}_" + r"{\infty}$"]
     fig, ax = plt.subplots(ncols=2, sharey="row", figsize=(6, 2))
 
-    # set ticks for colorbar manually because otherwise the format is messed up
-    ticks = [pt.linspace(-2e-4, 1e-4, 7).tolist(), pt.linspace(0, 8e-5, 9).tolist()]
     for i in range(2):
         vmin, vmax = error_field[i].min().item(), error_field[i].max().item()
+
+        # determine the tick format for the colorbar manually because otherwise the format is messed up
+        fmt = [abs(int("{:.0e}".format(vmin).split("e")[-1])), abs(int("{:.0e}".format(vmax).split("e")[-1]))]
+        pre = [int("{:.0e}".format(vmin).split("e")[0]), int("{:.0e}".format(vmax).split("e")[0])]
+        if i == 0:
+            ticks = pt.linspace(round(vmin, fmt[0]), round(vmax, fmt[1]), len(list(range(pre[0], pre[1])))+1)
+        else:
+            # std. dev. starts always at zero
+            ticks = pt.linspace(0, round(vmax, fmt[1]), 6)
+
         tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i], vmin=vmin, vmax=vmax,
                                 levels=pt.linspace(vmin, vmax, 100))
-        cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, label=label[i], location="bottom", pad=0.3, ticks=ticks[i])
+        cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, label=label[i], location="bottom", pad=0.3, ticks=ticks)
 
         # force scientific notation, taken from:
-        # https://stackoverflow.com/questions/25983218/scientific-notation-colorbar
         cbar.formatter.set_powerlimits((0, 0))
 
         if geometry_ is not None:
@@ -141,13 +148,13 @@ if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to
     field_name = "Ma"
     area = "large"
-    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+    load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                      "results_with_geometry_refinement_no_dl_constraint")
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}",
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                              "plots_with_geometry_refinement_no_dl_constraint")
 
     # load the coordinates of the original grid used in CFD
-    xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"))
+    xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"), weights_only=False)
     cell_area_orig = xz[f"area_{area}"].unsqueeze(-1).sqrt()
     xz = pt.stack([xz[f"x_{area}"], xz[f"z_{area}"]], dim=-1)
 
@@ -161,9 +168,9 @@ if __name__ == "__main__":
     if area == "large":
         # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
         load_path_ma_large = join("..", "data", "2D", "OAT15")
-        orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"))
+        orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"), weights_only=False)
     else:
-        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"))
+        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"), weights_only=False)
 
     # compute the metric
     metric = pt.std(orig_field, dim=1)
@@ -197,7 +204,7 @@ if __name__ == "__main__":
     error_time_vs_metric, error_total_vs_metric = [], []
 
     # create KNN for interpolating the generated field back to the original one
-    knn = KNeighborsRegressor(n_neighbors=8 if xz.size(-1) == 2 else 26, weights="distance", n_jobs=6)
+    knn = KNeighborsRegressor(n_neighbors=8 if xz.size(-1) == 2 else 26, weights="distance", n_jobs=8)
 
     for v, h in zip(variances, files_hdf):
         # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix
