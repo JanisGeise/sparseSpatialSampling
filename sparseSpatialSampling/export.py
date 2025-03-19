@@ -126,23 +126,21 @@ class ExportData:
             self._metric = pt.from_numpy(self._knn.predict(self._centers))
 
         # determine the required size of the data matrix
-        self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size()[-1]
+        self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size(-1)
 
-        # create empty tensors for the field values at centers & vertices with dimensions
+        # create empty tensors for the field values at centers and vertices with dimensions
         # [N_cells, N_dimensions, N_snapshots_currently] each call to allow variable batch sizes
-        self._interpolated_fields.centers = pt.zeros((self._centers.size()[0], _data.size()[1], _data.size()[2]),
-                                                     dtype=pt.float32)
-        self._interpolated_fields.vertices = pt.zeros((self._vertices.size()[0], _data.size()[1], _data.size()[2]),
-                                                      dtype=pt.float32)
+        self._interpolated_fields.centers = pt.zeros((self._centers.size(0), _data.size(1), _data.size(2)))
+        self._interpolated_fields.vertices = pt.zeros((self._vertices.size(0), _data.size(1), _data.size(2)))
 
         # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
-        for dimension in range(_data.size()[1]):
+        for dimension in range(_data.size(1)):
             self._knn.fit(_coord, _data[:, dimension, :])
             self._interpolated_fields.vertices[:, dimension, :] = pt.from_numpy(self._knn.predict(self._vertices))
             self._interpolated_fields.centers[:, dimension, :] = pt.from_numpy(self._knn.predict(self._centers))
 
         # update the number of snapshots we already interpolated
-        self._snapshot_counter += _data.size()[-1]
+        self._snapshot_counter += _data.size(-1)
 
     def _write_data_to_hdf5(self) -> None:
         """

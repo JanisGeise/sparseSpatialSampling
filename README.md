@@ -183,7 +183,7 @@ version is $>= 1.22$ (requirement for numba).
     git clone https://github.com/JanisGeise/sparseSpatialSampling.git
 
     # create a virtual environment inside the repository
-    python3 -m venv s_cube_venv
+    python3.12 -m venv s_cube_venv
 
     # activate the environment and install all dependencies
     source s_cube_venv/bin/activate
@@ -219,8 +219,8 @@ An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation 
     #SBATCH --job-name=s_cube
     
     # load python
-    module load release/23.04  GCCcore/10.2.0
-    module load Python/3.8.6
+    module load release/24.04  GCCcore/13.3.0
+    module load Python/3.12.3
     
     # activate venv
     source s_cube_venv/bin/activate

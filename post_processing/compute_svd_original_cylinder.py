@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
+def compute_svd(_field: pt.Tensor, cell_area: pt.Tensor) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
     """
         computes an SVD of the interpolated field.
 
@@ -27,7 +27,7 @@ def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tenso
         https://flowmodelingcontrol.github.io/flowtorch-docs/1.2/flowtorch.analysis.html#flowtorch.analysis.svd.SVD.opt_rank
 
         :param _field: data matrix containing all snapshots of the field
-        :param _sqrt_cell_area: sqrt of the cell area, used for weighting
+        :param cell_area: cell area, used for weighting
         :return: None
     """
     # subtract the temporal mean
@@ -35,11 +35,11 @@ def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tenso
 
     if len(_field.size()) == 2:
         # multiply by the sqrt of the cell areas to weight their contribution
-        _field *= _sqrt_cell_area
+        _field *= cell_area.sqrt()
         svd = SVD(_field, rank=_field.size(-1))
-        _modes = svd.U[:, :svd.opt_rank] / _sqrt_cell_area
+        _modes = svd.U[:, :svd.opt_rank] / cell_area.sqrt()
     else:
-        _field *= _sqrt_cell_area.unsqueeze(-1)
+        _field *= cell_area.sqrt().unsqueeze(-1)
 
         # stack the data of all components for the SVD
         orig_shape = _field.size()
@@ -48,7 +48,7 @@ def compute_svd(_field: pt.Tensor, _sqrt_cell_area: pt.Tensor) -> Tuple[pt.Tenso
 
         # reshape the data back to ux, uy, uz
         new_shape = (orig_shape[0], orig_shape[1], svd.rank)
-        _modes = svd.U.reshape(new_shape)[:, :, :svd.opt_rank] / _sqrt_cell_area.unsqueeze(-1)
+        _modes = svd.U.reshape(new_shape)[:, :, :svd.opt_rank] / cell_area.sqrt().unsqueeze(-1)
 
     return _modes, svd.V, svd.s
 
@@ -99,8 +99,8 @@ def write_hfd5_for_svd(_centers, _vertices, _face_id, _modes, _mode_coefficients
 if __name__ == "__main__":
     # path to original cylinder3D simulation
     load_path = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests", "cylinder_3D_Re3900")
-    save_path = join("..", "run", "final_benchmarks", "cylinder3D_Re3900_local_TKE",
-                     "test_SVD_original_cylinder")
+    save_path = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests",
+                     "results_SVD_original_cylinder3D_Re3900")
     save_name = "cylinder3D_Re3900_original"
 
     # for which field should the SVD be performed?
