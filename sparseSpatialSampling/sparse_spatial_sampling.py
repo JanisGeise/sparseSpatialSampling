@@ -47,12 +47,9 @@ class SparseSpatialSampling:
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
         :param n_jobs: number of CPUs to use for the KNN prediction
-        :param n_neighbors: number of neighbors to use for the KNN, if 'None' then 8 and 26 will be used for 2 and 3
-                            dimensions, respectively
         :return: None
         """
         self.n_jobs = n_jobs
-        self.n_neighbors = n_neighbors
         self.coordinates = coordinates
         self.metric = metric
         self.save_path = save_path
@@ -85,8 +82,7 @@ class SparseSpatialSampling:
         self._sampling = SamplingTree(self.coordinates, self.metric, self._geometries, n_cells=self._n_cells_max,
                                       uniform_level=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
-                                      n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs,
-                                      n_neighbors=self.n_neighbors)
+                                      n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs)
 
     def execute_grid_generation(self) -> None:
         """

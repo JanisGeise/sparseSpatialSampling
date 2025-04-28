@@ -83,7 +83,7 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
 
     # use default color cycle
     color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
-    ls = ["-", "--", "-.", ":"]
+    ls = ["-", "--", ":", "-."]
 
     # plot variance vs N_cells
     fig, ax = plt.subplots(figsize=(6, 3), ncols=2)
@@ -119,8 +119,8 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     ax[0].set_ylabel(r"$N_{\mathrm{cells}} \, / \, N_{\mathrm{cells, orig}}$")
     ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
     ax[1].set_yscale("log")
-    ax[0].legend(ncols=1, loc="upper left")
-    ax[1].legend(ncols=2)
+    fig.legend(case, ncols=2, loc="upper center")
+    ax[1].legend(ncols=1, loc="lower left", bbox_to_anchor=(0.55, 0.12))
     fig.tight_layout()
     fig.subplots_adjust(top=0.88)
     plt.savefig(join(_save_path, f"{save_name}.png"), dpi=340)
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     save_path = join("..", "run", "final_benchmarks", "plots_final")
     cases = [join("OAT15_large", "results_with_geometry_refinement_no_dl_constraint"),
              join("cylinder3D_Re3900_local_TKE", "results_with_geometry_refinement_no_dl_constraint")]
-    legend = [r"$OAT$", r"$Cylinder3D$",]
+    legend = [r"$OAT$", r"$cylinder$",]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

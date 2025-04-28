@@ -77,12 +77,14 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
             ax[row][0].set_xlim(7, coord_original[:, 0].max() / d)
             ax[row][0].set_ylim(0, coord_original[:, 1].max() / d)
 
+    ax[0][0].set_title("$original$")
+    ax[0][1].set_title("$S^3$")
     if plane == 0:
         fig.supylabel("$y / d$")
     elif plane == 2:
         fig.supylabel("$z / d$")
     ax[-1][0].set_xlabel("$x / d$")
-    ax[-1][1].set_xlabel("$x / c$")
+    ax[-1][1].set_xlabel("$x / d$")
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)

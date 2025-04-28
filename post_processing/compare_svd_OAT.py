@@ -73,7 +73,7 @@ def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: st
     ax.set_ylabel("$PSD$")
     ax.set_xlim(xlim)
     ax.legend()
-    ax.legend(loc="upper right", ncols=1)
+    ax.legend(loc="upper right", ncols=3)
     fig.legend(legend, loc="upper center", ncols=4)
     fig.tight_layout()
     fig.subplots_adjust(top=0.82)
@@ -108,8 +108,8 @@ def plot_pod_modes(coord_original, coord_inter, U_orig, U_inter, _save_path: str
                 ax[row][0].add_patch(Polygon(g / chord, facecolor="black"))
                 ax[row][1].add_patch(Polygon(g / chord, facecolor="black"))
 
-    # ax[0][0].set_title("$original$")
-    # ax[0][1].set_title("$interpolated$")
+    ax[0][0].set_title("$original$")
+    ax[0][1].set_title("$S^3$")
     fig.supylabel("$z / c$")
     ax[-1][0].set_xlabel("$x / c$")
     ax[-1][1].set_xlabel("$x / c$")
@@ -234,7 +234,7 @@ if __name__ == "__main__":
                            legend=legend, n_modes=6)
 
     # plot the first N POD modes (left singular vectors) for a specific case
-    no = 0
-    plot_pod_modes(xz, dataloader[no].vertices, svd_orig.U / cell_area_orig, svd_inter[no].U / cell_area_inter[no],
-                   save_path_results, f"comparison_pod_modes_metric_{metric[no]}", _geometry=geometry,
-                   n_modes=6)
+    for no in range(len(metric)):
+        plot_pod_modes(xz, dataloader[no].vertices, svd_orig.U / cell_area_orig, svd_inter[no].U / cell_area_inter[no],
+                       save_path_results, f"comparison_pod_modes_metric_{metric[no]}", _geometry=geometry,
+                       n_modes=6)
