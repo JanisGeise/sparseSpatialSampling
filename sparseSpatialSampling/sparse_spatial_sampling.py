@@ -19,7 +19,7 @@ class SparseSpatialSampling:
                  save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5, n_cells_max: int = None,
                  min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 n_neighbors: int = None):
+                 relTol: Union[int, float] = None):
         """
         Class for executing the S^3 algorithm.
 
@@ -47,6 +47,9 @@ class SparseSpatialSampling:
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
         :param n_jobs: number of CPUs to use for the KNN prediction
+        :param relTol: min. improvement between two consecutive iterations, defaults to:
+                        1e-3 (metric as stopping criterion) or
+                        10 cells (N_cells as stopping criterion)
         :return: None
         """
         self.n_jobs = n_jobs
@@ -74,6 +77,7 @@ class SparseSpatialSampling:
         self._max_delta_level = max_delta_level
         self._n_cells_iter_start = n_cells_iter_start if n_cells_iter_start is None else int(n_cells_iter_start)
         self._n_cells_iter_end = n_cells_iter_end if n_cells_iter_end is None else int(n_cells_iter_end)
+        self._relTol = relTol
 
         # check if the dicts for the geometry objects are correct
         self._check_input()
@@ -82,7 +86,8 @@ class SparseSpatialSampling:
         self._sampling = SamplingTree(self.coordinates, self.metric, self._geometries, n_cells=self._n_cells_max,
                                       uniform_level=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
-                                      n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs)
+                                      n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs,
+                                      relTol=self._relTol)
 
     def execute_grid_generation(self) -> None:
         """

@@ -304,9 +304,13 @@ perform the SVD.
 `n_cells_iter_end` have to be decreased. If `None` provided, they are automatically set to:  
   
 &emsp;&emsp; `n_cells_iter_start` = $0.1%$ of original grid size  
-&emsp;&emsp; `n_cells_iter_end` = `n_cells_iter_start` 
+&emsp;&emsp; `n_cells_iter_end` = `n_cells_iter_start`  
+&emsp;&emsp; `relTol` = `1e-3` or `10 cells` (depending on stopping criterion)  
 
 
+- in case the refinement process takes too long (especially towards the end of the adaptive refinement), a relative
+tolerance can be set to abort the refinement if the improvement in between two consecutive iterations falls below a threshold.
+Therefore, the argument `relTol` can be increased.
 - the refinement of the grid near geometries requires approximately the same amount of time as the adaptive refinement, 
 so unless a high resolution of geometries is required, it is recommended to leave `refine = False` when instantiating a 
 geometry object

@@ -64,7 +64,7 @@ def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: st
 
     for m in range(n_modes):
         for i, v in enumerate(V):
-            freq, amp = welch(v[:, m], fs=1 / dt, nperseg=int(n_samples / 2), nfft=2 * n_samples)
+            freq, amp = welch(v[:, m], fs=1 / dt, nperseg=n_samples, nfft=n_samples, window="boxcar")
             if i == 0:
                 ax.plot(freq * chord / u_inf, amp, color=color[m], label=f"$mode$ ${m + 1}$", ls=ls[i])
             else:

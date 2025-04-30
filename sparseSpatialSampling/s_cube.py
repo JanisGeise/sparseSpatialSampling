@@ -95,7 +95,8 @@ class SamplingTree(object):
 
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1):
+                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
+                 relTol: Union[int, float] = None):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -112,6 +113,9 @@ class SamplingTree(object):
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning
         :param n_cells_iter_end: number of cells to refine per iteration at the end
         :param n_jobs: number of CPUs to use for the KNN prediction
+        :param relTol: min. improvement between two consecutive iterations, defaults to:
+                        1e-3 (metric as stopping criterion) or
+                        10 cells (N_cells as stopping criterion)
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -146,6 +150,13 @@ class SamplingTree(object):
         self._n_cells_orig = self._target.size(0)
         self.data_final_mesh = {}
         self._times = initialize_time_dict()
+
+        # relative tolerance for stopping criterion
+        if relTol is None:
+            # improve the metric by at least 0.1% or add at least 10 cells per iteration
+            self._relTol = 1e-3 if n_cells is None else 10
+        else:
+            self._relTol = relTol
 
         # offset matrix, used for computing the cell centers relative to the cell center of the parent cell
         if self._n_dimensions == 2:
@@ -231,14 +242,17 @@ class SamplingTree(object):
         Check if the stopping criteria for ending the refinement process is met; either based on the captured metric
         wrt to the original grid or the max. number of cells specified
 
-        :return: None
+        :return: bool
         """
         # If a max. number of cells is specified, then the default value of 1e9 will be overwritten, if not then use
         # the stopping criteria based on metric
         if abs(self._n_cells_max - 1e9) <= 1e-6:
-            return self._metric[-1] < self._min_metric
+            if len(self._metric) > 1:
+                return self._metric[-1] < self._min_metric and abs(self._metric[-1] - self._metric[-2]) > self._relTol
+            else:
+                return self._metric[-1] < self._min_metric
         else:
-            return len(self._leaf_cells) <= self._n_cells_max
+            return len(self._leaf_cells) <= self._n_cells_max and self._cells_per_iter > self._relTol
 
     def _compute_n_cells_per_iter(self) -> None:
         """
