@@ -208,8 +208,9 @@ class SamplingTree(object):
             cell.metric = _metric[i, 0]
 
             # scale with the cell size of the children (the cell size is computed based on the cell level and the
-            # size of the original cell)
-            cell.gain = _n_children * ((self._width / (2 ** cell.level)) ** self._n_dimensions) * sum_delta_metric[i]
+            # size of the initial cell), then normalize gain with gain of the initial cell
+            cell.gain = (_n_children * ((self._width / (2 ** cell.level)) ** self._n_dimensions) * sum_delta_metric[i]
+                         / self._cells[0].gain)
 
     def _update_leaf_cells(self, idx_parents: set, idx_children: set) -> None:
         """

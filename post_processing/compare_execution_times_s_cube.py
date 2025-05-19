@@ -127,6 +127,29 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     plt.close("all")
 
 
+def plot_progress_metric(_data: list, _save_path: str, case: list, save_name: str = "approximation_of_metric",
+                         no: int = -1) -> None:
+    # create directory for plots
+    if not path.exists(_save_path):
+        makedirs(_save_path)
+
+    # use default color cycle
+    color = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f']
+
+    # plot variance vs N_cells
+    fig, ax = plt.subplots(figsize=(6, 3))
+    for i, d in enumerate(_data):
+        ax.plot(d["metric_per_iter"][no], marker="x", label=case[i], color=color[i])
+
+    ax.set_xlabel(r"iteration no. $\#$")
+    ax.set_ylabel(r"$\mathcal{M} \, / \, \mathcal{M}_{orig}$")
+    fig.legend(ncols=3, loc="upper center", fontsize=6)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
+    plt.savefig(join(save_path, f"{save_name}_{round(data[0]['final_metric'][no], 2)}.png"), dpi=340)
+    plt.close("all")
+
+
 if __name__ == "__main__":
     # -------------------------------------------- cylinder --------------------------------------------
     load_path = join("..", "run", "final_benchmarks")
@@ -139,5 +162,6 @@ if __name__ == "__main__":
     data = [load_results(join(load_path, c)) for c in cases]
 
     # plot the results
+    plot_progress_metric(data, save_path, legend, no=10)
     plot_n_cells_and_t_exec(data, save_path, legend)
     plot_execution_times(data, save_path, legend)
