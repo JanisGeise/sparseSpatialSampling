@@ -237,7 +237,7 @@ An [example jobscript](https://github.com/JanisGeise/sparseSpatialSampling/blob/
 [Barnard](https://compendium.hpc.tu-dresden.de/jobs_and_resources/barnard/) HPC of TU Dresden is provided.
 
 ### Performing an SVD
-Once the grid is generated and a field is interpolated, e.g., an SVD from this field can be computed:
+Once the grid is generated and a field is interpolated, an SVD from this field can be computed:
 
     from sparseSpatialSampling.utils import write_svd_s_cube_to_file
 
@@ -253,7 +253,7 @@ The HDF5 file will contain the following quantities:
 
 The singular values and mode coefficients are not referenced in the XDMF file since they don't match the 
 size of the field and can therefore not be visualized in ParaView. 
-Before performing the SVD, the fields are weighted with the cell areas to improve the accuracy and 
+Before performing the SVD, the fields are weighted with the square-root of the cell areas (volumes) to improve the accuracy and 
 comparability. 
 This weighting is accounted for prior exporting the results of the SVD, however, it needs to be kept in mind when comparing 
 the results to SVDs executed on the original (potentially unweighted) data.

@@ -11,8 +11,8 @@ from typing import Union, Tuple
 from flowtorch.analysis import SVD
 from flowtorch.data import FOAMDataloader, mask_box
 
-from sparseSpatialSampling.data import Dataloader, Datawriter
-from sparseSpatialSampling.export import ExportData
+from .data import Dataloader, Datawriter
+from .export import ExportData
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
