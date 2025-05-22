@@ -16,7 +16,7 @@ from stl import mesh
 from os.path import join
 
 from sparseSpatialSampling.export import ExportData
-from examples.s3_for_cylinder2D_Re100 import write_svd_s_cube_to_file
+from sparseSpatialSampling.utils import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 from sparseSpatialSampling.geometry import CubeGeometry, GeometryCoordinates2D
 

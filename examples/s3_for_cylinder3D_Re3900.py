@@ -19,8 +19,7 @@ from flowtorch.data import FOAMDataloader
 
 from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.geometry import CubeGeometry, CylinderGeometry3D
-from sparseSpatialSampling.utils import load_original_Foam_fields
-from examples.s3_for_cylinder2D_Re100 import write_svd_s_cube_to_file
+from sparseSpatialSampling.utils import load_original_Foam_fields, write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 
 logger = logging.getLogger(__name__)

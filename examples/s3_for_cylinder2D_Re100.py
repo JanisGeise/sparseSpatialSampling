@@ -24,73 +24,11 @@ import logging
 import torch as pt
 
 from os.path import join
-from typing import Union
 
 from sparseSpatialSampling.export import ExportData
-from sparseSpatialSampling.data import Datawriter, Dataloader
 from sparseSpatialSampling.geometry import CubeGeometry, SphereGeometry
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
-from sparseSpatialSampling.utils import load_foam_data, export_openfoam_fields, compute_svd
-
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
-
-def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_name: str,
-                             new_file: bool, n_modes: int = None, rank=None) -> None:
-    """
-    computes an SVD for a given number of fields and exports the results to HDF5 & XDMF for visualizing,
-     e.g., in ParaView
-
-    :param field_names: names of the fields for which the SVD should be computed
-    :param load_dir: directory from which the results of S^3 should be loaded from, the results of the SVD will be
-                     written into the same directory
-    :param file_name: the name of the file from which the data should be loaded, for clarity '_svd' will be appended to
-                      the file name which contains the results of the SVD
-    :param new_file: flag if all exported fields are located in a single HDF5 file or if each field is written into a
-                     separate file
-    :param n_modes: number of modes to write to the file, if larger than available modes, all available modes will be
-                    written
-    :param rank: number of modes which should be used to compute the SVD, if 'None' then the optimal rank will be used
-    :return: None
-    """
-    if type(field_names) is str:
-        field_names = [field_names]
-
-    for f in field_names:
-        _name = f"{file_name}_{f}" if new_file else file_name
-        dataloader = Dataloader(load_dir, f"{_name}.h5")
-
-        # assemble a datamatrix for computing an SVD and perform an SVD weighted with cell areas
-        s, U, V = compute_svd(dataloader.load_snapshot(f), dataloader.weights, rank)
-
-        # write the data to HDF5 & XDMF
-        datawriter = Datawriter(load_dir, file_name + f"_{f}_svd.h5")
-
-        # write the grid
-        datawriter.write_grid(dataloader)
-
-        # set the max. number of modes to write, if the specified number of modes is larger than the available modes,
-        # then only write all available modes
-        n_modes = U.size(-1) if n_modes is None else n_modes
-        if n_modes > U.size(-1):
-            logger.warning(f"Number of modes to write is set to {n_modes}, but found only {U.size(-1)} modes to write.")
-            n_modes = U.size(-1)
-
-        # write the modes as vectors, where each mode is treated as an independent vector
-        for i in range(n_modes):
-            if len(U.size()) == 2:
-                datawriter.write_data(f"mode_{i + 1}", group="constant", data=U[:, i].squeeze())
-            else:
-                datawriter.write_data(f"mode_{i + 1}", group="constant", data=U[:, :, i].squeeze())
-
-        # write the rest as tensor (not referenced in XDMF file anyway)
-        datawriter.write_data("V", group="constant", data=V)
-        datawriter.write_data("s", group="constant", data=s)
-        datawriter.write_data("cell_area", group="constant", data=dataloader.weights)
-
-        # write XDMF file
-        datawriter.write_xdmf_file()
+from sparseSpatialSampling.utils import load_foam_data, export_openfoam_fields, write_svd_s_cube_to_file
 
 
 if __name__ == "__main__":
