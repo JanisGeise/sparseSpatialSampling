@@ -96,7 +96,7 @@ class SamplingTree(object):
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = None):
+                 relTol: Union[int, float] = None, reach_at_least: float = 0.75):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -116,6 +116,8 @@ class SamplingTree(object):
         :param relTol: min. improvement between two consecutive iterations, defaults to:
                         1e-3 (metric as stopping criterion) or
                         10 cells (N_cells as stopping criterion)
+        :param reach_at_least: reach at least per cent of the target metric / number of cells before activating the
+                                relTol stopping criterion
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -134,6 +136,7 @@ class SamplingTree(object):
         # end value = same as start value
         self._cells_per_iter_end = self._cells_per_iter_start if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
+        self._reach_at_least = reach_at_least
         self._width = None
         self._n_dimensions = self._vertices.size(-1)
         self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance",
@@ -248,12 +251,15 @@ class SamplingTree(object):
         # If a max. number of cells is specified, then the default value of 1e9 will be overwritten, if not then use
         # the stopping criteria based on metric
         if abs(self._n_cells_max - 1e9) <= 1e-6:
-            if len(self._metric) > 1:
+            # only check stopping if we have captured at least self._reach_at_least % of the target metric (or cells)
+            if len(self._metric) > 1 and self._metric[-1] / self._min_metric >= self._reach_at_least:
                 return self._metric[-1] < self._min_metric and abs(self._metric[-1] - self._metric[-2]) > self._relTol
-            else:
-                return self._metric[-1] < self._min_metric
         else:
-            return len(self._leaf_cells) <= self._n_cells_max and self._cells_per_iter > self._relTol
+            if len(self._leaf_cells) / self._n_cells_max >= self._reach_at_least:
+                return len(self._leaf_cells) <= self._n_cells_max and self._cells_per_iter > self._relTol
+
+        # continue refinement if all criteria are not fulfilled
+        return True
 
     def _compute_n_cells_per_iter(self) -> None:
         """
