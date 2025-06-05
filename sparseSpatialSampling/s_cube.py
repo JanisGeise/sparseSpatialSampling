@@ -96,7 +96,7 @@ class SamplingTree(object):
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = None, reach_at_least: float = 0.75):
+                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -113,9 +113,7 @@ class SamplingTree(object):
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning
         :param n_cells_iter_end: number of cells to refine per iteration at the end
         :param n_jobs: number of CPUs to use for the KNN prediction
-        :param relTol: min. improvement between two consecutive iterations, defaults to:
-                        1e-3 (metric as stopping criterion) or
-                        10 cells (N_cells as stopping criterion)
+        :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least per cent of the target metric / number of cells before activating the
                                 relTol stopping criterion
         """
@@ -127,7 +125,7 @@ class SamplingTree(object):
         self._geometry = geometry_obj
         self._n_cells = 0
         self._min_metric = min_metric
-        self._n_cells_max = 1e9 if n_cells is None else n_cells
+        self._n_cells_max = n_cells
         self._min_level = uniform_level
         self._current_min_level = 0
         self._current_max_level = 0
@@ -136,6 +134,7 @@ class SamplingTree(object):
         # end value = same as start value
         self._cells_per_iter_end = self._cells_per_iter_start if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
+        self._cells_per_iter_last = 1e9
         self._reach_at_least = reach_at_least
         self._width = None
         self._n_dimensions = self._vertices.size(-1)
@@ -248,15 +247,15 @@ class SamplingTree(object):
 
         :return: bool
         """
-        # If a max. number of cells is specified, then the default value of 1e9 will be overwritten, if not then use
-        # the stopping criteria based on metric
-        if abs(self._n_cells_max - 1e9) <= 1e-6:
+        # check the fulfillment of the stopping criterion
+        if self._n_cells_max is None:
             # only check stopping if we have captured at least self._reach_at_least % of the target metric (or cells)
             if len(self._metric) > 1 and self._metric[-1] / self._min_metric >= self._reach_at_least:
                 return self._metric[-1] < self._min_metric and abs(self._metric[-1] - self._metric[-2]) > self._relTol
         else:
             if len(self._leaf_cells) / self._n_cells_max >= self._reach_at_least:
-                return len(self._leaf_cells) <= self._n_cells_max and self._cells_per_iter > self._relTol
+                _relStop = abs(self._cells_per_iter / self._n_cells_max - self._cells_per_iter_last / self._n_cells_max)
+                return len(self._leaf_cells) <= self._n_cells_max and _relStop > self._relTol
 
         # continue refinement if all criteria are not fulfilled
         return True
@@ -272,7 +271,7 @@ class SamplingTree(object):
         :return: None
         """
         # if we use the target metric as stopping criteria, compute dx based on the current approximation of the metric
-        if abs(self._n_cells_max - 1e9) <= 1e-6:
+        if self._n_cells_max is None:
             _delta_x = self._min_metric - self._metric[0]
             _current_x = self._metric[-1]
 
@@ -286,6 +285,7 @@ class SamplingTree(object):
         _new = self._cells_per_iter_start - (_delta_y / _delta_x) * _current_x
 
         # avoid negative updates or values of zeros
+        self._cells_per_iter_last = self._cells_per_iter
         self._cells_per_iter = int(_new) if _new > 1 else 1
 
     def _compute_captured_metric(self) -> bool:
@@ -504,18 +504,22 @@ class SamplingTree(object):
         # checked and set beforehand
         self._refine_uniform()
 
-        # compute the initial metric
+        # compute the initial metric if selected as a stopping criterion
         iteration_count = 0
         self._n_cells_after_uniform = len(self._leaf_cells)
-        self._compute_captured_metric()
+        if self._n_cells_max is None:
+            self._compute_captured_metric()
 
         # start the adaptive refinement
         logger.info("Starting adaptive refinement.")
         self._times["t_start_adaptive"] = time()
 
         while self._check_stopping_criteria():
-            logger.info(f"\r\tStarting iteration no. {iteration_count}, captured metric: "
-                        f"{round(self._metric[-1] * 100, 2)} %, N_cells = {len(self._leaf_cells)}")
+            if self._n_cells_max is None:
+                logger.info(f"\r\tStarting iteration no. {iteration_count}, captured metric: "
+                            f"{round(self._metric[-1] * 100, 2)} %, N_cells = {len(self._leaf_cells)}")
+            else:
+                logger.info(f"\r\tStarting iteration no. {iteration_count}, N_cells = {len(self._leaf_cells)}")
 
             # update _n_cells_per_iter based on the difference wrt metric or N_cells
             if len(self._metric) >= 2:
@@ -571,13 +575,19 @@ class SamplingTree(object):
             self._remove_invalid_cells({c.index for c in new_cells})
 
             # compute global gain after refinement to check if we can stop the refinement
-            self._compute_captured_metric()
+            # if the metric is selected as a stopping criterion
+            if self._n_cells_max is None:
+                self._compute_captured_metric()
             iteration_count += 1
 
         try:
             del _leaf_cells_sorted
         except UnboundLocalError:
             pass
+
+        # if we use N_cells_max as a stopping criterion, then compute the captured metric only once here
+        if self._n_cells_max is not None:
+            self._compute_captured_metric()
 
         # refine the grid near geometry objects is specified
         logger.info("Finished adaptive refinement.")

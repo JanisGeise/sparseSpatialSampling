@@ -19,7 +19,7 @@ class SparseSpatialSampling:
                  save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5, n_cells_max: int = None,
                  min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = None, reach_at_least: float = 0.75):
+                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75):
         """
         Class for executing the S^3 algorithm.
 
@@ -47,9 +47,7 @@ class SparseSpatialSampling:
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
         :param n_jobs: number of CPUs to use for the KNN prediction
-        :param relTol: min. improvement between two consecutive iterations, defaults to:
-                        1e-3 (metric as stopping criterion) or
-                        10 cells (N_cells as stopping criterion)
+        :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least x% of the target metric / number of cells before activating the
                                relTol stopping criterion
         :return: None
