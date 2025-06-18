@@ -8,6 +8,7 @@ import torch as pt
 from time import time
 from numba import njit
 from typing import Tuple, Union
+from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
 
 logger = logging.getLogger(__name__)
@@ -112,16 +113,16 @@ class SamplingTree(object):
                                 difference of one (important for computing gradients across cells)
         :param n_cells_iter_start: number of cells to refine per iteration at the beginning
         :param n_cells_iter_end: number of cells to refine per iteration at the end
-        :param n_jobs: number of CPUs to use for the KNN prediction
+        :param n_jobs: number of CPUs to use, if None all available CPUs will be used
         :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least per cent of the target metric / number of cells before activating the
                                 relTol stopping criterion
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
+        self._n_jobs = n_jobs if n_jobs is not None else cpu_count()
         self._max_delta_level = max_delta_level
         self._vertices = vertices
-        self._target = target
         self._geometry = geometry_obj
         self._n_cells = 0
         self._min_metric = min_metric
@@ -137,10 +138,11 @@ class SamplingTree(object):
         self._cells_per_iter_last = 1e9
         self._reach_at_least = reach_at_least
         self._width = None
+        self._pool = get_context("spawn").Pool(self._n_jobs)
         self._n_dimensions = self._vertices.size(-1)
         self._knn = KNeighborsRegressor(n_neighbors=8 if self._n_dimensions == 2 else 26, weights="distance",
-                                        n_jobs=n_jobs)
-        self._knn.fit(self._vertices, self._target)
+                                        n_jobs=self._n_jobs)
+        self._knn.fit(self._vertices, target)
         self._cells = None
         self._leaf_cells = set()
         self._n_cells_after_uniform = None
@@ -149,7 +151,7 @@ class SamplingTree(object):
         self.all_centers = []
         self.face_ids = None
         self._metric = []
-        self._n_cells_orig = self._target.size(0)
+        self._n_cells_orig = target.size(0)
         self.data_final_mesh = {}
         self._times = initialize_time_dict()
 
@@ -178,7 +180,7 @@ class SamplingTree(object):
 
         # overwrite the metric with its L2-Norm, because the metric itself is not needed anymore (Frobenius norm here
         # same as L2, because the metric is always a vector)
-        self._target_norm = pt.linalg.norm(self._target).item()
+        self._target_norm = pt.linalg.norm(target).item()
 
     def _update_gain(self, new_cells: Union[set, list]) -> None:
         """
@@ -201,18 +203,17 @@ class SamplingTree(object):
         # the target function the most relative to the original cell center to each newly created cell center
         sum_delta_metric = (_metric[:, [0]] - _metric[:, 1:]).abs().sum(dim=1)
 
-        # assign the values for metric and gain to the cells
-        _n_children = 1 / (2 ** self._n_dimensions)
+        # args = (level, _n_dims, _width, gain_0, _metric, sum_delta_metric)
+        args = [(self._cells[idx].level, self._n_dimensions, self._width, self._cells[0].gain.item(),
+                 sum_delta_metric[i].item()) for i, idx in enumerate(new_cells)]
+        _res = self._pool.map(_update_gain, args)
+
         for i, idx in enumerate(new_cells):
-            cell = self._cells[idx]
+            # gain of the cell
+            self._cells[idx].gain = _res[i]
 
             # metric at the cell center of the current cell
-            cell.metric = _metric[i, 0]
-
-            # scale with the cell size of the children (the cell size is computed based on the cell level and the
-            # size of the initial cell), then normalize gain with gain of the initial cell
-            cell.gain = (_n_children * ((self._width / (2 ** cell.level)) ** self._n_dimensions) * sum_delta_metric[i]
-                         / self._cells[0].gain)
+            self._cells[idx].metric = _metric[i, 0]
 
     def _update_leaf_cells(self, idx_parents: set, idx_children: set) -> None:
         """
@@ -231,14 +232,6 @@ class SamplingTree(object):
         """
         min_level = min({self._cells[index].level for index in self._leaf_cells})
         self._current_min_level = max(self._current_min_level, min_level)
-
-    def leaf_cells(self) -> list:
-        """
-        get all current leaf cells
-
-        :return: list containing all current leaf cells
-        """
-        return [self._cells[i] for i in self._leaf_cells]
 
     def _check_stopping_criteria(self) -> bool:
         """
@@ -458,14 +451,18 @@ class SamplingTree(object):
             logger.info(f"\r\tStarting iteration no. {j}, N_cells = {len(self._leaf_cells)}")
             new_cells = []
             new_index, all_parents, all_children = len(self._cells), set(), set()
-            for i in self._leaf_cells:
+
+            # compute cell centers
+            if j == 0:
+                loc_center = self._compute_cell_centers(self._leaf_cells, _keep_parent_center=False).unsqueeze(-1)
+            else:
+                loc_center = self._compute_cell_centers(self._leaf_cells, _keep_parent_center=False)
+
+            for idx, i in enumerate(self._leaf_cells):
                 cell = self._cells[i]
 
-                # compute cell centers
-                loc_center = self._compute_cell_centers(i, _keep_parent_center=False)
-
                 # assign the neighbors of current cell and add all new cells as children
-                cell.children = list(self._assign_neighbors(cell, loc_center, new_index))
+                cell.children = list(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
                 all_children.update(list(range(new_index, new_index + len(cell.children))))
                 all_parents.add(cell.index)
 
@@ -545,14 +542,15 @@ class SamplingTree(object):
 
             new_cells, all_parents, all_children = [], set(), set()
             new_index = len(self._cells)
-            for i in to_refine:
+
+            # compute cell centers
+            loc_center = self._compute_cell_centers(to_refine, _keep_parent_center=False)
+
+            for idx, i in enumerate(to_refine):
                 cell = self._cells[i]
 
-                # compute cell centers
-                loc_center = self._compute_cell_centers(i, _keep_parent_center=False)
-
                 # assign the neighbors of current cell and add all new cells as children
-                cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
+                cell.children = tuple(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
                 all_children.update(list(range(new_index, new_index + len(cell.children))))
                 all_parents.add(cell.index)
 
@@ -595,10 +593,15 @@ class SamplingTree(object):
         # refine geometries if specified
         self._refine_geometries()
 
+        # close the multiprocessing pool
+        self._pool.close()
+
         # update the min. refinement level for logging info and grid statistics
         self._update_min_ref_level()
 
         # assemble the final grid
+        # TODO: parallelization possible?, maybe with shared memory, compare to:
+        #       https://docs.python.org/3.12/library/multiprocessing.html#multiprocessing-start-methods
         self._resort_nodes_and_indices_of_grid()
 
         # save and print timings and size of final mesh
@@ -630,27 +633,17 @@ class SamplingTree(object):
 
         # determine for which geometries we should check -> important for geometry refinement at the end
         _geometries = [self._geometry[g] for g in _geometry_no] if _geometry_no is not None else self._geometry
-        _idx = set()
 
         # compute the node locations of the current cell
         nodes = self._compute_cell_centers(_refined_cells, _factor=0.5, _keep_parent_center=False)
 
         # loop over all new cells and check if they are valid
-        for i, cell in enumerate(_refined_cells):
-            # check for each geometry object if the cell is inside the geometry or outside the domain
-            for g in _geometries:
-                # save the index of the invalid cell, set the gain to zero and make sure this cell is not changed back
-                # to a leaf cell in future iterations resulting from delta level constraint
-                if g.check_cell(nodes[:, :, i], _refine_geometry):
-                    _idx.add(cell)
+        # TODO: add bounding box to pre-select the cells which might be near the geometry and discard all other cells
+        args_list = [(cell, nodes[:, :, i], _geometries, _refine_geometry) for i, cell in enumerate(_refined_cells)]
+        result = self._pool.map(_check_cell_validity, args_list)
 
-                    # deactivate children by using an empty list, because a cell is seen as leaf cell if children = None
-                    # but if we just want to get the idx for refining geometries, we don't want to deactivate the cell
-                    self._cells[cell].children = None if _refine_geometry else []
-                    self._cells[cell].gain = 0
-
-                    # once the cell is removed, we don't need to check it for the remaining geometry objects
-                    break
+        _idx = set(filter(None, result))
+        del result, args_list
 
         # if we didn't find any invalid cells, we are done here, else we need to reset the nb of the cells affected by
         # the removal of the masked cells
@@ -661,6 +654,9 @@ class SamplingTree(object):
         else:
             # for each invalid cell, loop over their neighbors, find the invalid cell and deactivate it as a neighbor
             for cell in _idx:
+                self._cells[cell].children = None if _refine_geometry else []
+                self._cells[cell].gain = 0
+
                 for nb in self._cells[cell].nb:
                     if nb is not None:
                         self._cells[nb.index].nb = [None if nb.nb[n] is not None and nb.nb[n].index == cell else
@@ -722,7 +718,9 @@ class SamplingTree(object):
         # newly created cells
         for g in _geometries:
             logger.info(f"Starting refining geometry {self._geometry[g].name}.")
+            _t_start = time()
             _all_cells = set(self._remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
+            self._debug_time += time() - _t_start
             _global_min_level = min([self._cells[cell].level for cell in _all_cells])
 
             # determine the max. refinement level for the geometries:
@@ -1472,12 +1470,8 @@ class SamplingTree(object):
     def geometry(self) -> list:
         return self._geometry
 
-    @property
-    def target(self) -> pt.Tensor:
-        return self._target
 
-
-@njit(fastmath=True)
+@njit(fastmath=True, nogil=True)
 def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: np.ndarray,
                           dims: int) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -1557,6 +1551,35 @@ def initialize_time_dict() -> dict:
             "t_start_adaptive": 0.0,                            # we don't need t_end_adaptive
             "t_start_geometry": 0.0, "t_end_geometry": 0.0,
             "t_start_renumber": 0.0, "t_end_renumber": 0.0}
+
+
+def _check_cell_validity(args) -> Union[None, int]:
+    """
+    check if a cell is valid or invalid
+
+    :param args:  cell, node, geometries, refine_geometry
+    :return: cell index if cell should be removed or None if cell is valid
+    """
+    cell, node, geometries, refine_geometry = args
+    for g in geometries:
+        if g.check_cell(node, refine_geometry):
+            return cell
+    return None
+
+
+@njit(fastmath=True, nogil=True)
+def _update_gain(args) -> float:
+    """
+    compute gain of a cell
+
+    :param args: _level, _n_children, _n_dims, _width, gain_0, sum_delta_metric
+    :return: gain of the cell as float
+    """
+    _level, _n_dims, _width, gain_0, sum_delta_metric = args
+
+    # scale with the cell size of the children (the cell size is computed based on the cell level and the
+    # size of the initial cell), then normalize gain with gain of the initial cell
+    return 1 / (2 ** _n_dims) * ((_width / (2 ** _level)) ** _n_dims) * sum_delta_metric / gain_0
 
 
 if __name__ == "__main__":

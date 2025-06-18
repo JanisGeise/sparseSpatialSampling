@@ -46,7 +46,7 @@ class SparseSpatialSampling:
                                    set to 1% of the number of vertices in the original grid
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
-        :param n_jobs: number of CPUs to use for the KNN prediction
+        :param n_jobs: number of CPUs to use, if None all available CPUs will be used
         :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least x% of the target metric / number of cells before activating the
                                relTol stopping criterion
