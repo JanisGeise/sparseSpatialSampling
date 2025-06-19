@@ -720,7 +720,6 @@ class SamplingTree(object):
             logger.info(f"Starting refining geometry {self._geometry[g].name}.")
             _t_start = time()
             _all_cells = set(self._remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
-            self._debug_time += time() - _t_start
             _global_min_level = min([self._cells[cell].level for cell in _all_cells])
 
             # determine the max. refinement level for the geometries:
