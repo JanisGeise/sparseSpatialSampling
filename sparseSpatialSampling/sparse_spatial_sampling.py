@@ -16,7 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 class SparseSpatialSampling:
     def __init__(self, coordinates: pt.Tensor, metric: pt.Tensor, geometry_objects: list, save_path: str,
-                 save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5, n_cells_max: int = None,
+                 save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5,
+                 n_cells_max: Union[int, float] = None,
                  min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75):
@@ -36,7 +37,8 @@ class SparseSpatialSampling:
         :param n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
                             will be used
         :param min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
-                           grid), if 'None' the max. number of cells will be used as stopping criteria
+                           grid), if 'None' the max. number of cells will be used as stopping criteria.
+                           If additionally a value for n_cells_max is provided, min_metric will be ignored
         :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
                                 difference of one
         :param write_times: numerical time steps of the simulation, needs to be provided as

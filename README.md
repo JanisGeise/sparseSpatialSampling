@@ -177,7 +177,7 @@ For executing $S^3$, it is recommended to create a virtual environment. Otherwis
 version is $>= 1.22$ (requirement for numba).
 
     # install venv
-    sudo apt update && sudo apt install python3.8-venv
+    sudo apt update && sudo apt install python3.12-venv
 
     # clone the S^3 repository 
     git clone https://github.com/JanisGeise/sparseSpatialSampling.git
@@ -262,7 +262,11 @@ The `Datawriter` class provides a common interface for exporting $S^3$ data and 
 
 ## General notes
 ### Memory requirements
-The RAM needs to be large enough to hold at least:
+The grid generation currently requires the storage of the complete tree structure when creating the mesh, which is a
+bottleneck for large meshes (see section *known issues*). 
+A solution for this issue will be implemented in future versions of $S^3$.
+
+For the interpolation and export of fields, the RAM needs to be large enough to hold at least:
 - a single snapshot of the original grid
 - the original grid
 - the interpolated grid (size depends on the specified target metric)
@@ -337,6 +341,22 @@ If you have any questions or something is not working as expected, fell free to 
 
 - when opening the `XDMF` file in Paraview, it is important to select the `Xdmf3 ReaderS`, all other readers
 will lead to an incorrect assignment of the values to the respective cells
+
+#### Out of memory when performing the mesh generation for large meshes
+
+- when dealing with a large number of cells which have to be created, $S^3$ will eventually run out of memory
+- this issue occurs in the order of $N_{cells} \approx 1.5e8$ cells, depending on the available memory maybe sooner
+- this issue is caused, because currently $S^3$ holds the complete sampling tree of the mesh in memory, a solution for
+this issue will be implemented in future versions of $S^3$.
+
+As a work-around for now, the number of mesh cells to generate can be limited by the argument *n_cells_max*, e.g.:
+
+```
+s_cube = SparseSpatialSampling(vertices, metric, [domain, geometry], save_dir, save_name, write_times=write_times,
+                               n_jobs=126, n_cells_max=1e8)
+```
+
+In case both a value for *min_metric and *n_cells_max* is provided, the value for *min_metric* will be ignored.
 
 #### Significant increase in runtime when using STL files as geometry objects
 
