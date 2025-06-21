@@ -102,6 +102,10 @@ class CubeGeometry(GeometryObject):
                                  f"value of {v[1]} for the upper bound for geometry {self.name}. The the lower bound "
                                  f"must be smaller than the upper bound!")
 
+    @property
+    def type(self) -> str:
+        return self._type
+
 
 class SphereGeometry(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
@@ -175,6 +179,10 @@ class SphereGeometry(GeometryObject):
 
         # make sure the radius is larger than zero
         assert self._radius > 0, f"Expected a radius larger than zero but found a value of {self._radius}."
+
+    @property
+    def type(self) -> str:
+        return self._type
 
 
 class CylinderGeometry3D(GeometryObject):
@@ -287,6 +295,10 @@ class CylinderGeometry3D(GeometryObject):
                                        ),
                            where(normal_distance <= self._radius, True, False))
 
+    @property
+    def type(self) -> str:
+        return self._type
+
 
 class GeometryCoordinates2D(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
@@ -312,7 +324,11 @@ class GeometryCoordinates2D(GeometryObject):
         """
         super().__init__(name, keep_inside, refine, min_refinement_level)
         self._coordinates = Polygon(coordinates)
-        self._type = "coordinates 2D"
+        self._type = "coord_2D"
+
+        # xmin, ymin, zmin, xmax, ymax, zmax
+        self._lower_bound = list(self._coordinates.bounds)[:2]
+        self._upper_bound = list(self._coordinates.bounds)[2:]
 
         # check the user input based on the specified settings
         self._check_geometry()
@@ -338,6 +354,26 @@ class GeometryCoordinates2D(GeometryObject):
         # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
+    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+        """
+        method to pre-check if a cell is within a rectangular bounding box of the geometry object
+        -> much faster than check the polygon directly if it is expected to generate large numbers of cells outside
+            the bounding box
+
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: bool
+        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :rtype: bool
+        """
+        mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
+
+        # check if the cell is valid or invalid
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
+
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
@@ -345,6 +381,10 @@ class GeometryCoordinates2D(GeometryObject):
         # check if an enclosed area is provided (is_closed property only available for line strings in shapely)
         assert self._coordinates.boundary.is_closed, (f"Expected an enclosed area formed by the provided coordinates "
                                                       f"for geometry {self.name}.")
+
+    @property
+    def type(self) -> str:
+        return self._type
 
 
 class GeometrySTL3D(GeometryObject):
@@ -387,6 +427,10 @@ class GeometrySTL3D(GeometryObject):
         self._stl_file = read(path_stl_file).decimate(reduce_by)
         self._type = "STL"
 
+        # xmin, xmax, ymin, ymax, zmin, zmax
+        self._lower_bound = list(self._stl_file.bounds)[::2]
+        self._upper_bound = list(self._stl_file.bounds)[1::2]
+
         # check the user input based on the specified settings
         self._check_geometry()
 
@@ -414,6 +458,26 @@ class GeometrySTL3D(GeometryObject):
         # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
+    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+        """
+        method to pre-check if a cell is within a rectangular bounding box of the geometry object
+        ->  much faster than check the STL directly if it is expected to generate large numbers of cells outside
+            the bounding box
+
+        :param cell_nodes: vertices of the cell which should be checked
+        :type cell_nodes: pt.Tensor
+        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
+                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
+                                it subsequently. S^3 will provide this parameter.
+        :type refine_geometry: bool
+        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :rtype: bool
+        """
+        mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
+
+        # check if the cell is valid or invali
+        return self._apply_mask(mask, refine_geometry=refine_geometry)
+
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
@@ -426,6 +490,10 @@ class GeometrySTL3D(GeometryObject):
         except RuntimeError:
             logger.critical(f"Expected an STL file with a closed and manifold surface for geometry {self.name}.")
             exit(0)
+
+    @property
+    def type(self) -> str:
+        return self._type
 
 
 if __name__ == "__main__":

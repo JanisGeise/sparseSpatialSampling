@@ -356,7 +356,7 @@ s_cube = SparseSpatialSampling(vertices, metric, [domain, geometry], save_dir, s
                                n_jobs=126, n_cells_max=1e8)
 ```
 
-In case both a value for *min_metric and *n_cells_max* is provided, the value for *min_metric* will be ignored.
+In case both a value for *min_metric* and *n_cells_max* is provided, the value for *min_metric* will be ignored.
 
 #### Significant increase in runtime when using STL files as geometry objects
 

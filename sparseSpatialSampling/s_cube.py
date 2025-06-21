@@ -11,6 +11,8 @@ from typing import Tuple, Union
 from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
 
+from flowtorch.data import mask_box
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -97,7 +99,7 @@ class SamplingTree(object):
     def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
                  uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75):
+                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select: bool = False):
         """
         initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
 
@@ -117,9 +119,14 @@ class SamplingTree(object):
         :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least per cent of the target metric / number of cells before activating the
                                 relTol stopping criterion
+        :param pre_select: when dealing with 'GeometrySTL3D' or 'GeometryCoordinates2D' geometry objects, this option
+                           can decrease the required runtime significantly if the majority of cells is expected to be
+                           created outside a rectangular bounding box around the geometry object,
+                           i.e. if the difference between the volume of the geometry and a bounding box are minimal
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
+        self._pre_select = pre_select
         self._n_jobs = n_jobs if n_jobs is not None else cpu_count()
         self._max_delta_level = max_delta_level
         self._vertices = vertices
@@ -638,8 +645,8 @@ class SamplingTree(object):
         nodes = self._compute_cell_centers(_refined_cells, _factor=0.5, _keep_parent_center=False)
 
         # loop over all new cells and check if they are valid
-        # TODO: add bounding box to pre-select the cells which might be near the geometry and discard all other cells
-        args_list = [(cell, nodes[:, :, i], _geometries, _refine_geometry) for i, cell in enumerate(_refined_cells)]
+        args_list = [(cell, nodes[:, :, i], _geometries, _refine_geometry, self._pre_select)
+                     for i, cell in enumerate(_refined_cells)]
         result = self._pool.map(_check_cell_validity, args_list)
 
         _idx = set(filter(None, result))
@@ -1559,9 +1566,12 @@ def _check_cell_validity(args) -> Union[None, int]:
     :param args:  cell, node, geometries, refine_geometry
     :return: cell index if cell should be removed or None if cell is valid
     """
-    cell, node, geometries, refine_geometry = args
+    cell, node, geometries, refine_geometry, _pre_select_cells = args
     for g in geometries:
-        if g.check_cell(node, refine_geometry):
+        if _pre_select_cells:
+            if (g.type == "STL" or g.type == "coord_2D") and not g.pre_check_cell(node, refine_geometry):
+                continue
+        elif g.check_cell(node, refine_geometry):
             return cell
     return None
 

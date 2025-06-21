@@ -20,7 +20,7 @@ class SparseSpatialSampling:
                  n_cells_max: Union[int, float] = None,
                  min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75):
+                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select_cells: bool = False):
         """
         Class for executing the S^3 algorithm.
 
@@ -52,6 +52,11 @@ class SparseSpatialSampling:
         :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least x% of the target metric / number of cells before activating the
                                relTol stopping criterion
+        :param pre_select_cells: when dealing with 'GeometrySTL3D' or 'GeometryCoordinates2D' geometry objects,
+                                 this option can decrease the required runtime significantly if the majority of cells
+                                 is expected to be created outside a rectangular bounding box around the geometry
+                                 object, i.e. if the difference between the volume of the geometry and a bounding box
+                                 are minimal
         :return: None
         """
         self.n_jobs = n_jobs
@@ -73,6 +78,7 @@ class SparseSpatialSampling:
 
         # properties only required by SamplingTree
         self._geometries = geometry_objects
+        self._pre_select_cells = pre_select_cells
         self._level_bounds = int(uniform_levels)
         self._n_cells_max = n_cells_max if n_cells_max is None else int(n_cells_max)
         self._min_metric = min_metric
@@ -90,7 +96,8 @@ class SparseSpatialSampling:
                                       uniform_level=self._level_bounds, min_metric=self._min_metric,
                                       max_delta_level=self._max_delta_level, n_cells_iter_end=self._n_cells_iter_end,
                                       n_cells_iter_start=self._n_cells_iter_start, n_jobs=self.n_jobs,
-                                      relTol=self._relTol, reach_at_least=self._reach_at_least)
+                                      relTol=self._relTol, reach_at_least=self._reach_at_least,
+                                      pre_select=self._pre_select_cells)
 
     def execute_grid_generation(self) -> None:
         """
