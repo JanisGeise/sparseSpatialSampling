@@ -1,5 +1,5 @@
 """
-    implementation of the sparse spatial sampling algorithm (S^3) for 2D & 3D CFD data
+    implementation of the sparse spatial sampling algorithm (S^3) for 2D and 3D CFD data
 """
 import logging
 import numpy as np
@@ -10,8 +10,6 @@ from numba import njit
 from typing import Tuple, Union
 from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
-
-from flowtorch.data import mask_box
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -168,6 +166,9 @@ class SamplingTree(object):
             self._relTol = 1e-3 if n_cells is None else 10
         else:
             self._relTol = relTol
+
+        # print settings to console ifor logging purposes
+        self._print_settings()
 
         # offset matrix, used for computing the cell centers relative to the cell center of the parent cell
         if self._n_dimensions == 2:
@@ -1475,6 +1476,22 @@ class SamplingTree(object):
     @property
     def geometry(self) -> list:
         return self._geometry
+
+    def _print_settings(self):
+        omit = ["_times", "all_centers", "data_final_mesh", "_width", "_pool", "_knn", "_cells", "_leaf_cells",
+                "_n_cells_after_uniform", "_N_cells_per_iter", "all_nodes", "face_ids", "_metric", "_current_min_level",
+                "_current_max_level", "_vertices", "_n_cells"]
+        max_key_len = max(len(key) for key in self.__dict__ if key not in omit)
+
+        atts = ["\n\tSelected settings:"]
+        for key, value in self.__dict__.items():
+            if key not in omit:
+                if key == "_geometry":
+                    val_str = str([v.name for v in value])
+                else:
+                    val_str = str(value)
+                atts.append(f"\t\t{key:<{max_key_len}}:\t{val_str}")
+        logger.info("\n".join(atts))
 
 
 @njit(fastmath=True, nogil=True)
