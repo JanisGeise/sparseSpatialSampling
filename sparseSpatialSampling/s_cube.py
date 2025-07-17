@@ -12,7 +12,8 @@ from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                    force=True)
 
 pt.set_default_dtype(pt.float64)
 
@@ -167,7 +168,7 @@ class SamplingTree(object):
         else:
             self._relTol = relTol
 
-        # print settings to console ifor logging purposes
+        # print settings to console for logging purposes
         self._print_settings()
 
         # offset matrix, used for computing the cell centers relative to the cell center of the parent cell
@@ -256,7 +257,7 @@ class SamplingTree(object):
         else:
             if len(self._leaf_cells) / self._n_cells_max >= self._reach_at_least:
                 _relStop = abs(self._cells_per_iter / self._n_cells_max - self._cells_per_iter_last / self._n_cells_max)
-                return len(self._leaf_cells) <= self._n_cells_max and _relStop > self._relTol
+                return len(self._leaf_cells) < self._n_cells_max and _relStop > self._relTol
 
         # continue refinement if all criteria are not fulfilled
         return True
@@ -601,27 +602,19 @@ class SamplingTree(object):
         # refine geometries if specified
         self._refine_geometries()
 
-        # close the multiprocessing pool
+        # close the multiprocessing pool TODO: mv after renumbering once parallelized
         self._pool.close()
 
         # update the min. refinement level for logging info and grid statistics
         self._update_min_ref_level()
 
         # assemble the final grid
-        # TODO: parallelization possible?, maybe with shared memory, compare to:
-        #       https://docs.python.org/3.12/library/multiprocessing.html#multiprocessing-start-methods
         self._resort_nodes_and_indices_of_grid()
 
         # save and print timings and size of final mesh
         self._create_mesh_info(iteration_count)
 
-        logger.info("\nFinished refinement in {:2.4f} s ({:d} iterations).".format(self.data_final_mesh["t_total"],
-                                                                                   iteration_count))
-        logger.info("Time for uniform refinement: {:2.4f} s".format(self.data_final_mesh["t_uniform"]))
-        logger.info("Time for adaptive refinement: {:2.4f} s".format(self.data_final_mesh["t_adaptive"]))
-        if self.data_final_mesh["t_geometry"] is not None:
-            logger.info("Time for geometry refinement: {:2.4f} s".format(self.data_final_mesh["t_geometry"]))
-        logger.info("Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"]))
+        # print info
         logger.info(self)
 
     def _remove_invalid_cells(self, _refined_cells: set, _refine_geometry: bool = False,
@@ -682,8 +675,9 @@ class SamplingTree(object):
         """
         logger.info("Starting renumbering final mesh.")
         self._times["t_start_renumber"] = time()
+        dtype = pt.int32 if self._n_cells < pt.iinfo(pt.int32).max else pt.int64
 
-        _all_idx = pt.tensor([cell.node_idx for cell in self._cells if cell.leaf_cell()]).int()
+        _all_idx = pt.tensor([cell.node_idx for cell in self._cells if cell.leaf_cell()], dtype=dtype)
         _unique_idx = _all_idx.flatten().unique()
 
         # the initial cell is not in the list, so add it manually
@@ -693,12 +687,40 @@ class SamplingTree(object):
         _all_available_idx = pt.cat([_idx_initial_cell, pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)])
 
         # get all node indices that are not used by all cells anymore
-        _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().int().numpy()
-        del _unique_idx, _all_available_idx
+        _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().to(dtype=dtype).numpy()
+        del _unique_idx, _all_available_idx, _idx_initial_cell
+
+        """
+        # =======================================   START TEST   =======================================
+        # TODO: chunk the data matrix into n_jobs chunks and run parallel possible? Test for 3D once works
+        #       currently: doesn't yield same results especially for __unique_node_coord_
+        _unique_node_coord_, _all_idx_ = [], []
+        _half_idx_ = _all_idx.size(0) // 2
+        _half_all_nodes_ = len(self.all_nodes) // 2
+        for i in range(2):
+            if i == 0:
+                _uc, _ai = renumber_node_indices(_all_idx[:_half_idx_, :].numpy(),
+                                                 pt.stack(self.all_nodes[:_half_all_nodes_]).numpy(), _unused_idx,
+                                                 self._n_dimensions)
+            else:
+                _uc, _ai = renumber_node_indices(_all_idx[_half_idx_:, :].numpy(),
+                                                 pt.stack(self.all_nodes[_half_all_nodes_:]).numpy(), _unused_idx,
+                                                 self._n_dimensions)
+
+            _unique_node_coord_.append(pt.from_numpy(_uc))
+            _all_idx_.append(pt.from_numpy(_ai))
+        del _uc, _ai
+
+        _unique_node_coord_, _all_idx_ = pt.cat(_unique_node_coord_), pt.cat(_all_idx_)
+
+        # ========================================   END TEST   ========================================
+        """
 
         # re-index using numba -> faster than python, and this step is computationally quite expensive
         _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
                                                              _unused_idx, self._n_dimensions)
+
+        # TODO compare to original
 
         # update node ID's and their coordinates
         self.face_ids = pt.from_numpy(_all_idx)
@@ -727,7 +749,15 @@ class SamplingTree(object):
         for g in _geometries:
             logger.info(f"Starting refining geometry {self._geometry[g].name}.")
             _t_start = time()
-            _all_cells = set(self._remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
+            try:
+                # it may happen that we didn't find any cells near geometries.
+                # In that case _remove_invalid_cells will return 'None', so we skip the refinement
+                _all_cells = set(self._remove_invalid_cells(self._leaf_cells, _refine_geometry=True, _geometry_no=g))
+            except TypeError:
+                logger.warning("Could not find any cells to refine. Skipping geometry refinement.")
+                logger.info("Finished geometry refinement.")
+                return
+
             _global_min_level = min([self._cells[cell].level for cell in _all_cells])
 
             # determine the max. refinement level for the geometries:
@@ -1456,14 +1486,23 @@ class SamplingTree(object):
         return self._n_cells
 
     def __str__(self):
-        message = """
-                        Number of cells: {:d}
-                        Minimum ref. level: {:d}
-                        Maximum ref. level: {:d}
-                        Captured metric of original grid: {:.2f} %
+        message = [f"Finished refinement in {self.data_final_mesh["t_total"]:2.4f} s "
+                   f"({self.data_final_mesh['iterations']} iterations).",
+                   f"Time for uniform refinement: {self.data_final_mesh['t_uniform']:2.4f} s",
+                   f"Time for adaptive refinement: {self.data_final_mesh['t_adaptive']:2.4f} s"]
+
+        if self.data_final_mesh["t_geometry"] is not None:
+            message += [f"Time for geometry refinement: {self.data_final_mesh["t_geometry"]:2.4f} s"]
+        message += ["Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"])]
+
+        message += ["""
+                                    Number of cells: {:d}
+                                    Minimum ref. level: {:d}
+                                    Maximum ref. level: {:d}
+                                    Captured metric of original grid: {:.2f} %
                   """.format(len(self._leaf_cells), self._current_min_level, self._current_max_level,
-                             self._metric[-1] * 100)
-        return message
+                             self._metric[-1] * 100)]
+        return "\n\t\t\t\t\t\t\t\t".join(message)
 
     @property
     def n_dimensions(self) -> int:
