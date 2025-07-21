@@ -147,13 +147,15 @@ class
 depending on the size of the dataset and available RAM (refer to section memory requirements). 
 - for data from `OpenFoam`, the function `export_openfoam_fields` in `s_cube.utils` can be used to either 
 export all snapshots for a given list of fields at once or snapshot-by-snapshot (more convenient)
+- to export a cell-centered solution only (instead of an additional solution at the vertices), the option 
+`interpolate_at_vertices=False` can be set as desribed in the following. This significantly reduces the amount of the exported data
 
 example for interpolating and exporting a field:
 
     from s_cube.export import ExportData
 
     # create export instance, export all fields into the same HFD5 file and create single XDMF from it
-    export = ExportData(s_cube, write_new_file_for_each_field=False)
+    export = ExportData(s_cube, write_new_file_for_each_field=False, interpolate_at_vertices=False)
 
     # write_times are the time steps of the simulation, need to be either a str or a list[int | float | str]
     export.write_times = times
