@@ -1486,14 +1486,14 @@ class SamplingTree(object):
         return self._n_cells
 
     def __str__(self):
-        message = [f"Finished refinement in {self.data_final_mesh["t_total"]:2.4f} s "
+        message = [f"Finished refinement in {self.data_final_mesh['t_total']:2.4f} s ",
                    f"({self.data_final_mesh['iterations']} iterations).",
                    f"Time for uniform refinement: {self.data_final_mesh['t_uniform']:2.4f} s",
                    f"Time for adaptive refinement: {self.data_final_mesh['t_adaptive']:2.4f} s"]
 
-        if self.data_final_mesh["t_geometry"] is not None:
-            message += [f"Time for geometry refinement: {self.data_final_mesh["t_geometry"]:2.4f} s"]
-        message += ["Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh["t_renumbering"])]
+        if self.data_final_mesh['t_geometry'] is not None:
+            message += [f"Time for geometry refinement: {self.data_final_mesh['t_geometry']:2.4f} s"]
+        message += ["Time for renumbering the final mesh: {:2.4f} s".format(self.data_final_mesh['t_renumbering'])]
 
         message += ["""
                                     Number of cells: {:d}
