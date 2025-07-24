@@ -42,6 +42,7 @@ class ExportData:
                        If 'None' then the same number of CPUs used for executing S^3 will be used
         :param n_neighbors: number of neighbors to use for the KNN, if 'None' then 8 and 26 will be used for 2 and 3
                             dimensions, respectively
+                            TODO: switch default to False
         :param interpolate_at_vertices: interpolate a solution for the cell vertices as well;
                                         if 'False' only the cell centered solutions will be interpolated
         """
@@ -107,8 +108,8 @@ class ExportData:
         Note: the variables 'centers' & 'vertices' used in this method are denoting the values of the field at center
         and nodes of each cell (not the node coordinates of the generated mesh)
 
-        :param _coord: the coordinates of the original grid used in CFD
-        :param _data: the original field data
+        :param _coord: coordinates of the original grid used in CFD
+        :param _data: original field data
         :param _field_name: name of the field, which should be exported, e.g. 'p' for pressure field
         :param _n_snapshots_total: number of snapshots in total, which should be exported. If 'None', it is assumed
                                    that the provided data are all available snapshots

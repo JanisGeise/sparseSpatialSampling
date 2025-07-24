@@ -77,7 +77,7 @@ if __name__ == "__main__":
     save_name = "cylinder3D_Re3900"
 
     # load an exiting s_cube object or start new
-    load_existing = True
+    load_existing = False
 
     # for which field should we compute the metric?
     field_name = "UPrime2Mean"

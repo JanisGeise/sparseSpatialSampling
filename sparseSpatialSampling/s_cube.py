@@ -602,7 +602,7 @@ class SamplingTree(object):
         # refine geometries if specified
         self._refine_geometries()
 
-        # close the multiprocessing pool TODO: mv after renumbering once parallelized
+        # close the multiprocessing pool
         self._pool.close()
 
         # update the min. refinement level for logging info and grid statistics
@@ -663,6 +663,18 @@ class SamplingTree(object):
                         self._cells[nb.index].nb = [None if nb.nb[n] is not None and nb.nb[n].index == cell else
                                                     nb.nb[n] for n in range(len(nb.nb))]
 
+                # TODO: can we safely remove the cell center and node idx completely from the tree?
+                #       no, because this would require re-indexing of leaf_cells
+                #       -> applies for removal of unused cells as well (to save some memory)
+                #       -> general steps would be:
+                #           1. determination of unused cells
+                #           2. complete removal from tree
+                #           3. removal of corresponding cell centers and nodes
+                #           4. re-indexing of leaf_cells
+                #           5. re-indexing of cell faces / face id's (?)
+
+            # TODO: for testing purposes start with removal of invalid cell, if that works try unused parent cells
+
             # remove all invalid cells from the leaf cells
             self._leaf_cells -= _idx
 
@@ -684,43 +696,16 @@ class SamplingTree(object):
         _idx_initial_cell = pt.arange(0, 2 ** self._n_dimensions)
 
         # add the remaining indices to get all available indices present in the current grid
-        _all_available_idx = pt.cat([_idx_initial_cell, pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1)])
+        _all_available_idx = pt.cat([_idx_initial_cell, pt.arange(_all_idx.min().item(), _all_idx.max().item() + 1,
+                                                                  dtype=dtype)])
 
         # get all node indices that are not used by all cells anymore
         _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().to(dtype=dtype).numpy()
         del _unique_idx, _all_available_idx, _idx_initial_cell
 
-        """
-        # =======================================   START TEST   =======================================
-        # TODO: chunk the data matrix into n_jobs chunks and run parallel possible? Test for 3D once works
-        #       currently: doesn't yield same results especially for __unique_node_coord_
-        _unique_node_coord_, _all_idx_ = [], []
-        _half_idx_ = _all_idx.size(0) // 2
-        _half_all_nodes_ = len(self.all_nodes) // 2
-        for i in range(2):
-            if i == 0:
-                _uc, _ai = renumber_node_indices(_all_idx[:_half_idx_, :].numpy(),
-                                                 pt.stack(self.all_nodes[:_half_all_nodes_]).numpy(), _unused_idx,
-                                                 self._n_dimensions)
-            else:
-                _uc, _ai = renumber_node_indices(_all_idx[_half_idx_:, :].numpy(),
-                                                 pt.stack(self.all_nodes[_half_all_nodes_:]).numpy(), _unused_idx,
-                                                 self._n_dimensions)
-
-            _unique_node_coord_.append(pt.from_numpy(_uc))
-            _all_idx_.append(pt.from_numpy(_ai))
-        del _uc, _ai
-
-        _unique_node_coord_, _all_idx_ = pt.cat(_unique_node_coord_), pt.cat(_all_idx_)
-
-        # ========================================   END TEST   ========================================
-        """
-
         # re-index using numba -> faster than python, and this step is computationally quite expensive
         _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
                                                              _unused_idx, self._n_dimensions)
-
-        # TODO compare to original
 
         # update node ID's and their coordinates
         self.face_ids = pt.from_numpy(_all_idx)
