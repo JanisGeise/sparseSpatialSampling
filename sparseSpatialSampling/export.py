@@ -60,7 +60,7 @@ class ExportData:
         self._save_dir = s_cube.save_path
         self._save_name = s_cube.save_name
         self._grid_name = s_cube.grid_name
-        self._write_times = s_cube.write_times
+        self._write_times = s_cube.write_times if s_cube.write_times[0] is not None else None
 
         # properties we need for interpolating and exporting the fields
         self._interpolated_fields = Fields()
@@ -77,16 +77,16 @@ class ExportData:
         self._n_snapshots_total = None
         self._t_start = time()
 
-    def export(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:
+    def export(self, coordinates: pt.Tensor, data: pt.Tensor, field_name: str, n_snapshots_total: int = None) -> None:
         """
         interpolate the provided (original) CFD data onto the generated grid by S^3 and write it to a HDF5 and XDMF
         file for all given time steps.
 
-        :param _coord: the coordinates of the original grid used in CFD
-        :param _data: the original field data with dimension [N_cells, N_dimensions, N_snapshots].
+        :param coordinates: the coordinates of the original grid used in CFD
+        :param data: the original field data with dimension [N_cells, N_dimensions, N_snapshots].
                       N_snapshots can either be all snapshots, a batch of snapshots or just a single snapshot
-        :param _field_name: name of the field, which should be exported, e.g. 'p' for pressure field
-        :param _n_snapshots_total: number of snapshots in total, which should be exported. If 'None', it is assumed
+        :param field_name: name of the field, which should be exported, e.g. 'p' for pressure field
+        :param n_snapshots_total: number of snapshots in total, which should be exported. If 'None', it is assumed
                                    that the provided data are all available snapshots
         :return: None
         """
@@ -96,8 +96,8 @@ class ExportData:
                          "instantiation or set a value for the write times before calling the export method.")
 
         # make sure the field name is always up to date
-        self._field_name = _field_name
-        self._fit_data(_coord, _data, _field_name, _n_snapshots_total)
+        self._field_name = field_name
+        self._fit_data(coordinates, data, field_name, n_snapshots_total)
         self._write_data_to_hdf5()
 
     def _fit_data(self, _coord: pt.Tensor, _data: pt.Tensor, _field_name: str, _n_snapshots_total: int = None) -> None:

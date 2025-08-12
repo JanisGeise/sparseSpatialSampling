@@ -51,7 +51,6 @@ def load_original_Foam_fields(_load_dir: str, _n_dimensions: int, _boundaries: l
         # stack the coordinates to tuples
         coord = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(_n_dimensions)], dim=1)
 
-        # get all available time steps, skip the zero folder
         if _write_times is None:
             _write_times = [t for t in loader.write_times[1:]]
         elif type(_write_times) is str:
@@ -177,7 +176,7 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
 
             # in case the field is not available, the export()-method will return None
             if data is not None:
-                datawriter.export(coordinates, data, f, _n_snapshots_total=len(datawriter.write_times))
+                datawriter.export(coordinates, data, f, n_snapshots_total=len(datawriter.write_times))
             counter += 1
 
 
@@ -208,7 +207,7 @@ def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int 
     mask = mask_box(vertices, lower=boundaries[0], upper=boundaries[1])
 
     # assemble data matrix
-    write_time = [t for t in _loader.write_times[1:] if float(t) >= t_start]
+    write_time = sorted([t for t in _loader.write_times[1:] if float(t) >= t_start], key=lambda x: float(x))
 
     # stack the coordinates to tuples and free up some space
     xyz = pt.stack([pt.masked_select(vertices[:, d], mask) for d in range(n_dims)], dim=1)
@@ -228,7 +227,7 @@ def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int 
         if scalar:
             data[:, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask)
         else:
-            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())
+            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())[:, :n_dims]
 
     return data, xyz, _loader.weights, write_time
 
@@ -277,7 +276,7 @@ def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt
 
 
 def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_name: str,
-                             new_file: bool, n_modes: int = None, rank=None) -> None:
+                             new_file: bool, n_modes: int = None, rank=None, t_start: Union[int, float] = 0) -> None:
     """
     computes an SVD for a given number of fields and exports the results to HDF5 & XDMF for visualizing,
      e.g., in ParaView
@@ -292,6 +291,7 @@ def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_
     :param n_modes: number of modes to write to the file, if larger than available modes, all available modes will be
                     written
     :param rank: number of modes which should be used to compute the SVD, if 'None' then the optimal rank will be used
+    :param t_start: starting point in time, all snapshots for which t >= t_start will be loaded
     :return: None
     """
     if type(field_names) is str:
@@ -302,9 +302,10 @@ def write_svd_s_cube_to_file(field_names: Union[list, str], load_dir: str, file_
 
         _name = f"{file_name}_{f}" if new_file else file_name
         dataloader = Dataloader(load_dir, f"{_name}.h5")
+        _write_times = sorted([t for t in dataloader.write_times if float(t) >= t_start], key=lambda x: float(x))
 
         # assemble a datamatrix for computing an SVD and perform an SVD weighted with cell areas
-        s, U, V = compute_svd(dataloader.load_snapshot(f), dataloader.weights, rank)
+        s, U, V = compute_svd(dataloader.load_snapshot(f, _write_times), dataloader.weights, rank)
 
         # write the data to HDF5 & XDMF
         datawriter = Datawriter(load_dir, file_name + f"_{f}_svd.h5")

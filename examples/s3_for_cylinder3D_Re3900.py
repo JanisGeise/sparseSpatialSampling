@@ -63,7 +63,7 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
 
             # in case the field is not available, the export()-method will return None
             if data is not None:
-                datawriter.export(coordinates, data, f, _n_snapshots_total=len(datawriter.write_times))
+                datawriter.export(coordinates, data, f, n_snapshots_total=len(datawriter.write_times))
             counter += 1
 
 

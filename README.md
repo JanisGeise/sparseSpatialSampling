@@ -9,7 +9,8 @@ data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 See section [issues](#Issues) for know issues and their solution.
 
 ## Getting started
-The following code snipped shows how to execute $S^3$, a more detailed explanation is given below.
+You can find an introductory tutorial on how to use $S^3$ [here](https://github.com/JanisGeise/sparseSpatialSampling/tree/main/tutorials/tutorial1_cylinder2D_Re100.ipynb).
+The following code snipped briefly shows how to execute $S^3$, a more detailed explanation is given below.
         
         from s_cube.export import ExportData
         from s_cube.sparse_spatial_sampling import SparseSpatialSampling
@@ -341,7 +342,7 @@ If you have any questions or something is not working as expected, fell free to 
 
 #### Incorrect assignment of values to the grid when displaying the results in ParaView
 
-- when opening the `XDMF` file in Paraview, it is important to select the `Xdmf3 ReaderS`, all other readers
+- when opening the `XDMF` file in Paraview, it is important to select the `Xdmf3ReaderS`, all other readers
 will lead to an incorrect assignment of the values to the respective cells
 
 #### Out of memory when performing the mesh generation for large meshes
