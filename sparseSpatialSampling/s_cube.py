@@ -157,6 +157,7 @@ class SamplingTree(object):
         self.all_centers = []
         self.face_ids = None
         self._metric = []
+        self._n_cells_log = []
         self._n_cells_orig = target.size(0)
         self.data_final_mesh = {}
         self._times = initialize_time_dict()
@@ -516,6 +517,9 @@ class SamplingTree(object):
         if self._n_cells_max is None:
             self._compute_captured_metric()
 
+        # append the current N_cells for logging purposes
+        self._n_cells_log.append(len(self._leaf_cells))
+
         # start the adaptive refinement
         logger.info("Starting adaptive refinement.")
         self._times["t_start_adaptive"] = time()
@@ -586,6 +590,9 @@ class SamplingTree(object):
             if self._n_cells_max is None:
                 self._compute_captured_metric()
             iteration_count += 1
+
+            # append the current N_cells for logging purposes
+            self._n_cells_log.append(len(self._leaf_cells))
 
         try:
             del _leaf_cells_sorted
@@ -1456,6 +1463,7 @@ class SamplingTree(object):
         self.data_final_mesh["min_level"] = self._current_min_level
         self.data_final_mesh["max_level"] = self._current_max_level
         self.data_final_mesh["metric_per_iter"] = self._metric
+        self.data_final_mesh["cells_per_iter"] = self._n_cells_log
         self.data_final_mesh["t_total"] = self._times["t_end_renumber"] - self._times["t_start_uniform"]
         self.data_final_mesh["t_uniform"] = self._times["t_end_uniform"] - self._times["t_start_uniform"]
         self.data_final_mesh["t_renumbering"] = self._times["t_end_renumber"] - self._times["t_start_renumber"]
@@ -1504,7 +1512,7 @@ class SamplingTree(object):
     def _print_settings(self):
         omit = ["_times", "all_centers", "data_final_mesh", "_width", "_pool", "_knn", "_cells", "_leaf_cells",
                 "_n_cells_after_uniform", "_N_cells_per_iter", "all_nodes", "face_ids", "_metric", "_current_min_level",
-                "_current_max_level", "_vertices", "_n_cells"]
+                "_current_max_level", "_vertices", "_n_cells", "_n_cells_log"]
         max_key_len = max(len(key) for key in self.__dict__ if key not in omit)
 
         atts = ["\n\tSelected settings:"]

@@ -119,9 +119,11 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     ax[0].set_ylabel(r"$N_{\mathrm{cells}} \, / \, N_{\mathrm{cells, orig}}$")
     ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
     ax[1].set_ylim(0.06, 1)
+    ax[0].set_xlim(0.2, 1)
+    ax[1].set_xlim(0.2, 1.05)
     ax[1].set_yscale("log")
     fig.legend(case, ncols=2, loc="upper center")
-    ax[1].legend(ncols=1, loc="lower left", bbox_to_anchor=(0.65, 0.5), fontsize=8)
+    ax[1].legend(ncols=1, loc="lower left", bbox_to_anchor=(0.67, 0.52), fontsize=8)
     fig.tight_layout()
     fig.subplots_adjust(top=0.86)
     plt.savefig(join(_save_path, f"{save_name}.png"), dpi=340)
@@ -142,7 +144,7 @@ def plot_progress_metric(_data: list, _save_path: str, case: list, save_name: st
     for i, d in enumerate(_data):
         ax.plot(d["metric_per_iter"][no], marker="x", label=case[i], color=color[i])
 
-    ax.set_xlabel(r"iteration no. $\#$")
+    ax.set_xlabel(r"$\mathrm{iteration}$ $\mathrm{no.}$ $\#$")
     ax.set_ylabel(r"$\mathcal{M} \, / \, \mathcal{M}_{orig}$")
     ax.set_xlim(0, max([len(d["metric_per_iter"][no])-1 for d in _data]))
     ax.legend(ncols=1, loc="lower right")
@@ -156,9 +158,9 @@ if __name__ == "__main__":
     # -------------------------------------------- cylinder --------------------------------------------
     load_path = join("..", "run", "final_benchmarks")
     save_path = join("..", "run", "final_benchmarks", "plots_final")
-    cases = [join("OAT15_large", "results_with_geometry_refinement_no_dl_constraint"),
-             join("cylinder3D_Re3900_local_TKE", "results_with_geometry_refinement_no_dl_constraint")]
-    legend = [r"$OAT$", r"$cylinder$",]
+    cases = [join("OAT15_large_new", "results_with_geometry_refinement_no_dl_constraint_parallel_execution"),
+             join("cylinder3D_Re3900_local_TKE", "results_with_geometry_refinement_no_dl_constraint_parallel_execution")]
+    legend = [r"$\mathrm{OAT}$", r"$\mathrm{cylinder}$"]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

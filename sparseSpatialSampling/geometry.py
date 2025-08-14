@@ -26,6 +26,9 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 
 
 class CubeGeometry(GeometryObject):
+    """
+    implements a class for using rectangles (2D) or cubes (3D)
+    """
     def __init__(self, name: str, keep_inside: bool, lower_bound: list, upper_bound: list, refine: bool = False,
                  min_refinement_level: int = None):
         """
@@ -109,6 +112,9 @@ class CubeGeometry(GeometryObject):
 
 
 class SphereGeometry(GeometryObject):
+    """
+    implements a class for using circles (2D) or spheres (3D)
+    """
     def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
                  min_refinement_level: int = None):
         """
@@ -187,6 +193,9 @@ class SphereGeometry(GeometryObject):
 
 
 class CylinderGeometry3D(GeometryObject):
+    """
+    implements a class for using cylinders (3D)
+    """
     def __init__(self, name: str, keep_inside: bool, position: List[Union[list, tuple]], radius: Union[int, float],
                  refine: bool = False, min_refinement_level: int = None):
         """
@@ -302,6 +311,9 @@ class CylinderGeometry3D(GeometryObject):
 
 
 class GeometryCoordinates2D(GeometryObject):
+    """
+    implements a class for using 2D coordinates
+    """
     def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
                  min_refinement_level: int = None):
         """
@@ -389,6 +401,9 @@ class GeometryCoordinates2D(GeometryObject):
 
 
 class GeometrySTL3D(GeometryObject):
+    """
+    implements a class for using an STL file (3D)
+    """
     def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
                  min_refinement_level: int = None, reduce_by: Union[int, float] = 0):
         """

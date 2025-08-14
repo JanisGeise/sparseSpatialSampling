@@ -1,6 +1,8 @@
 """
     implements wrapper function for executing the S^3 algorithm
 """
+import inspect
+import textwrap
 import logging
 import torch as pt
 
@@ -162,6 +164,30 @@ class SparseSpatialSampling:
             # we need lower level >= 1, because otherwise the stopping criteria is not working
             logger.warning(f"Lower level bound of {self._level_bounds} is invalid. Changed lower level bound to 1.")
             self._level_bounds = 1
+
+
+def list_geometries() -> None:
+    """
+    lists all available geometry objects along with a short description thereof
+
+    :return: None
+    """
+    #
+    from . import geometry
+    from .geometry_base import GeometryObject
+
+    # find all classes in geometry that are subclasses of GeometryObject
+    classes = [obj for name, obj in inspect.getmembers(geometry, inspect.isclass)
+               if issubclass(obj, GeometryObject) and obj is not GeometryObject]
+
+    msg = ["\n\tAvailable geometry objects:", "\t---------------------------"]
+    max_len = max(len(cls.__name__) for cls in classes)
+    for cls in sorted(classes, key=lambda c: c.__name__):
+        short_desc = textwrap.shorten(cls.__doc__, width=100, placeholder="…")
+        msg.append(f"\t\t- {cls.__name__.ljust(max_len)} : {short_desc}")
+
+    msg.append("\n\tFor a more detailed description checkout the respective geometry object classes.")
+    logger.info("\n".join(msg))
 
 
 if __name__ == "__main__":

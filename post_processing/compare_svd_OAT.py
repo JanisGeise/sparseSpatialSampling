@@ -43,7 +43,7 @@ def plot_singular_values(sv: list, _save_path: str, _save_name: str, legend: lis
     # ax.set_ylabel(r"$\sigma_{i, rel}$   $[\%]$")
     ax.set_ylabel(r"$\sigma_{i}$")
     ax.set_ylim(0, max([s[:n_values].max() for s in sv]))
-    ax2.set_ylabel(r"$cumulative$ $[\%]$")
+    ax2.set_ylabel(r"$\mathrm{cumulative}$ $[\%]$")
     ax2.set_xlim(0, n_values)
     # ax[1].set_ylim(0, max([s.max() for s in s_cum]))
     fig.legend(loc="upper center", framealpha=1.0, ncols=4)
@@ -66,7 +66,8 @@ def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: st
         for i, v in enumerate(V):
             freq, amp = welch(v[:, m], fs=1 / dt, nperseg=n_samples, nfft=n_samples, window="boxcar")
             if i == 0:
-                ax.plot(freq * chord / u_inf, amp, color=color[m], label=f"$mode$ ${m + 1}$", ls=ls[i])
+                ax.plot(freq * chord / u_inf, amp, color=color[m], label=r"$\mathrm{mode}$" + f" ${m + 1}$",
+                        ls=ls[i])
             else:
                 ax.plot(freq * chord / u_inf, amp, color=color[m], ls=ls[i])
     ax.set_xlabel(r"$Sr$")
@@ -76,7 +77,7 @@ def plot_psd(V: list, dt: float, n_samples: int, _save_path: str, _save_name: st
     ax.legend(loc="upper right", ncols=3)
     fig.legend(legend, loc="upper center", ncols=4)
     fig.tight_layout()
-    fig.subplots_adjust(top=0.82)
+    fig.subplots_adjust(top=0.86)
     plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
     plt.close("all")
 
@@ -212,7 +213,7 @@ if __name__ == "__main__":
                              "plots_SVD_paper_final")
 
     # the actual metric may differ from the filename
-    legend = ["$original$"] + [r"$\mathcal{M} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
+    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
 
     # load the field of the original CFD data
     if area == "large":
