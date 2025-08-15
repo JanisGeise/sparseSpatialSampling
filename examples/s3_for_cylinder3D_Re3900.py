@@ -25,7 +25,7 @@ from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 logger = logging.getLogger(__name__)
 
 
-def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_names: list, boundaries: list,
+def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_names: Union[str, list], boundaries: list,
                                 write_times: Union[str, list], write_times_mean_fields: Union[str, list] = None,
                                 batch_size: int = 25) -> None:
     """
@@ -43,7 +43,9 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
     :param batch_size: batch size, number of snapshots which should be interpolated and exported at once
     :return: None
     """
-    write_times = [write_times] if type(write_times) is str else write_times
+    write_times = write_times if isinstance(write_times, list) else [write_times]
+    field_names = field_names if isinstance(field_names, list) else [field_names]
+
     for f in field_names:
         if f.endswith("Mean") and write_times_mean_fields is not None:
             # usually, the write times for the mean fields differ from the other fields

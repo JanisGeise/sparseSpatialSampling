@@ -6,6 +6,8 @@ import logging
 import torch as pt
 
 from time import time
+from typing import Union
+from os import makedirs, path
 from sklearn.neighbors import KNeighborsRegressor
 
 from .data import Datawriter
@@ -232,12 +234,35 @@ class ExportData:
         return self._write_times
 
     @write_times.setter
-    def write_times(self, value: list) -> None:
-        self._write_times = value
+    def write_times(self, value: Union[str, list]) -> None:
+        self._write_times = value if isinstance(value, list) else [value]
 
     @property
-    def new_file(self):
+    def new_file(self) -> bool:
         return self._new_file
+
+    @property
+    def save_name(self) -> str:
+        return self._save_name
+
+    @save_name.setter
+    def save_name(self, new_name: str) -> None:
+        self._save_name = new_name
+        self._initialized = False
+
+    @property
+    def save_dir(self) -> str:
+        return self._save_dir
+
+    @save_dir.setter
+    def save_dir(self, new_path: str) -> None:
+        self._save_dir = new_path
+        self._initialized = False
+
+        # make sure that the directory exists when we change the save path
+        if not path.exists(self._save_dir):
+            makedirs(self._save_dir)
+
 
 
 if __name__ == "__main__":
