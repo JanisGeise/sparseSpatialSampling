@@ -197,8 +197,12 @@ if __name__ == "__main__":
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
 
     # get all the generated grids in the directory
-    files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
-    variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
+    # files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
+    # variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
+    files_hdf = [join(load_path, "OAT15_large_area_variance_0.25.h5"),
+                 join(load_path, "OAT15_large_area_variance_0.50.h5"),
+                 join(load_path, "OAT15_large_area_variance_0.75.h5")]
+    variances = ["0.25", "0.50", "0.75"]
 
     # create empty lists for L2-errors vs. metrics
     error_time_vs_metric, error_total_vs_metric = [], []
@@ -234,6 +238,7 @@ if __name__ == "__main__":
         plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],
                             f"error_metric_{v}_{field_name}", save_path_results, geometry_=geometry,
                             field=field_name)
+    exit()
 
     # save the errors
     pt.save({"L2_error_time": error_time_vs_metric, "L2_error_total": error_total_vs_metric},

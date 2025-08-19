@@ -174,7 +174,7 @@ def list_geometries() -> None:
     """
     #
     from . import geometry
-    from .geometry_base import GeometryObject
+    from .geometry.geometry_base import GeometryObject
 
     # find all classes in geometry that are subclasses of GeometryObject
     classes = [obj for name, obj in inspect.getmembers(geometry, inspect.isclass)
