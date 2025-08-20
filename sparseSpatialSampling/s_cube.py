@@ -625,7 +625,7 @@ class SamplingTree(object):
         logger.info(self)
 
     def _remove_invalid_cells(self, _refined_cells: set, _refine_geometry: bool = False,
-                              _geometry_no: Union[int, list] = None) -> None or list:
+                              _geometry_no: Union[int, list] = None) -> Union[None, set]:
         """
         Check if any of the generated cells are located inside a geometry or outside a domain, if so they are removed.
 
@@ -656,7 +656,7 @@ class SamplingTree(object):
         # if we didn't find any invalid cells, we are done here, else we need to reset the nb of the cells affected by
         # the removal of the masked cells
         if _idx == set():
-            return
+            return None
         elif _refine_geometry:
             return _idx
         else:

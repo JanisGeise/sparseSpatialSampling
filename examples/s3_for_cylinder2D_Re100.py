@@ -32,7 +32,7 @@ from sparseSpatialSampling.utils import load_foam_data, export_openfoam_fields, 
 
 if __name__ == "__main__":
     # load paths to the CFD data
-    load_path = join("..", "..", "flow_data", "run", "cylinder_2D_Re100")
+    load_path = join("..", "data", "2D", "cylinder_2D_Re100")
     save_path = join("..", "run", "final_benchmarks", "cylinder2D_new")
 
     # how much of the metric within the original grid should be captured at least
@@ -53,12 +53,7 @@ if __name__ == "__main__":
 
     # create a S^3 instance
     s_cube = SparseSpatialSampling(coord, pt.mean(field.abs().sum(1), 1), [domain, geometry], save_path, save_name,
-                                   "cylinder2D", min_metric=min_metric, n_jobs=8)
-
-    # DEBUG
-    # s_cube = SparseSpatialSampling(coord, pt.std(field, 1), [domain, geometry], save_path, save_name,
-    #                                "cylinder2D", n_cells_max=4, write_times=write_times, n_jobs=8,
-    #                                uniform_levels=2)
+                                   "cylinder2D", min_metric=min_metric, n_jobs=4)
 
     # execute S^3
     s_cube.execute_grid_generation()
