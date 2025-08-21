@@ -5,7 +5,7 @@
 import pytest
 import torch as pt
 
-from ..geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D
+from ..geometry import CubeGeometry, SphereGeometry, GeometryCoordinates2D, TriangleGeometry
 
 
 def test_spherical_geometry_2d():
@@ -72,3 +72,25 @@ def test_geometry_2d_stl():
 
     # valid if point is partially inside the geometry
     assert rectangle.check_cell(cell_part).item() is False
+
+
+def test_triangle_geometry_2d():
+    triangle = TriangleGeometry("triangle", False, [(0.5, 1), (1, 0), (0, 0)])
+
+    # generate cell completely inside the cylinder
+    cell_inside = pt.tensor([[0.175, 0.175], [0.175, 0.225], [0.225, 0.225], [0.225, 0.175]])
+
+    # generate cell completely outside the cylinder
+    cell_outside = pt.tensor([[2, 2], [3, 2], [3, 3], [2, 3]])
+
+    # generate cell partially inside the cylinder
+    cell_part = pt.tensor([[0.2, 0.2], [0.2, 0.5], [0.5, 0.5], [0.5, 0.2]])
+
+    # valid if point is outside the geometry
+    assert triangle.check_cell(cell_outside).item() is False
+
+    # invalid if point is inside the geometry
+    assert triangle.check_cell(cell_inside).item() is True
+
+    # valid if point is partially inside the geometry
+    assert triangle.check_cell(cell_part).item() is False

@@ -37,7 +37,7 @@ class SparseSpatialSampling:
         :param save_name: name of the files (grid & data)
         :param grid_name: name of the grid (used in XDMF file)
         :param uniform_levels: number of uniform refinement cycles to perform
-        :param n_cells_max: max. number of cells of the grid, if not set then early stopping based on captured variance
+        :param n_cells_max: max. number of cells of the grid, if not set, then early stopping based on captured variance
                             will be used
         :param min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
                            grid), if 'None' the max. number of cells will be used as stopping criteria.
@@ -51,7 +51,7 @@ class SparseSpatialSampling:
                                    set to 1% of the number of vertices in the original grid
         :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
                                  5% of _n_cells_iter_start
-        :param n_jobs: number of CPUs to use, if None all available CPUs will be used
+        :param n_jobs: number of CPUs to use, if 'None', all available CPUs will be used
         :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
         :param reach_at_least: reach at least x% of the target metric / number of cells before activating the
                                relTol stopping criterion

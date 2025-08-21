@@ -69,7 +69,7 @@ as the setup needs to be adjusted accordingly. A script can then be executed as
 
 ### HPC
 The setup for executing $S^3$ on an HPC cluster is the same as for the local machine. 
-An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation may look like:
+An example jobscript for executing $S^3$ on the *cylinder3D_Re3900* simulation may look like:
 
     #!/bin/bash
     #SBATCH --nodes=1
@@ -90,7 +90,7 @@ An example jobscript for executing $S^3$ on the *surfaceMountedCube* simulation 
     # path to the python script
     cd examples/
     
-    python3 s3_for_surfaceMountedCube_large_hpc.py &> "log.main"
+    python3 cylinder3D_Re3900.py &> "log.main"
 
 An [example jobscript](example_jobscript) for the
 [Barnard](https://compendium.hpc.tu-dresden.de/jobs_and_resources/barnard/) HPC of TU Dresden is provided.
