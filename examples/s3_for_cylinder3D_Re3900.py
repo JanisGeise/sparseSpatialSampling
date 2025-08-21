@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # path to original cylinder3D simulation
     load_path = join("/media", "janis", "Elements", "Janis", "cylinder_3D_Re3900_tests", "cylinder_3D_Re3900")
     save_path = join("..", "run", "final_benchmarks", "cylinder3D_Re3900_local_TKE",
-                     "results_with_geometry_refinement_no_dl_constraint")
+                     "results_with_geometry_refinement_no_dl_constraint_fully_parallel")
 
     save_name = "cylinder3D_Re3900"
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
             s_cube.execute_grid_generation()
 
         # create export instance, export all fields into the same HFD5 file and create single XDMF from it
-        export = ExportData(s_cube, write_new_file_for_each_field=False)
+        export = ExportData(s_cube)
 
         # export the fields snapshot-by-snapshot (batch_size = 1) or in batches,
         # only export time range in which we sampled the data with a high frequency, except the mean fields

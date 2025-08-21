@@ -73,7 +73,8 @@ if __name__ == "__main__":
     load_path = join("..", "data", "2D", "OAT15")
     field_name = "Ma"
     area = "large"
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new", "results")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
+                             "results_geometry_refinement_no_dl_constraint_fully_parallelized")
 
     # execute S^3 for range of variances (for parameter study)
     min_variance = pt.arange(0.2, 1.05, 0.05)
@@ -119,6 +120,7 @@ if __name__ == "__main__":
 
         # execute S^3
         s_cube.execute_grid_generation()
+        continue
 
         # create export instance, export all fields into the same HFD5 file and create single XDMF from it
         export = ExportData(s_cube)

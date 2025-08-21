@@ -6,7 +6,7 @@ import numpy as np
 import torch as pt
 
 from time import time
-from numba import njit
+from numba import njit, prange
 from typing import Tuple, Union
 from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
@@ -707,12 +707,13 @@ class SamplingTree(object):
                                                                   dtype=dtype)])
 
         # get all node indices that are not used by all cells anymore
-        _unused_idx = _all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().to(dtype=dtype).numpy()
+        _unused_idx = set(_all_available_idx[~pt.isin(_all_available_idx, _unique_idx)].unique().to(dtype=dtype).numpy())
         del _unique_idx, _all_available_idx, _idx_initial_cell
 
         # re-index using numba -> faster than python, and this step is computationally quite expensive
-        _unique_node_coord, _all_idx = renumber_node_indices(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
-                                                             _unused_idx, self._n_dimensions)
+        _unique_node_coord, _all_idx = renumber_node_indices_parallel(_all_idx.numpy(), pt.stack(self.all_nodes).numpy(),
+                                                                      _unused_idx, self._n_dimensions)
+        del _unused_idx
 
         # update node ID's and their coordinates
         self.face_ids = pt.from_numpy(_all_idx)
@@ -1524,6 +1525,43 @@ class SamplingTree(object):
                     val_str = str(value)
                 atts.append(f"\t\t{key:<{max_key_len}}:\t{val_str}")
         logger.info("\n".join(atts))
+
+
+@njit(parallel=True, fastmath=True, nogil=True)
+def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
+                                   unused_idx: set, dims: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    remove all unused nodes and center coordinates from the list, re-number the node coordinates - parallelized version
+
+    :param all_idx: array containing all indices of nodes, which are used within the grid
+    :param all_nodes: all nodes which have been created throughout the refinement process
+    :param unused_idx: node indices of coordinates, which are not present in the final grid anymore
+    :param dims: number of physical dimensions
+    :return: array with unique node coordinates used in the final grid and array with re-numbered node indices pointing
+             to these node coordinates
+    """
+    # TODO: documentation
+    # build mapping from old index -> new index
+    mapping = np.full(all_nodes.shape[0], -1, dtype=np.int64)
+    counter = 0
+    for i in range(all_nodes.shape[0]):
+        if i not in unused_idx:
+            mapping[i] = counter
+            counter += 1
+
+    # create the new unique node
+    _unique_nodes = np.zeros((counter, dims), dtype=all_nodes.dtype)
+    for i in prange(all_nodes.shape[0]):
+        if mapping[i] != -1:
+            _unique_nodes[mapping[i], :] = all_nodes[i, :]
+
+    # remap all_idx using the mapping
+    orig_shape = all_idx.shape
+    all_idx = all_idx.flatten()
+    for j in prange(all_idx.shape[0]):
+        all_idx[j] = mapping[all_idx[j]]
+
+    return _unique_nodes, all_idx.reshape(orig_shape)
 
 
 @njit(fastmath=True, nogil=True)
