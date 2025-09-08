@@ -120,7 +120,6 @@ if __name__ == "__main__":
 
         # execute S^3
         s_cube.execute_grid_generation()
-        continue
 
         # create export instance, export all fields into the same HFD5 file and create single XDMF from it
         export = ExportData(s_cube)

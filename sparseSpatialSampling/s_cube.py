@@ -138,6 +138,11 @@ class SamplingTree(object):
         self._current_max_level = 0
         # starting value = 0.1% of original grid size
         self._cells_per_iter_start = int(0.001 * vertices.size(0)) if n_cells_iter_start is None else n_cells_iter_start
+
+        # make sure we don't encounter issues for test meshes
+        if self._cells_per_iter_start <= 0:
+            self._cells_per_iter_start = 1
+
         # end value = same as start value
         self._cells_per_iter_end = self._cells_per_iter_start if n_cells_iter_end is None else n_cells_iter_end
         self._cells_per_iter = self._cells_per_iter_start
@@ -340,6 +345,11 @@ class SamplingTree(object):
         # compute the gain of the first cell
         sum_distances = sum([abs(metric[0] - metric[i]) for i in range(1, len(metric))])
         gain = pow(self._width / 2, 2) * sum_distances
+
+        # in the unlikely event that the gain of the first cell is zero (e.g. for test datasets),
+        # disable scaling with gain of initial cell by setting it to one
+        if abs(gain - 0) < 1e-6:
+            gain = pt.ones((1,))
 
         # add the first cell to the cell counter
         self._n_cells += 1
@@ -1540,8 +1550,7 @@ def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
     :return: array with unique node coordinates used in the final grid and array with re-numbered node indices pointing
              to these node coordinates
     """
-    # TODO: documentation
-    # build mapping from old index -> new index
+    # build mapping from old index -> new index, fill with -1 as marker for unused idx based on unused_idx
     mapping = np.full(all_nodes.shape[0], -1, dtype=np.int64)
     counter = 0
     for i in range(all_nodes.shape[0]):
@@ -1549,7 +1558,7 @@ def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
             mapping[i] = counter
             counter += 1
 
-    # create the new unique node
+    # create the new unique node, then map the idx based on the mapping
     _unique_nodes = np.zeros((counter, dims), dtype=all_nodes.dtype)
     for i in prange(all_nodes.shape[0]):
         if mapping[i] != -1:
@@ -1672,6 +1681,7 @@ def _update_gain(args) -> float:
     :return: gain of the cell as float
     """
     _level, _n_dims, _width, gain_0, sum_delta_metric = args
+    print(gain_0)
 
     # scale with the cell size of the children (the cell size is computed based on the cell level and the
     # size of the initial cell), then normalize gain with gain of the initial cell

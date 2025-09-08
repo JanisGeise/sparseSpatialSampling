@@ -1,6 +1,5 @@
 """
     test the correct assignment of the node indices
-    TODO: since parallelized test isn't passed anymore due to division by zero error -> check
 """
 import pytest
 import torch as pt
