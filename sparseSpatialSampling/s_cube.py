@@ -1681,7 +1681,6 @@ def _update_gain(args) -> float:
     :return: gain of the cell as float
     """
     _level, _n_dims, _width, gain_0, sum_delta_metric = args
-    print(gain_0)
 
     # scale with the cell size of the children (the cell size is computed based on the cell level and the
     # size of the initial cell), then normalize gain with gain of the initial cell
