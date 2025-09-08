@@ -1649,6 +1649,11 @@ def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int) -> Cell:
 
 
 def initialize_time_dict() -> dict:
+    """
+    initialize an empty dictionary in which the timings are saved
+
+    :return: dict
+    """
     return {"t_start_uniform": 0.0, "t_end_uniform": 0.0,
             "t_start_adaptive": 0.0,                            # we don't need t_end_adaptive
             "t_start_geometry": 0.0, "t_end_geometry": 0.0,

@@ -143,6 +143,18 @@ For the interpolation and export of fields, the RAM needs to be large enough to 
 - the levels of the interpolated grid (size depends on the specified target metric)
 - a snapshot of the interpolated field (size depends on the specified target metric)
 
+## Documentation
+To build the documentation for $S^3$ first `sphinx` has to be installed:
+
+````
+pip3 install sphinx sphinx_rtd_theme nbsphinx recommonmark
+````
+you can then build the documentation by running
+````
+cd docs/
+make html
+````
+
 ## Unit tests
 To perform unit tests, `pytest` has to be installed via
 

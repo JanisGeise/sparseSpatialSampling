@@ -72,7 +72,7 @@ class GeometryCoordinates2D(GeometryObject):
         """
         method to pre-check if a cell is within a rectangular bounding box of the geometry object
         -> much faster than check the polygon directly if it is expected to generate large numbers of cells outside
-            the bounding box
+        the bounding box
 
         :param cell_nodes: vertices of the cell which should be checked
         :type cell_nodes: pt.Tensor

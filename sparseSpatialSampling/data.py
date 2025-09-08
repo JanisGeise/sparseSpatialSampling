@@ -63,7 +63,7 @@ class Dataloader:
         stored in the 'field_names' property.
 
         :return: available write times
-        :rtype list
+        :rtype: list
         """
         if self._write_times is None:
             with File(join(self._load_path, self._file_name), "r") as f:
