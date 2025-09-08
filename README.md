@@ -18,14 +18,12 @@ accurately since it only generates cells in regions where the gradient of the me
 ## Getting started
 To get started with $S^3$ you can check out the tutorials provided:
 
-| # | topic                                                                    | notebook                                             |
-|--:|:-------------------------------------------------------------------------|:-----------------------------------------------------|
-| 1 | 2D flow past a cylinder                                                  | [view](./tutorials/tutorial1_cylinder2D_Re100.ipynb) |
-| 2 | OAT15 at high speed stall conditions                                     | [view](./tutorials/tutorial2_oat15_buffet.ipynb)     |
-| 3 | How to select the best settings and advanced options                     | [view](./tutorials/tutorial3_select_settings.ipynb)  |
-| 4 | Loading existing *s_cube* objects and export options                     | [view](./tutorials/tutorial4_export_options.ipynb)   |
-
-TODO: add documentation using Sphinx
+| # | topic                                                                    | notebook                                                          |
+|--:|:-------------------------------------------------------------------------|:------------------------------------------------------------------|
+| 1 | 2D flow past a cylinder                                                  | [view](./docs/source/tutorials/tutorial1_cylinder2D_Re100.ipynb)  |
+| 2 | OAT15 at high speed stall conditions                                     | [view](./docs/source/tutorials/tutorial2_oat15_buffet.ipynb)      |
+| 3 | How to select the best settings and advanced options                     | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)   |
+| 4 | Loading existing *s_cube* objects and export options                     | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)    |
 
 **Note:** There are some issues, which may arise when visualizing the results of $S^3$ in Paraview. 
 See section [issues](#Issues) for known issues and their solution.
