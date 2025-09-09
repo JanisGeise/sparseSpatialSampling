@@ -409,7 +409,7 @@ class SamplingTree(object):
 
         Note:
             Although this method is called ``_compute_cell_centers()``, it computes the vertices of a cell if
-            ``_factor=0.5`` (half distance between two adjacent cell centers).
+            ``_factor=0.5`` (half the distance between two adjacent cell centers).
             If ``_factor=0.25``, it computes the cell centers of all child cells relative to the parent cell center.
 
         :param _idx: Index of the cell(s) to compute for
@@ -529,7 +529,7 @@ class SamplingTree(object):
                 cell = self._cells[i]
 
                 # assign the neighbors of current cell and add all new cells as children
-                cell.children = list(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
+                cell.children = tuple(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
                 all_children.update(list(range(new_index, new_index + len(cell.children))))
                 all_parents.add(cell.index)
 
@@ -710,6 +710,10 @@ class SamplingTree(object):
         # compute the node locations of the current cell
         nodes = self._compute_cell_centers(_refined_cells, _factor=0.5, _keep_parent_center=False)
 
+        # if we only have a single cell, we need to expand one dimension
+        if len(nodes.size()) == 2:
+            nodes = nodes.unsqueeze(-1)
+
         # loop over all new cells and check if they are valid
         args_list = [(cell, nodes[:, :, i], _geometries, _refine_geometry, self._pre_select)
                      for i, cell in enumerate(_refined_cells)]
@@ -738,6 +742,7 @@ class SamplingTree(object):
 
             # remove all invalid cells from the leaf cells
             self._leaf_cells -= _idx
+            return None
 
     def _resort_nodes_and_indices_of_grid(self) -> None:
         """
@@ -1152,7 +1157,7 @@ class SamplingTree(object):
 
         return children
 
-    def _assign_indices(self, cells):
+    def _assign_indices(self, cells: tuple):
         """
         Assign unique indices to the nodes of child cells, ignoring coordinate information.
 
