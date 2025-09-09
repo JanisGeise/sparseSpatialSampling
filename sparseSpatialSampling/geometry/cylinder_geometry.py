@@ -77,6 +77,9 @@ class CylinderGeometry3D(GeometryObject):
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
+
+        :return: None
+        :rtype: None
         """
         # check if position is an empty list
         assert self._position, "Found empty list for the position. Please provide values for the positions."
@@ -122,4 +125,10 @@ class CylinderGeometry3D(GeometryObject):
 
     @property
     def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
         return self._type

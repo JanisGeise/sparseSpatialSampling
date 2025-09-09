@@ -61,19 +61,36 @@ class Cell(object):
     """
 
     def __init__(self, index: int, parent, nb: list, center: pt.Tensor, level: int, children=None, metric=None,
-                 gain=None, dimensions: int = 2, idx: list = None):
+                 gain=None, dimensions: int = 2, node_idx: list = None):
         """
-        note that all cells are rectangular, meaning len_x == len_y = len_z; each cell has the following attributes:
+        Initialize a cell object.
 
-        :param index: index of the cell (cell number)
-        :param parent: the superior cell, from which this cell was derived
-        :param nb: list containing all neighbor of the cell
-        :param center: coordinates of the cell center
-        :param level: refinement level (how often do we need to divide an initial cell to get to this cell)
-        :param children: is this cell a parent cell of other cells (contains this cell other, smaller cells inside it)
-        :param metric: the prediction for the metric made by the KNN based on the cell centers
-        :param gain: value indicating the benefit arising from refining this cell
-        :param dimensions: number of physical dimensions (2D / 3D)
+        Note:
+            All cells are rectangular (``len_x == len_y == len_z``).
+            Each cell has the following attributes describing its position, refinement level, neighbors, and metric values.
+
+        :param index: Index of the cell (cell number)
+            :type index: int
+        :param parent: Parent cell from which this cell was derived
+            :type parent: Cell | None
+        :param nb: List of neighboring cells
+            :type nb: list[Cell]
+        :param center: Coordinates of the cell center
+            :type center: pt.Tensor
+        :param level: Refinement level (how many times an initial cell must be divided to obtain this cell)
+            :type level: int
+        :param children: Child cells of this cell, if any
+            :type children: list[Cell] | None
+        :param metric: Prediction for the metric made by the KNN based on the cell centers
+            :type metric: float | None
+        :param gain: Value indicating the benefit from refining this cell
+            :type gain: float | None
+        :param dimensions: Number of physical dimensions (2 for 2D, 3 for 3D)
+            :type dimensions: int
+        :param node_idx: Indices of the cell's vertices
+            :type node_idx: list[int] | None
+        :return: None
+        :rtype: None
         """
         self.index = index
         self.parent = parent
@@ -84,7 +101,7 @@ class Cell(object):
         self.gain = gain
         self._n_dims = dimensions
         self.nb = nb
-        self.node_idx = idx
+        self.node_idx = node_idx
 
     def leaf_cell(self) -> bool:
         return self.children is None
@@ -100,28 +117,43 @@ class SamplingTree(object):
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select: bool = False):
         """
-        initialize the KNNand settings, create an initial cell, which can be refined iteratively in the 'refine'-methods
+        Initialize the KNN and refinement settings, and create an initial cell that can be
+        refined iteratively using the ``refine`` methods.
 
-        :param vertices: node coordinates of the original mesh (from CFD)
-        :param target: the metric based on which the grid should be created, e.g., std. deviation of pressure wrt time
-        :param geometry_obj: a list containing possible geometry objects, such as the numerical domain
-        :param n_cells: max. number of cell, if 'None', then the refinement process stopps automatically once the
-                        target metric is reached
-        :param uniform_level: number of uniform refinement cycles to perform
-        :param min_metric: percentage the metric the generated grid should capture (wrt the original grid), if 'None'
-                            the max. number of cells will be used as stopping criteria
-        :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
-                                difference of one (important for computing gradients across cells)
-        :param n_cells_iter_start: number of cells to refine per iteration at the beginning
-        :param n_cells_iter_end: number of cells to refine per iteration at the end
-        :param n_jobs: number of CPUs to use, if None all available CPUs will be used
-        :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
-        :param reach_at_least: reach at least per cent of the target metric / number of cells before activating the
-                                relTol stopping criterion
-        :param pre_select: when dealing with 'GeometrySTL3D' or 'GeometryCoordinates2D' geometry objects, this option
-                           can decrease the required runtime significantly if the majority of cells is expected to be
-                           created outside a rectangular bounding box around the geometry object,
-                           i.e. if the difference between the volume of the geometry and a bounding box are minimal
+        :param vertices: Node coordinates of the original mesh (from CFD)
+            :type vertices: pt.Tensor
+        :param target: Metric based on which the grid should be created
+            (e.g., standard deviation of pressure with respect to time)
+            :type target: pt.Tensor
+        :param geometry_obj: List of geometry objects, such as the numerical domain
+            :type geometry_obj: list[dict] | list[Geometry]
+        :param n_cells: Maximum number of cells.
+                        If None, the refinement process stops automatically once the target metric is reached
+            :type n_cells: int | None
+        :param uniform_level: Number of uniform refinement cycles to perform
+            :type uniform_level: int
+        :param min_metric: Percentage of the target metric the generated grid should capture
+            (with respect to the original grid). If None, the maximum number of cells is used as the stopping criterion
+            :type min_metric: float
+        :param max_delta_level: If True, enforce that adjacent cells differ by at most one refinement level
+            (important for computing gradients across cells)
+            :type max_delta_level: bool
+        :param n_cells_iter_start: Number of cells to refine per iteration at the beginning
+            :type n_cells_iter_start: int | None
+        :param n_cells_iter_end: Number of cells to refine per iteration at the end
+            :type n_cells_iter_end: int | None
+        :param n_jobs: Number of CPUs to use. If None, all available CPUs will be used
+            :type n_jobs: int | None
+        :param relTol: Minimum improvement between two consecutive iterations
+            :type relTol: int | float
+        :param reach_at_least: Minimum percentage of the target metric / number of cells to reach
+            before activating the ``relTol`` stopping criterion
+            :type reach_at_least: float
+        :param pre_select: Optimization for geometry objects (e.g., ``GeometrySTL3D`` or ``GeometryCoordinates2D``)
+            that reduces runtime when most cells are expected outside the bounding box around the geometry
+            :type pre_select: bool
+        :return: None
+        :rtype: None
         """
         # if '_min_metric' is not set, then use 'n_cells' as stopping criteria -> metric of 1 means we capture all
         # the dynamics in the original grid -> we should reach 'n_cells_max' earlier
@@ -199,13 +231,16 @@ class SamplingTree(object):
 
     def _update_gain(self, new_cells: Union[set, list]) -> None:
         """
-        Update the gain of all (new) leaf cells, the gain is composed of the improvement wrt the target metric and the
-        cell size.
-        Within the first iterations, cells with a high metric are preferred for refinement while later the cell size is
-        the main driver
+        Update the gain of all (new) leaf cells.
+
+        The gain is composed of the improvement with respect to the target metric and the cell size.
+        In the first iterations, cells with a high metric are preferred for refinement, while in later
+        iterations the cell size becomes the main driver.
 
         :param new_cells: Indices of cells for which the gain should be updated
+        :type new_cells: set[int] | list[int]
         :return: None
+        :rtype: None
         """
         # compute cell centers of all leaf cells and their potential children
         _centers = self._compute_cell_centers(new_cells)
@@ -244,6 +279,7 @@ class SamplingTree(object):
         Update the current min. refinement level within the grid
 
         :return: None
+        :rtype: None
         """
         min_level = min({self._cells[index].level for index in self._leaf_cells})
         self._current_min_level = max(self._current_min_level, min_level)
@@ -253,7 +289,8 @@ class SamplingTree(object):
         Check if the stopping criteria for ending the refinement process is met; either based on the captured metric
         wrt to the original grid or the max. number of cells specified
 
-        :return: bool
+        :return: fulfillment of stopping criterion (False) or if refinement should be continued (True)
+        :rtype: bool
         """
         # check the fulfillment of the stopping criterion
         if self._n_cells_max is None:
@@ -277,6 +314,7 @@ class SamplingTree(object):
         on the specified stopping criteria.
 
         :return: None
+        :rtype None
         """
         # if we use the target metric as stopping criteria, compute dx based on the current approximation of the metric
         if self._n_cells_max is None:
@@ -300,8 +338,9 @@ class SamplingTree(object):
         """
         compute the metric at the cell centers captured by the current grid, relative to the metric of the original grid
 
-        :return: bool, indicating if the current captured metric is larger than the min. metric defined as stopping
+        :return: yields False if the current captured metric is larger than the min. metric defined as stopping
                  criteria
+        :rtype: bool
         """
         # the metric is computed at the cell centers for the original grid from CFD
         _centers = pt.stack([self._cells[cell].center for cell in self._leaf_cells])
@@ -321,30 +360,27 @@ class SamplingTree(object):
         refinement process
 
         :return: None
+        :rtype: None
         """
         # determine the main dimensions of the domain (cells are all rectangular, so len_x == len_y == len_z)
         self._width = max([(self._vertices[:, i].max() - self._vertices[:, i].min()).item() for i in
                            range(self._n_dimensions)])
 
-        # compute the cell centers of the first cell and its child cells,
-        # we can't use '_compute_cell_centers()', because we don't have any cells yet
-        centers_ = pt.zeros((2 ** self._n_dimensions + 1, self._n_dimensions))
+        # we can't use '_compute_cell_centers()', because we don't have any cells yet, so create tensor with
+        # [n_parent + n_child, n_dimensions] entries
+        middle_ = (self._vertices.max(dim=0).values + self._vertices.min(dim=0).values) / 2.0
+        centers_ = middle_.unsqueeze(0).repeat(2 ** self._n_dimensions + 1, 1).type(pt.float64)
 
-        # we can't use tensor operations to compute the centers_ tensor all at once, so we need to fill it element-wise
-        for node in range(2 ** self._n_dimensions + 1):
-            for d in range(self._n_dimensions):
-                centers_[node, d] = (pt.max(self._vertices[:, d]).item() + pt.min(self._vertices[:, d]).item()) / 2.0
-
-        # correct cell centers of children with offset -> in each direction +- 0.25 of cell width
+        # now correct cell centers of children with offset -> in each direction +- 0.25 of cell width
         nodes = centers_[1:, :] + self._directions * 0.5 * self._width
         centers_[1:, :] += self._directions * 0.25 * self._width
 
         # interpolate the metric to the newly created cell centers
         metric = self._knn.predict(centers_.numpy()).squeeze()
 
-        # compute the gain of the first cell
+        # compute the gain of the first cell, the cell level is zero so the computation simplifies
         sum_distances = sum([abs(metric[0] - metric[i]) for i in range(1, len(metric))])
-        gain = pow(self._width / 2, 2) * sum_distances
+        gain = pow(self._width / 2, self._n_dimensions) * sum_distances
 
         # in the unlikely event that the gain of the first cell is zero (e.g. for test datasets),
         # disable scaling with gain of initial cell by setting it to one
@@ -355,13 +391,13 @@ class SamplingTree(object):
         self._n_cells += 1
 
         # add the node coordinates to the list containing all coordinates
-        for n in range(nodes.size()[0]):
+        for n in range(nodes.size(0)):
             self.all_nodes.append(nodes[n, :])
         self.all_centers.append(centers_[0, :])
 
         # add the initial cell to the list of created cells
         self._cells = [Cell(0, None, self._knn.n_neighbors * [None], centers_[0, :], 0, None, metric[0], gain,
-                            dimensions=self._n_dimensions, idx=list(range(nodes.size()[0])))]
+                            dimensions=self._n_dimensions, node_idx=list(range(nodes.size(0))))]
 
         # update the leaf cells, so the initial cell is now seen as leaf cell
         self._leaf_cells.add(0)
@@ -369,18 +405,24 @@ class SamplingTree(object):
     def _compute_cell_centers(self, _idx: Union[int, list, set] = None, _factor: float = 0.25,
                               _keep_parent_center: bool = True, _cell: Cell = None) -> pt.Tensor:
         """
-        Computes either the cell centers of the child cells for a given parent cell ('factor_' = 0.25) or the nodes of
-        a given cell ('factor_' = 0.5)
+        Compute either the cell centers of the child cells for a given parent cell or the vertices of a given cell.
 
-        Note:   although this method is called '_compute_cell_centers()', it computes the vertices of a cell if
-                'factor_=0.5', not the cell center.
-                If 'factor_=0.25', it computes the cell centers of all child cells, hence the name for this method.
+        Note:
+            Although this method is called ``_compute_cell_centers()``, it computes the vertices of a cell if
+            ``_factor=0.5`` (half distance between two adjacent cell centers).
+            If ``_factor=0.25``, it computes the cell centers of all child cells relative to the parent cell center.
 
-        :param _idx: index of the cell
-        :param _factor: the factor (0.5 = half distance between two adjacent cell centers = node; 0.25 = cell center of
-                        child cells relative to the parent cell center)
-        :param _keep_parent_center: if the cell center of the parent cell should be deleted from the tensor prior return
-        :return: either cell centers of child cells (factor_=0.25) or nodes of current cell (factor_=0.5)
+        :param _idx: Index of the cell(s) to compute for
+        :type _idx: int | list[int] | set[int]
+        :param _factor: Factor determining the computation:
+            - 0.5: compute the vertices (nodes) of the current cell
+            - 0.25: compute the centers of child cells relative to the parent cell
+        :type _factor: float
+        :param _keep_parent_center: If True, the parent cell center is retained; if False, it is removed from the result
+        :type _keep_parent_center: bool
+        :return: Computed coordinates: either the centers of child cells (``_factor=0.25``) or the nodes of the current
+                 cell (``_factor=0.5``)
+        :rtype: pt.Tensor
         """
         if _cell is None:
             _idx = [_idx] if type(_idx) is int else _idx
@@ -407,12 +449,15 @@ class SamplingTree(object):
 
     def _check_nb(self, _cell_no: int) -> list:
         """
-        check if a cell and its neighbors have the same level, if not then we need to refine all cells for which this
-        constraint is violated, because after refinement of the current cell, we would end up with a level difference
-        of two
+        Check whether a cell and its neighbors satisfy the maximum level difference constraint.
 
-        :param _cell_no: current cell index for which we want to check the constraint
-        :return: list with indices of nb cell we need to refine, because delta level is >= 1
+        If any neighbor has a different refinement level, all cells violating the constraint must be refined,
+        because refining the current cell alone could create a level difference of two.
+
+        :param _cell_no: Index of the current cell to check
+        :type _cell_no: int
+        :return: List of neighbor cell indices that need to be refined to satisfy the level constraint
+        :rtype: list[int]
         """
         # Check if the level of the current cell is the same as the one of all nb cells -> if not, then refine the nb
         # cell to avoid too large level differences between adjacent cells. The same level is required,
@@ -432,9 +477,10 @@ class SamplingTree(object):
             would be violated. So we need to check the constraint for cell C as well, and if the constraint is violated
             for any nb of cell C, we need to check these nb as well and so on.
 
-        :param nb_violating_constraint: NB cells of current cell, which violate the delta level constraint
-        :return: all nb cells which need to be refined as well (basically all cells that need to be refined in the
-                 current iteration)
+        :param nb_violating_constraint: Set of neighbor cell indices of the current cell that violate the delta-level constraint
+        :type nb_violating_constraint: set[int]
+        :return: Set of all neighbor cell indices that need to be refined to maintain the level constraint
+        :rtype: set[int]
         """
         new_cells_to_check = True if nb_violating_constraint else False
         while new_cells_to_check:
@@ -465,6 +511,7 @@ class SamplingTree(object):
         (uniform refinement is significantly faster than adaptive refinement)
 
         :return: None
+        :rtype: None
         """
         self._times["t_start_uniform"] = time()
         for j in range(self._min_level):
@@ -515,6 +562,7 @@ class SamplingTree(object):
         Implements the generation of the grid based on the original grid and a metric
 
         :return: None
+        :rtype: None
         """
         logger.info("Starting refinement:")
         # execute uniform refinement, the stopping criteria requires at least one uniform refinement cycle which is
@@ -639,11 +687,18 @@ class SamplingTree(object):
         """
         Check if any of the generated cells are located inside a geometry or outside a domain, if so they are removed.
 
-        :param _refined_cells: indices of the cells which are newly added
-        :param _refine_geometry: flag if we want to refine the grid near geometry objects
-        :param _geometry_no: index of the geometry object to check (or to refine) within the self._geometries
-        :return: None if we removed all invalid cells, if '_refine_geometry = True' returns list with indices of the
-                 cells which are neighbors of geometries / domain boundaries
+        Remove newly generated cells that are located inside geometries or outside the domain.
+
+        :param _refined_cells: Indices of the newly added cells to check
+        :type _refined_cells: set[int]
+        :param _refine_geometry: If True, refine the grid near geometry objects
+        :type _refine_geometry: bool
+        :param _geometry_no: Index (or list of indices) of the geometry object(s) within ``self._geometries`` to check or refine
+        :type _geometry_no: int | list[int] | None
+        :return:
+        - None if all invalid cells were removed
+        - Set of cell indices that are neighbors of geometries or domain boundaries if ``_refine_geometry=True``
+        :rtype: None | set[int]
         """
         # in case we only have a single geometry, we need to cast it to a list
         if type(_geometry_no) is int:
@@ -671,6 +726,7 @@ class SamplingTree(object):
             return _idx
         else:
             # for each invalid cell, loop over their neighbors, find the invalid cell and deactivate it as a neighbor
+            # TODO: can we get rid of the inner loop?
             for cell in _idx:
                 self._cells[cell].children = None if _refine_geometry else []
                 self._cells[cell].gain = 0
@@ -679,18 +735,6 @@ class SamplingTree(object):
                     if nb is not None:
                         self._cells[nb.index].nb = [None if nb.nb[n] is not None and nb.nb[n].index == cell else
                                                     nb.nb[n] for n in range(len(nb.nb))]
-
-                # TODO: can we safely remove the cell center and node idx completely from the tree?
-                #       no, because this would require re-indexing of leaf_cells
-                #       -> applies for removal of unused cells as well (to save some memory)
-                #       -> general steps would be:
-                #           1. determination of unused cells
-                #           2. complete removal from tree
-                #           3. removal of corresponding cell centers and nodes
-                #           4. re-indexing of leaf_cells
-                #           5. re-indexing of cell faces / face id's (?)
-
-            # TODO: for testing purposes start with removal of invalid cell, if that works try unused parent cells
 
             # remove all invalid cells from the leaf cells
             self._leaf_cells -= _idx
@@ -701,6 +745,7 @@ class SamplingTree(object):
         respect to their corresponding index and re-number all nodes.
 
         :return: None
+        :rtype: None
         """
         logger.info("Starting renumbering final mesh.")
         self._times["t_start_renumber"] = time()
@@ -734,16 +779,19 @@ class SamplingTree(object):
 
     def _execute_geometry_refinement(self, _geometries: list = None) -> None:
         """
-        an adapted version of the 'refine()' method for refinement of the final grid near geometry objects or
-        domain boundaries.
-        The documentation of this method is equivalent to the 'refine()' method, but with some extensions:
-            - loop over all geometries we want to refine
-            - determine the level with which we want to refine the geometry object
-            - determine the cells in the vicinity of the geometry
-            - refine the geometry analogously to the refine() method
+        Perform an adapted version of the ``refine()`` method for refining the grid near geometry objects
+        or domain boundaries.
 
-        :param _geometries: list containing the indices of the geometry objects we want to refine
+        This method extends ``refine()`` by:
+            - Looping over all geometry objects to refine
+            - Determining the refinement level for each geometry object
+            - Identifying cells in the vicinity of the geometry
+            - Refining the geometry in the same manner as ``refine()``
+
+        :param _geometries: List of indices of the geometry objects to refine. If None, all relevant geometries are considered.
+        :type _geometries: list[int] | None
         :return: None
+        :rtype: None
         """
         logger.info("Starting geometry refinement.")
 
@@ -832,11 +880,18 @@ class SamplingTree(object):
         """
         create a child cell from a given parent cell, assign its neighbors correctly to each child cell
 
-        :param loc_center: center coordinates of the cell and its subcells
-        :param cell: current cell
-        :param new_idx: new index of the cell
-        :return: the child cells with correctly assigned neighbors
+        :param cell: The parent cell to subdivide
+        :type cell: Cell
+        :param loc_center: Center coordinates of the parent cell and its subcells
+        :type loc_center: pt.Tensor | None
+        :param new_idx: New index to assign to the generated child cell(s)
+        :type new_idx: int | None
+        :param children: Optional pre-created child cells to assign neighbors for
+        :type children: tuple[Cell] | list[Cell] | None
+        :return: List of child cells with neighbors correctly assigned
+        :rtype: list[Cell]
         """
+        # TODO: replace with mapping table to improve readability and efficiency
         if children is None:
             # each child cell gets a new index within all cells
             children = [Cell(new_idx + i, cell, len(cell.nb) * [None], loc_center[i, :], cell.level + 1,
@@ -1099,13 +1154,19 @@ class SamplingTree(object):
 
     def _assign_indices(self, cells):
         """
-        Due to round-off errors, accumulation of errors, etc. even with double precision and is_close(), we are
-        interpreting the same node shared by adjacent cells as different node, so we need to generate the node indices
-        without any coordinate information
+        Assign unique indices to the nodes of child cells, ignoring coordinate information.
+
+        Due to round-off errors or accumulation of numerical errors, even with double precision and using ``is_close()``,
+        the same node shared by adjacent cells may be interpreted as different nodes.
+        This method generates consistent node indices for all cells without relying on coordinates.
 
         :param cells: Tuple containing the child cells
+        :type cells: tuple[Cell]
         :return: None
+        :rtype: None
         """
+        # TODO: replace with lookup table instead of hard-coded if/else statements
+        #       cell center computation can be parallelized since it's independent
         for i in range(len(cells)):
             # add the cell center to the set containing all centers -> ensuring that the order of nodes and centers is
             # consistent
@@ -1446,6 +1507,7 @@ class SamplingTree(object):
         Check which geometries should be refined and execute the refinement process for each of these geometries
 
         :return: None
+        :rtype: None
         """
         # check which geometries should be refined
         geometries_to_refine = [idx for idx, g in enumerate(self._geometry) if g.refine]
@@ -1461,11 +1523,13 @@ class SamplingTree(object):
 
     def _create_mesh_info(self, counter: int) -> None:
         """
-        create an info dict containing information about the created mesh and required execution times for each part of
-        the refinement process
+        Create a dictionary containing information about the generated mesh and the execution times
+        for each part of the refinement process.
 
-        :param counter: number of iterations required for the adaptive refinement
+        :param counter: Number of iterations required for the adaptive refinement
+        :type counter: int
         :return: None
+        :rtype: None
         """
         self.data_final_mesh["size_initial_cell"] = self._width
         self.data_final_mesh["n_cells_orig"] = self._n_cells_orig
@@ -1487,9 +1551,29 @@ class SamplingTree(object):
             self.data_final_mesh["t_adaptive"] = self._times["t_start_renumber"] - self._times["t_start_adaptive"]
 
     def __len__(self):
+        """
+        Return the total number of cells in the current mesh.
+
+        :return: Number of cells
+        :rtype: int
+        """
         return self._n_cells
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+            Return a formatted string summarizing the refinement process and mesh statistics.
+
+            Includes:
+                - Total refinement time and number of iterations
+                - Time spent in uniform and adaptive refinement
+                - Time spent in geometry refinement (if applicable)
+                - Time for renumbering the final mesh
+                - Number of cells, minimum and maximum refinement levels
+                - Captured metric of the original grid
+
+            :return: Formatted summary string
+            :rtype: str
+            """
         message = [f"Finished refinement in {self.data_final_mesh['t_total']:2.4f} s ",
                    f"({self.data_final_mesh['iterations']} iterations).",
                    f"Time for uniform refinement: {self.data_final_mesh['t_uniform']:2.4f} s",
@@ -1510,17 +1594,44 @@ class SamplingTree(object):
 
     @property
     def n_dimensions(self) -> int:
+        """
+        Get the number of physical dimensions of the mesh.
+
+        :return: Number of dimensions (2 for 2D, 3 for 3D)
+        :rtype: int
+        """
         return self._n_dimensions
 
     @property
     def width(self) -> pt.Tensor:
+        """
+        returns the width of the initial cell (dimension with the largest distance)
+
+        :return: Tensor containing the cell widths
+        :rtype: pt.Tensor
+        """
         return self._width
 
     @property
     def geometry(self) -> list:
+        """
+        Returns a list of all geometry objects stored in S^3
+
+        :return: List of geometry objects
+        :rtype: list
+        """
         return self._geometry
 
-    def _print_settings(self):
+    def _print_settings(self) -> None:
+        """
+        Log selected internal settings of the mesh object.
+
+        Certain internal attributes are omitted for readability.
+        For the ``_geometry`` attribute, only the names of geometry objects are displayed.
+
+        :return: None
+        :rtype: None
+        """
         omit = ["_times", "all_centers", "data_final_mesh", "_width", "_pool", "_knn", "_cells", "_leaf_cells",
                 "_n_cells_after_uniform", "_N_cells_per_iter", "all_nodes", "face_ids", "_metric", "_current_min_level",
                 "_current_max_level", "_vertices", "_n_cells", "_n_cells_log"]
@@ -1541,14 +1652,21 @@ class SamplingTree(object):
 def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
                                    unused_idx: set, dims: int) -> Tuple[np.ndarray, np.ndarray]:
     """
-    remove all unused nodes and center coordinates from the list, re-number the node coordinates - parallelized version
+    Remove unused nodes and corresponding coordinates, and re-number the remaining node indices.
+    This is a parallelized version for improved performance on large grids.
 
-    :param all_idx: array containing all indices of nodes, which are used within the grid
-    :param all_nodes: all nodes which have been created throughout the refinement process
-    :param unused_idx: node indices of coordinates, which are not present in the final grid anymore
-    :param dims: number of physical dimensions
-    :return: array with unique node coordinates used in the final grid and array with re-numbered node indices pointing
-             to these node coordinates
+    :param all_idx: Array containing all node indices used within the grid
+    :type all_idx: np.ndarray
+    :param all_nodes: Array of all node coordinates created during the refinement process
+    type all_nodes: np.ndarray
+    :param unused_idx: Set of node indices that are no longer present in the final grid
+    :type unused_idx: set[int]
+    :param dims: Number of physical dimensions (2 for 2D, 3 for 3D)
+    :type dims: int
+    :return:
+        - Array of unique node coordinates used in the final grid
+        - Array of re-numbered node indices pointing to these coordinates
+    :rtype: Tuple[np.ndarray, np.ndarray]
     """
     # build mapping from old index -> new index, fill with -1 as marker for unused idx based on unused_idx
     mapping = np.full(all_nodes.shape[0], -1, dtype=np.int64)
@@ -1579,12 +1697,18 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
     """
     remove all unused nodes and center coordinates from the list, re-number the node coordinates.
 
-    :param all_idx: array containing all indices of nodes, which are used within the grid
-    :param all_nodes: all nodes which have been created throughout the refinement process
-    :param _unused_idx: node indices of coordinates, which are not present in the final grid anymore
-    :param dims: number of physical dimensions
-    :return: array with unique node coordinates used in the final grid and array with re-numbered node indices pointing
-             to these node coordinates
+    :param all_idx: Array containing all node indices used within the grid
+    :type all_idx: np.ndarray
+    :param all_nodes: Array of all node coordinates created during the refinement process
+    type all_nodes: np.ndarray
+    :param _unused_idx: Set of node indices that are no longer present in the final grid
+    :type _unused_idx: set[int]
+    :param dims: Number of physical dimensions (2 for 2D, 3 for 3D)
+    :type dims: int
+    :return:
+        - Array of unique node coordinates used in the final grid
+        - Array of re-numbered node indices pointing to these coordinates
+    :rtype: Tuple[np.ndarray, np.ndarray]
     """
     """
     some things regarding numba:
@@ -1630,6 +1754,19 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
 
 
 def check_nb_node(_cell: Cell, nb_no: int) -> bool:
+    """
+    Check if a specific neighbor of a cell exists, is a leaf cell, and has the same refinement level.
+
+    This is used after neighbors have been updated but before assigning node indices to ensure
+    that neighbor consistency is maintained.
+
+    :param _cell: The current cell to check
+    :type _cell: Cell
+    :param nb_no: Index of the neighbor to check in the cell's neighbor list
+    :type nb_no: int
+    :return: True if the neighbor exists, is a leaf cell, and has the same level; False otherwise
+    :rtype: bool
+    """
     # since we already updated the NB prior assigning the indices, we only need to check if the nb cell of the current
     # child cell exists and has the same level
     return _cell.nb[nb_no] is not None and _cell.nb[nb_no].leaf_cell() and _cell.level == _cell.nb[nb_no].level
@@ -1637,22 +1774,31 @@ def check_nb_node(_cell: Cell, nb_no: int) -> bool:
 
 def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int) -> Cell:
     """
-    get the neighbor cell of a newly created child cell
+    Retrieve the neighbor cell of a newly created child cell.
 
-    :param nb: list containing the neighbors of the current parent cell
-    :param check: flag if the current parent cell has children
-    :param nb_idx: index of the neighbor for which we want to check
-    :param child_idx: index of the possible child, which would be the nb of the child cell we are currently looking at
-    :return: the nb child cell of current child cell if present, else the nb parent cell of current child cell
+    If the parent neighbor has children, return the appropriate child; otherwise, return the parent neighbor itself.
+
+    :param nb: List of neighbor cells of the current parent cell
+    :type nb: list[Cell]
+    :param check: Flag indicating whether the current parent cell has children
+    :type check: bool
+    :param nb_idx: Index of the neighbor to check
+    :type nb_idx: int
+    :param child_idx: Index of the possible child, which may be the neighbor of the current child cell
+    :type child_idx: int
+    :return: The neighbor child cell if present, otherwise the parent neighbor cell
+    :rtype: Cell
     """
+    # TODO: maybe add as static method to class to improve structure
     return nb[nb_idx].children[child_idx] if check else nb[nb_idx]
 
 
 def initialize_time_dict() -> dict:
     """
-    initialize an empty dictionary in which the timings are saved
+    Initialize an empty dictionary to store execution timings for various parts of the algorithm.
 
-    :return: dict
+    :return: Empty dictionary for timing information
+    :rtype: dict
     """
     return {"t_start_uniform": 0.0, "t_end_uniform": 0.0,
             "t_start_adaptive": 0.0,                            # we don't need t_end_adaptive
@@ -1662,10 +1808,17 @@ def initialize_time_dict() -> dict:
 
 def _check_cell_validity(args) -> Union[None, int]:
     """
-    check if a cell is valid or invalid
+    Check whether a cell is valid or should be removed.
 
-    :param args:  cell, node, geometries, refine_geometry
-    :return: cell index if cell should be removed or None if cell is valid
+    :param args: Tuple containing the arguments required for validation:
+        - cell: The cell to check
+        - node: Node coordinates associated with the cell
+        - geometries: List of geometry objects to check against
+        - refine_geometry: Flag indicating if refinement near geometry is active
+        - _pre_select_cells: Flag for pre-selection optimization
+    :type args: tuple
+    :return: Index of the cell if it should be removed; None if the cell is valid
+    :rtype: int | None
     """
     cell, node, geometries, refine_geometry, _pre_select_cells = args
     for g in geometries:
@@ -1680,10 +1833,17 @@ def _check_cell_validity(args) -> Union[None, int]:
 @njit(fastmath=True, nogil=True)
 def _update_gain(args) -> float:
     """
-    compute gain of a cell
+    Compute the gain of a cell based on its refinement level, size, and metric improvement.
 
-    :param args: _level, _n_children, _n_dims, _width, gain_0, sum_delta_metric
-    :return: gain of the cell as float
+    :param args: Tuple containing the parameters required for gain calculation:
+        - _level: Refinement level of the cell
+        - _n_dims: Number of physical dimensions
+        - _width: Width of the cell
+        - gain_0: gain of the initial cell
+        - sum_delta_metric: Sum of metric improvements for the cell
+    :type args: tuple
+    :return: Computed gain of the cell
+    :rtype: float
     """
     _level, _n_dims, _width, gain_0, sum_delta_metric = args
 

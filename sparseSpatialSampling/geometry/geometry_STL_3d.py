@@ -113,6 +113,9 @@ class GeometrySTL3D(GeometryObject):
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
+
+        :return: None
+        :rtype: None
         """
         # check if the STL file is closed and manifold
         test_data = PolyData([(0.0, 0.0, 0.0)])
@@ -125,6 +128,12 @@ class GeometrySTL3D(GeometryObject):
 
     @property
     def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
         return self._type
 
 

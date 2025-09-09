@@ -232,7 +232,7 @@ def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int 
     return data, xyz, _loader.weights, write_time
 
 
-def compute_svd(data_matrix: pt.Tensor, cell_area, rank: int = None) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
+def compute_svd(data_matrix: pt.Tensor, cell_area: pt.Tensor, rank: int = None) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor]:
     """
     Computes an SVD for a given field, the field is weighted with the cell area.
     For more information on the determination of the optimal rank, it is referred to the flowtorch documentation:

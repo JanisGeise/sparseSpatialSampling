@@ -69,6 +69,9 @@ class CubeGeometry(GeometryObject):
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
+
+        :return: None
+        :rtype: None
         """
         # check is boundaries are empty list
         assert self._lower_bound, "Found empty list for the lower bound. Please provide values for the lower bound."
@@ -90,4 +93,10 @@ class CubeGeometry(GeometryObject):
 
     @property
     def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
         return self._type

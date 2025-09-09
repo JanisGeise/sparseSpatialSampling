@@ -175,6 +175,7 @@ class Dataloader:
         Set a new load path, this automatically resets the properties to avoid inconsistencies
 
         :return: None
+        :rtype: None
         """
         self._load_path = value
         self._reset()
@@ -195,6 +196,7 @@ class Dataloader:
         Set a new file name, this automatically resets the properties to avoid inconsistencies
 
         :return: None
+        :rtype: None
         """
         self._file_name = value
         self._reset()
@@ -204,6 +206,7 @@ class Dataloader:
         Reset the properties of the class to avoid inconsistencies
 
         :return: None
+        :rtype: None
         """
         with File(join(self._load_path, self._file_name), "r") as f:
             self._n_cells = f.get(f"{GRID}/{CENTERS}")[()].shape[0]
@@ -220,6 +223,7 @@ class Dataloader:
         Compute the cell areas (2d) / volumes (3D) of the grid
 
         :return: None
+        :rtype: None
         """
         self._weights = (pow(self._size_initial_cell / pow(2, self.levels), self._n_dimensions)).squeeze()
 
@@ -314,6 +318,7 @@ class Datawriter:
         Close the HDF writer
 
         :return: None
+        :rtype: None
         """
         self._file.close()
 
@@ -324,6 +329,7 @@ class Datawriter:
         :param loader: Dataloder instance containing the path to the HDF file from which the grid should be loaded
         :type loader: Dataloader
         :return: None
+        :rtype: None
         """
         self.write_data("centers", group="grid", data=loader.vertices)
         self.write_data("vertices", group="grid", data=loader.nodes)
@@ -347,6 +353,7 @@ class Datawriter:
                           the group is set to 'data', the data will be written to the zeroth time step ('data/0')
         :type time_step: list
         :return: None
+        :rtype: None
         """
         # if we want to write something in data, but we don't provide a time step, just write it to t = 0
         if group == DATA and time_step is None:
@@ -393,6 +400,7 @@ class Datawriter:
         write an XDMF file based on the contents of a given HDF5 file
 
         :return: None
+        :rtype: None
         """
         # check if an HDF file exists
         if not isfile(join(self._file_path, self._file_name)):
@@ -407,14 +415,35 @@ class Datawriter:
 
     @property
     def mode(self) -> str:
+        """
+        Get the current file access mode for the HDF5 file
+        (e.g., ``'r'`` for read, ``'w'`` for write).
+
+        :return: File access mode
+        :rtype: str
+        """
         return self._mode
 
     @property
     def file_name(self) -> str:
+        """
+        Get the name of the HDF5 file.
+
+        :return: File name
+        :rtype: str
+        """
         return self._file_name
 
     @mode.setter
     def mode(self, value) -> None:
+        """
+        Set the file access mode for the HDF5 file and reopen it with the new mode.
+
+        :param value: File access mode (e.g., ``'r'`` for read, ``'w'`` for write)
+        :type value: str
+        :return: None
+        :rtype: None
+        """
         self._mode = value
         self._file = File(join(self._file_path, self._file_name), self._mode)
 
@@ -471,6 +500,7 @@ class XDMFWriter:
         Implements a wrapper functions for writing the XDMF file
 
         :return: None
+        :rtype: None
         """
         # 1. check if we have temporal data available
         self._temporal_grid = True if self._check_data() else False
@@ -489,6 +519,7 @@ class XDMFWriter:
         written into the first time step
 
         :return: None
+        :rtype: None
         """
         # header for temporal grid structure
         _domain_header = f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Collection" CollectionType="temporal">\n'
@@ -569,6 +600,7 @@ class XDMFWriter:
         Write the XDMF file for the case of no temporal data being present in the HDF5 file
 
         :return: None
+        :rtype: None
         """
         _grid_header = f'<Domain>\n<Grid Name="{self._grid_name}" GridType="Uniform">\n' \
                        f'<Topology TopologyType="{self._grid_type}" NumberOfElements="{self._n_faces}">\n' \
@@ -674,6 +706,7 @@ class XDMFWriter:
         for the cell centers, vertices and faces
 
         :return: None
+        :rtype: None
         """
         if GRID in self._file.keys():
             if FACES not in self._file[GRID].keys():

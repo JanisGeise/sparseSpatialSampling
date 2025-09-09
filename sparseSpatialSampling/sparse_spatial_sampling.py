@@ -30,37 +30,50 @@ class SparseSpatialSampling:
         Note: the parameter "geometry_objects" needs to have at least one entry containing information about the domain.
 
         :param coordinates: Coordinates of the original grid
-        :param metric: quantity which should be used as an indicator for refinement of a cell
-        :param geometry_objects: list with dict containing information about the domain and geometries in it;
-                                 each geometry is passed in as dict.
-        :param save_path: path where the interpolated grid and data should be saved to
-        :param save_name: name of the files (grid & data)
-        :param grid_name: name of the grid (used in XDMF file)
-        :param uniform_levels: number of uniform refinement cycles to perform
-        :param n_cells_max: max. number of cells of the grid, if not set, then early stopping based on captured variance
-                            will be used
-        :param min_metric: percentage of variance of the metric the generated grid should capture (wrt the original
-                           grid), if 'None' the max. number of cells will be used as stopping criteria.
-                           If additionally a value for n_cells_max is provided, min_metric will be ignored
-        :param max_delta_level: flag for setting the constraint that two adjacent cells should have a max. level
-                                difference of one
-        :param write_times: numerical time steps of the simulation, needs to be provided as
-                            Union[int | float | str, list[int | float | str]].
-                            If 'None', the time steps need to be passed when calling the export method
-        :param n_cells_iter_start: number of cells to refine per iteration at the beginning. If 'None' then the value is
-                                   set to 1% of the number of vertices in the original grid
-        :param n_cells_iter_end: number of cells to refine per iteration at the end. If 'None' then the value is set to
-                                 5% of _n_cells_iter_start
-        :param n_jobs: number of CPUs to use, if 'None', all available CPUs will be used
-        :param relTol: min. improvement between two consecutive iterations, defaults to 1e-3
-        :param reach_at_least: reach at least x% of the target metric / number of cells before activating the
-                               relTol stopping criterion
-        :param pre_select_cells: when dealing with 'GeometrySTL3D' or 'GeometryCoordinates2D' geometry objects,
-                                 this option can decrease the required runtime significantly if the majority of cells
-                                 is expected to be created outside a rectangular bounding box around the geometry
-                                 object, i.e. if the difference between the volume of the geometry and a bounding box
-                                 are minimal
+        :type coordinates: pt.Tensor
+        :param metric: Quantity used as an indicator for refinement of a cell
+        :type metric: pt.Tensor
+        :param geometry_objects: Information about the domain and geometries in it; each geometry is passed in as dict
+        :type geometry_objects: list[dict]
+        :param save_path: Path where the interpolated grid and data should be saved
+        :type save_path: str
+        :param save_name: Base name of the files (grid & data)
+        :type save_name: str
+        :param grid_name: Name of the grid (used in XDMF file)
+        :type grid_name: str
+        :param uniform_levels: Number of uniform refinement cycles to perform
+        :type uniform_levels: int
+        :param n_cells_max: Maximum number of cells of the grid; if not set, early stopping based on captured variance
+            will be used
+        :type n_cells_max: int | float | None
+        :param min_metric: Percentage of variance of the metric the generated grid should capture w.r.t. the original
+            grid; if None, the max. number of cells will be used as stopping criterion. If n_cells_max is also provided,
+            min_metric will be ignored.
+        :type min_metric: float
+        :param max_delta_level: Constraint that two adjacent cells should have a max. level difference of one
+        :type max_delta_level: bool
+        :param write_times: Numerical time steps of the simulation; if None, time steps need to be passed when
+            calling the export method
+            :type write_times: str | list[int | float | str] | None
+        :param n_cells_iter_start: Number of cells to refine per iteration at the beginning; if None, defaults to 1%
+            of the number of vertices in the original grid
+        :type n_cells_iter_start: int | None
+        :param n_cells_iter_end: Number of cells to refine per iteration at the end; if None, defaults to 5% of
+            n_cells_iter_start
+        :type n_cells_iter_end: int | None
+        :param n_jobs: Number of CPUs to use; if None, all available CPUs will be used
+        :type n_jobs: int
+        :param relTol: Minimum improvement between two consecutive iterations
+        :type relTol: int | float
+        :param reach_at_least: Minimum percentage of the target metric / number of cells to reach before activating
+            the relTol stopping criterion
+        :type reach_at_least: float
+        :param pre_select_cells: Optimization for geometry objects (e.g., 'GeometrySTL3D', 'GeometryCoordinates2D')
+            that reduces runtime when bounding box volume is close to geometry volume
+        :type pre_select_cells: bool
+
         :return: None
+        :rtype: None
         """
         self.n_jobs = n_jobs
         self.coordinates = coordinates
@@ -106,7 +119,8 @@ class SparseSpatialSampling:
         """
         executed the S^3 algorithm
 
-        :return: instance of the Datawriter class containing the generated grid along with additional information & data
+        :return: None
+        :rtype: None
         """
         # create directory for data and final grid
         if not path.exists(self.save_path):
@@ -138,6 +152,7 @@ class SparseSpatialSampling:
         Check the user input for S^3 for invalid settings and adjust / correct them if possible
 
         :return: None
+        :rtype: None
         """
         # check if the metric is 1D
         assert len(self.metric.size()) == 1, (f"The size of the metric must be a 1D tensor of the length "
@@ -171,6 +186,7 @@ def list_geometries() -> None:
     lists all available geometry objects along with a short description thereof
 
     :return: None
+    :rtype: None
     """
     #
     from . import geometry

@@ -173,7 +173,7 @@ pytest sparseSpatialSampling/tests/test_s_cube_dataloader.py
 
 Note that these commands have to be executed from the top-level of the repository.
 ## Issues
-If you have any questions or something is not working as expected, fell free to open up a new 
+If you have any questions or something is not working as expected, feel free to open up a new 
 [issue](https://github.com/JanisGeise/sparseSpatialSampling/issues). There are some known issues, which are listed below.
 
 ### Out of memory when performing the mesh generation for large meshes
@@ -190,7 +190,7 @@ s_cube = SparseSpatialSampling(vertices, metric, [domain, geometry], save_dir, s
                                n_jobs=126, n_cells_max=1e8)
 ```
 
-In case both a value for *min_metric* and *n_cells_max* is provided, the value for *min_metric* will be ignored.
+In general, if both a value for *min_metric* and *n_cells_max* is provided, the value for *min_metric* will be ignored.
 
 ### Significant increase in runtime when using STL files as geometry objects
 

@@ -91,6 +91,9 @@ class GeometryCoordinates2D(GeometryObject):
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
+
+        :return: None
+        :rtype: None
         """
         # check if an enclosed area is provided (is_closed property only available for line strings in shapely)
         assert self._coordinates.boundary.is_closed, (f"Expected an enclosed area formed by the provided coordinates "
@@ -98,4 +101,10 @@ class GeometryCoordinates2D(GeometryObject):
 
     @property
     def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
         return self._type

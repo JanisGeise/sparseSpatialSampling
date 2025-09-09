@@ -1,7 +1,7 @@
 """
  implements a class for using triangles (2D) as geometry object
 
- TODO: extend to prism (3D)
+ TODO: extend to prism (3D) and rename the class
 """
 import logging
 
@@ -107,6 +107,9 @@ class TriangleGeometry(GeometryObject):
     def _check_geometry(self) -> None:
         """
         method to check the user input for correctness
+
+        :return: None
+        :rtype: None
         """
         # make sure the points are in some kind of list
         assert isinstance(self._points, list), (f"Expected a the points to be in a list, but found type "
@@ -131,4 +134,10 @@ class TriangleGeometry(GeometryObject):
 
     @property
     def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
         return self._type

@@ -132,6 +132,16 @@ class GeometryObject(ABC):
         """
         pass
 
+    @abstractmethod
+    def type(self) -> str:
+        """
+        returns name of the geometry object
+
+        :return: name of the geometry object
+        :rtype: str
+        """
+        pass
+
 
 if __name__ == "__main__":
     pass
