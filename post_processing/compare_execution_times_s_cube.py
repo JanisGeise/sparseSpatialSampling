@@ -114,9 +114,9 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
             ax[1].plot(d["final_metric"], (pt.tensor(d["t_renumbering"]) + pt.tensor(d["t_uniform"])) / t_tot,
                        marker="x", color=color[i], ls=ls[1])
 
-    ax[0].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{\mathrm{orig}}$")
-    ax[1].set_xlabel(r"$\mathcal{M} \, / \, \mathcal{M}_{\mathrm{orig}}$")
-    ax[0].set_ylabel(r"$N_{\mathrm{cells}} \, / \, N_{\mathrm{cells, orig}}$")
+    ax[0].set_xlabel(r"$||\widehat{\boldsymbol{\mathcal{M}}}||_F \, / \, ||\boldsymbol{\mathcal{M}} ||_F$")
+    ax[1].set_xlabel(r"$||\widehat{\boldsymbol{\mathcal{M}}}||_F \, / \, ||\boldsymbol{\mathcal{M}} ||_F$")
+    ax[0].set_ylabel(r"$N_{\mathcal{C}} \, / \, N_{\mathcal{C}, \mathrm{orig}}$")
     ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
     ax[1].set_ylim(0.01, 1)
     ax[0].set_xlim(0.2, 1)
@@ -145,7 +145,7 @@ def plot_progress_metric(_data: list, _save_path: str, case: list, save_name: st
         ax.plot(d["metric_per_iter"][no], marker="x", label=case[i], color=color[i])
 
     ax.set_xlabel(r"$\mathrm{iteration}$ $\mathrm{no.}$ $\#$")
-    ax.set_ylabel(r"$\mathcal{M} \, / \, \mathcal{M}_{orig}$")
+    ax.set_ylabel(r"$||\widehat{\boldsymbol{\mathcal{M}}}||_F \, / \, ||\boldsymbol{\mathcal{M}} ||_F$")
     ax.set_xlim(0, max([len(d["metric_per_iter"][no])-1 for d in _data]))
     ax.legend(ncols=1, loc="lower right")
     fig.tight_layout()

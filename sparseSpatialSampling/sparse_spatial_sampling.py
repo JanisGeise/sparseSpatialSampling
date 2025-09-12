@@ -202,7 +202,7 @@ def list_geometries() -> None:
         short_desc = textwrap.shorten(cls.__doc__, width=100, placeholder="…")
         msg.append(f"\t\t- {cls.__name__.ljust(max_len)} : {short_desc}")
 
-    msg.append("\n\tFor a more detailed description checkout the respective geometry object classes.")
+    msg.append("\n\tFor a more detailed description check out the documentation.")
     logger.info("\n".join(msg))
 
 

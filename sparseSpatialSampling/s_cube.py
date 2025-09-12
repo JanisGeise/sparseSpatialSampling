@@ -1171,7 +1171,6 @@ class SamplingTree(object):
         :rtype: None
         """
         # TODO: replace with lookup table instead of hard-coded if/else statements
-        #       cell center computation can be parallelized since it's independent
         for i in range(len(cells)):
             # add the cell center to the set containing all centers -> ensuring that the order of nodes and centers is
             # consistent
