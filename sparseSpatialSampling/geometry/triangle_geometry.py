@@ -13,9 +13,8 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 
 
 class TriangleGeometry(GeometryObject):
-    """
-    implements a class for using triangles (2D)
-    """
+    __short_description__ = "triangles (2D)"
+
     def __init__(self, name: str, keep_inside: bool, points: Union[list, Tensor], refine: bool = False,
                  min_refinement_level: int = None):
         """
@@ -113,8 +112,8 @@ class TriangleGeometry(GeometryObject):
         :rtype: None
         """
         # make sure the points are in some kind of list
-        assert isinstance(self._points, list) or isinstance(self._points, Tensor) , \
-            f"Expected the points to be a list or pt.Tensor, but found type {type(self._points)} instead."
+        assert isinstance(self._points, Union[list, Tensor]), (f"Expected the points to be a list or pt.Tensor, "
+                                                               f"but found type {type(self._points)} instead.")
 
         # make sure we have exactly 3 points
         assert len(self._points) == 3, f"Expected 3 points, but found {len(self._points)} points instead."

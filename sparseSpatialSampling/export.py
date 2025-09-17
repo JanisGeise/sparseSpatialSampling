@@ -95,15 +95,21 @@ class ExportData:
         Interpolate the provided (original) CFD data onto the generated grid by S^3
         and write it to HDF5 and XDMF files for all given time steps.
 
-        :param coordinates: Coordinates of the original grid used in CFD
+        Note:
+            The field data from CFD has to have the dimension ``[N_cells, N_dimensions, N_snapshots]``.
+            For a scalar field, ``N_dimensions = 1``.
+
+        :param coordinates: Coordinates of the original grid used in CFD.
         :type coordinates: pt.Tensor
-        :param data: Original field data with dimensions [N_cells, N_dimensions, N_snapshots].
-            N_snapshots can represent all snapshots, a batch of snapshots, or a single snapshot
+        :param data: Original field data with dimensions ``[N_cells, N_dimensions, N_snapshots]``.
+
+            - N_snapshots can represent all snapshots, a batch of snapshots, or a single snapshot.
         :type data: pt.Tensor
-        :param field_name: Name of the field to export (e.g., 'p' for pressure field)
+        :param field_name: Name of the field to export (e.g., 'p' for pressure field).
         :type field_name: str
         :param n_snapshots_total: Total number of snapshots to be exported.
-                                 If None, it is assumed that the provided data includes all snapshots
+
+            - If None, it is assumed that the provided data includes all snapshots.
         :type n_snapshots_total: int | None
         :return: None
         :rtype: None

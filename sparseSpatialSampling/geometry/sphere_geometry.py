@@ -9,9 +9,8 @@ from flowtorch.data import mask_sphere
 from .geometry_base import GeometryObject
 
 class SphereGeometry(GeometryObject):
-    """
-    implements a class for using circles (2D) or spheres (3D)
-    """
+    __short_description__ = "circles (2D) or spheres (3D)"
+
     def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
                  min_refinement_level: int = None):
         """
@@ -79,10 +78,9 @@ class SphereGeometry(GeometryObject):
         assert self._position, "Found empty list for the position. Please provide values for the position."
 
         # check if the radius is an int or float
-        assert type(self._radius) is int or type(self._radius) is float, (f"Expected the type of radius to be "
-                                                                          f"Union[int, float], got "
-                                                                          f"{type(self._radius)} for geometry "
-                                                                          f"{self.name} instead.")
+        assert isinstance(self._radius, Union[int, float]), (f"Expected the type of radius to be Union[int, float], "
+                                                             f"got {type(self._radius)} for geometry {self.name} "
+                                                             f"instead.")
 
         # make sure the radius is larger than zero
         assert self._radius > 0, f"Expected a radius larger than zero but found a value of {self._radius}."

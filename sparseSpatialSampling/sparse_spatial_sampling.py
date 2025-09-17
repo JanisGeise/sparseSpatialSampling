@@ -27,7 +27,8 @@ class SparseSpatialSampling:
         """
         Class for executing the S^3 algorithm.
 
-        Note: the parameter "geometry_objects" needs to have at least one entry containing information about the domain.
+        Note:
+            The parameter ``geometry_objects`` needs to have at least one entry containing information about the domain.
 
         :param coordinates: Coordinates of the original grid
         :type coordinates: pt.Tensor
@@ -199,7 +200,8 @@ def list_geometries() -> None:
     msg = ["\n\tAvailable geometry objects:", "\t---------------------------"]
     max_len = max(len(cls.__name__) for cls in classes)
     for cls in sorted(classes, key=lambda c: c.__name__):
-        short_desc = textwrap.shorten(cls.__doc__, width=100, placeholder="…")
+        short_desc = getattr(cls, "__short_description__", "")
+        short_desc = textwrap.shorten(short_desc, width=100, placeholder="…")
         msg.append(f"\t\t- {cls.__name__.ljust(max_len)} : {short_desc}")
 
     msg.append("\n\tFor a more detailed description check out the documentation.")

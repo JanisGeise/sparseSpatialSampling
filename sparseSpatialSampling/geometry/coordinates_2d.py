@@ -12,16 +12,16 @@ from .geometry_base import GeometryObject
 
 
 class GeometryCoordinates2D(GeometryObject):
-    """
-    implements a class for using 2D coordinates
-    """
+    __short_description__ = "2D coordinates for geometries"
+
     def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
                  min_refinement_level: int = None):
         """
         implements a class for using coordinates as geometry objects representing the numerical
         domain or geometries inside the domain for a 2D case only
 
-        Note: The coordinates need to form an enclosed area
+        Note:
+            The coordinates need to form an enclosed area
 
         :param name: name of the geometry object
         :type name: str

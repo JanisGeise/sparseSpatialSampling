@@ -8,9 +8,8 @@ from .geometry_base import GeometryObject
 
 
 class CubeGeometry(GeometryObject):
-    """
-    implements a class for using rectangles (2D) or cubes (3D)
-    """
+    __short_description__ = "rectangles (2D) or cubes (3D)"
+
     def __init__(self, name: str, keep_inside: bool, lower_bound: list, upper_bound: list, refine: bool = False,
                  min_refinement_level: int = None):
         """

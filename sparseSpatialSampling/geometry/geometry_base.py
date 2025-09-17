@@ -44,8 +44,9 @@ class GeometryObject(ABC):
         check if a given cell is invalid based on a given mask and settings,
         will return 'False' if the cell is valid, else 'True'
 
-        note: it is expected that the mask passed into the _apply_mask method is always 'False' outside the mask and
-              always 'True' inside it (independently if it is a geometry or domain)
+        Note:
+            It is expected that the mask passed into the _apply_mask method is always 'False' outside the mask and
+            always 'True' inside it (independently if it is a geometry or domain)
 
         :param mask: mask created by the geometry object
         :type mask: pt.Tensor

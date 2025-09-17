@@ -1,39 +1,45 @@
 """
-implements a class for using cylinders (3D) as geometry objects
+implements a class for using cylinders, cones and conical objects (3D) as geometry objects
 """
 from typing import Union, List
 from torch import Tensor, tensor, cross, logical_and, where, float64
 
 from .geometry_base import GeometryObject
 
-
 class CylinderGeometry3D(GeometryObject):
-    """
-    implements a class for using cylinders (3D)
-    """
-    def __init__(self, name: str, keep_inside: bool, position: List[Union[list, tuple]], radius: Union[int, float],
-                 refine: bool = False, min_refinement_level: int = None):
+    __short_description__ = "cylinders, conical objects and cones (3D)"
+
+    def __init__(self, name: str, keep_inside: bool, position: List[Union[list, tuple]],
+                 radius: Union[int, float, list, tuple], refine: bool = False, min_refinement_level: int = None):
         """
-        implements a class for using cylinders (3D) as geometry objects representing the numerical
-        domain or geometries inside the domain
+        Implements a class for using cylinders with a constant radius, cones, and conical objects (3D) as geometry
+        objects representing the numerical domain or geometries inside the domain.
 
-        Note: the length and orientation of the cylinder is inferred by two circles representing the start and end point
-              of the cylinder.
+        Note:
+            The length and orientation of the cylinder is inferred by two circles representing the start and end
+            point of the cylinder. The two circles don't have to be aligned, so it is possible to create *oblique*
+            cylinders in space along arbitrary directions as long as both circles are defined in the same coordinate
+            plane.
 
-        :param name: name of the geometry object
+        :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :param keep_inside: Flag if the points inside the object should be masked out (False) or kept (True).
         :type keep_inside: bool
-        :param position: position of the two circles [x, y, z] (center coordinates) spanning the cylinder (start and
-                         end of the cylinder)
+        :param position: Position of the two circles ``[x, y, z]`` (center coordinates) spanning the cylinder
+                         (start and end of the cylinder).
         :type position: List[Union[list, tuple]]
-        :param radius: radius of the cylinder
-        :type radius: Union[int, float]
-        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :param radius: Radius/radii of the cylinder(s):
+
+            - If only one radius is given, it is assumed to be constant over the extrusion axis of the cylinder.
+            - For conical objects, 2 radii are required (one for each position).
+            - For cones, the radius associated with the tip of the cone has to be set to zero.
+
+        :type radius: Union[int, float, list, tuple]
+        :param refine: Flag if the mesh around the geometry object should be refined after S^3 generates the mesh.
         :type refine: bool
-        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
-                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
-                                     refinement level present at its surface after S^3 has generated the grid
+        :param min_refinement_level: Option to define a minimum refinement level with which the geometry should be
+                                     resolved. If ``None`` and ``refine=True``, the geometry will be resolved with
+                                     the maximum refinement level present at its surface after S^3 has generated the grid.
         :type min_refinement_level: int
         """
         super().__init__(name, keep_inside, refine, min_refinement_level)
@@ -92,13 +98,28 @@ class CylinderGeometry3D(GeometryObject):
         assert self._position[0] != self._position[1], ("Expected two different positions, a cylinder of length zero is"
                                                         "invalid.")
 
-        # make sure that the radius is an int or float
-        assert type(self._radius) is int or type(self._radius) is float, (f"Expected the type of radius to be "
-                                                                          f"Union[int, float], got {type(self._radius)}"
+        # make sure that the radius is an int or float, or  in case of two radii a list or tuple
+        assert isinstance(self._radius, Union[int, float, list, tuple]), (f"Expected the type of radius to be "
+                                                                          f"Union[int, float, list, tuple], "
+                                                                          f"got {type(self._radius)}"
                                                                           f" for geometry {self.name} instead.")
 
-        # make sure the radius is larger than zero
-        assert self._radius > 0, f"Expected a radius larger than zero but found a value of {self._radius}."
+        # perform more checks on the radius/radii
+        if isinstance(self._radius, Union[int, float]):
+            # make sure the radius is larger than zero
+            assert self._radius > 0, f"Expected a radius larger than zero but found a value of {self._radius}."
+        else:
+            # make sure that we have either one or two radii
+            assert len(self._radius) == 2, f"Expected two values for the radii but found {len(self._radius)}."
+
+            # make sure they are >=0
+            assert self._radius[0] >= 0 and self._radius[1] >= 0, (f"Expected all radii >= 0 but found a values of "
+                                                                   f"{self._radius}.")
+
+            # ensure that max. one radius is zero
+            assert (self._radius[0] == self._radius[1]) == 0, (f"Both values for the radii can't be zero. At least one "
+                                                               f"radius has to be > 0 but found values of "
+                                                               f"{self._radius}.")
 
     def _mask_cylinder(self, vertices: Tensor) -> Tensor:
         """
@@ -108,7 +129,7 @@ class CylinderGeometry3D(GeometryObject):
         :type vertices: boolean mask that's 'True' for every vertex inside the cylinder or on the cylinder's surface
         :rtype: pt.Tensor
         """
-        # computer the normal distance of the point to an arbitrary (here starting point) point on the centerline
+        # compute the normal distance of the point to an arbitrary (here starting point) point on the centerline
         direction_vec = (vertices - self._position[0, :]).type(self._axis.dtype)
         normal_distance = (cross(self._axis.expand_as(direction_vec), direction_vec, 1)).norm(dim=1) / self._norm
 
@@ -118,10 +139,19 @@ class CylinderGeometry3D(GeometryObject):
 
         # create mask -> needs to return 'True' if point is inside, therefore it needs to yield 'True' if:
         # projection >= 0 and projection <= pt.norm(axis) and normal_distance <= radius
-        return logical_and(logical_and(where(0 <= projection, True, False),
-                                       where(projection <= self._norm, True, False)
-                                       ),
-                           where(normal_distance <= self._radius, True, False))
+        within_height = logical_and(where(0 <= projection, True, False), where(projection <= self._norm, True, False))
+
+        # check if the cell is within the local radius
+        if isinstance(self._radius, Union[float, int]):
+            _radius = self._radius
+        else:
+            # if we have two different radii then linearly interpolate the local radius at our cell
+            # (since we only have start and end of the cone), we also need to normalize it to the range of [0, 1] to
+            # obtain the relative position along the axis
+            _radius = self._radius[0] + projection / self._norm * (self._radius[1] - self._radius[0])
+
+        within_radius = where(normal_distance <= _radius, True, False)
+        return logical_and(within_height, within_radius)
 
     @property
     def type(self) -> str:

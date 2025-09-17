@@ -8,19 +8,17 @@ from .geometry_base import GeometryObject
 from .triangle_geometry import TriangleGeometry
 
 class PrismGeometry3D(GeometryObject):
-    """
-    Implements a class for using triangular prisms (3D) as geometry objects
-    """
+    __short_description__ = "prisms (3D)"
 
-    def __init__(self, name: str, keep_inside: bool,
-                 positions: List[List[Union[list, tuple]]],
-                 refine: bool = False, min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, positions: List[List[Union[list, tuple]]], refine: bool = False,
+                 min_refinement_level: int = None):
         """
-        Implements a class for using triangular prisms (3D) as geometry objects representing the numerical
+        Implements a class for using prisms (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.
 
-        Note: The prism is defined by two triangles, connected by an extrusion axis.
-              The triangles have to be aligned along a coordinate axis.
+        Note:
+            The prism is defined by two triangles, connected by an extrusion axis.
+            The triangles have to be aligned along a coordinate axis.
 
         :param name: name of the geometry object
         :type name: str

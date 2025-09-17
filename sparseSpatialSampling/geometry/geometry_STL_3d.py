@@ -17,16 +17,16 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 
 
 class GeometrySTL3D(GeometryObject):
-    """
-    implements a class for using an STL file (3D)
-    """
+    __short_description__ = "usage of STL files for geometries (3D)"
+
     def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
                  min_refinement_level: int = None, reduce_by: Union[int, float] = 0):
         """
         implements a class for using an STL file as geometry objects representing the numerical domain or geometries
         inside the domain for a 3D case
 
-        Note: pyVista requires the STL file to have a closed surface
+        Note:
+                pyVista requires the STL file to have a closed surface
 
         :param name: name of the geometry object
         :type name: str
