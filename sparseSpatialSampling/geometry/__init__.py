@@ -4,3 +4,4 @@ from .cube_geometry import CubeGeometry
 from .sphere_geometry import SphereGeometry
 from .cylinder_geometry import CylinderGeometry3D
 from .triangle_geometry import TriangleGeometry
+from .prism_geometry import PrismGeometry3D

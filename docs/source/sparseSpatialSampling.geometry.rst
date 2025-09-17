@@ -19,3 +19,4 @@ Submodules
    sparseSpatialSampling.geometry.geometry_base
    sparseSpatialSampling.geometry.sphere_geometry
    sparseSpatialSampling.geometry.triangle_geometry
+   sparseSpatialSampling.geometry.prism_geometry

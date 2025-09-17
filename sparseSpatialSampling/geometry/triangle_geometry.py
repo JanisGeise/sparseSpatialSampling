@@ -1,9 +1,8 @@
 """
  implements a class for using triangles (2D) as geometry object
-
- TODO: extend to prism (3D) and rename the class
 """
 import logging
+from typing import Union
 
 from torch import Tensor, tensor, float64
 from .geometry_base import GeometryObject
@@ -17,7 +16,8 @@ class TriangleGeometry(GeometryObject):
     """
     implements a class for using triangles (2D)
     """
-    def __init__(self, name: str, keep_inside: bool, points: list, refine: bool = False, min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, points: Union[list, Tensor], refine: bool = False,
+                 min_refinement_level: int = None):
         """
         implements a class for using triangles (2D) as geometry objects representing the numerical
         domain or geometries inside the domain
@@ -27,7 +27,7 @@ class TriangleGeometry(GeometryObject):
         :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
         :type name: bool
         :param points: list containing the three points of the triangle, each point is made up of two coordinates
-        :type points: list[tuple | list | pt.Tensor | np.ndarray]
+        :type points: list[tuple | list | pt.Tensor | np.ndarray] | pt.Tensor
         :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
         :type refine: bool
         :param min_refinement_level: option to define a min. refinement level with which the geometry should be
@@ -79,7 +79,8 @@ class TriangleGeometry(GeometryObject):
         select all vertices, which are located inside a triangle or on its surface
 
         :param vertices: tensor of vertices where each column corresponds to a coordinate
-        :type vertices: boolean mask that's 'True' for every vertex inside the triangle or on the triangle's surface
+        :type vertices: pt.Tensor
+        :return: boolean mask that's 'True' for every vertex inside the triangle or on the triangle's surface
         :rtype: pt.Tensor
         """
         # pytorch doesn't support cross product in 2D, so we have to do it manually
@@ -112,8 +113,8 @@ class TriangleGeometry(GeometryObject):
         :rtype: None
         """
         # make sure the points are in some kind of list
-        assert isinstance(self._points, list), (f"Expected a the points to be in a list, but found type "
-                                                f"{type(self._points)} instead.")
+        assert isinstance(self._points, list) or isinstance(self._points, Tensor) , \
+            f"Expected the points to be a list or pt.Tensor, but found type {type(self._points)} instead."
 
         # make sure we have exactly 3 points
         assert len(self._points) == 3, f"Expected 3 points, but found {len(self._points)} points instead."
@@ -131,6 +132,18 @@ class TriangleGeometry(GeometryObject):
         _b = self._points[2] - self._points[0]
         _area = 0.5 * abs(_a[0] * _b[1] - _a[1] * _b[0])
         assert _area > 0, f"The area of the triangle has to be larger than zero. Found an area of {_area}."
+
+    def check_triangle(self, vertices: Tensor) -> Tensor:
+        """
+        public method to check if given vertices are inside this triangle to access _mask_triangle method from other
+        classes
+
+        :param vertices: tensor of vertices where each column corresponds to a coordinate
+        :type vertices: pt.Tensor
+        :return: boolean mask that's 'True' for every vertex inside the triangle or on the triangle's surface
+        :rtype: pt.Tensor
+        """
+        return self._mask_triangle(vertices)
 
     @property
     def type(self) -> str:

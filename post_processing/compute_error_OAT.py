@@ -83,7 +83,8 @@ def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_ori
 
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: list, save_name: str, save_dir: str,
                         geometry_: list = None, field: str = "p", chord: float = 0.15) -> None:
-    label = [rf"$\mu(\Delta {field}) / {field}_" + r"{\infty}$", rf"$\sigma(\Delta {field}) / {field}_" + r"{\infty}$"]
+    label = [r"$\mu(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$",
+             r"$\sigma(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$"]
     fig, ax = plt.subplots(ncols=2, sharey="row", figsize=(6, 2))
 
     for i in range(2):
@@ -111,6 +112,7 @@ def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: lis
         ax[i].set_aspect("equal")
         ax[i].set_xlabel("$x / c$")
     ax[0].set_ylabel("$z / c$")
+    # fig.supxlabel("$x / c$")
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
@@ -145,7 +147,7 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
 
 
 if __name__ == "__main__":
-    # path to the CFD data and path to directory the results should be saved to
+    # path to the CFD data and path to directory the results should be saved to TODO: clean up script
     field_name = "Ma"
     area = "large"
     load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
@@ -238,7 +240,7 @@ if __name__ == "__main__":
         plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],
                             f"error_metric_{v}_{field_name}", save_path_results, geometry_=geometry,
                             field=field_name)
-    exit()
+
 
     # save the errors
     pt.save({"L2_error_time": error_time_vs_metric, "L2_error_total": error_total_vs_metric},

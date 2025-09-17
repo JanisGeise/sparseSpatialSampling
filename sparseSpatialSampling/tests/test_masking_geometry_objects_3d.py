@@ -6,7 +6,7 @@ import pytest
 import torch as pt
 from os.path import join
 
-from ..geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D
+from ..geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D, PrismGeometry3D
 
 
 def test_cubic_geometry_3d():
@@ -108,3 +108,28 @@ def test_cylindrical_geometry_3d():
 
     # valid if point is partially inside the geometry
     assert cylinder.check_cell(cell_part).item() is False
+
+def test_prism_geometry_3d():
+    triangle = PrismGeometry3D("prism", False,
+                               [[(0.5, 1, 0), (1, 0, 0), (0, 0, 0)], [(0.5, 1, 2), (1, 0, 2), (0, 0, 2)]])
+
+    # generate cell completely inside the cylinder
+    cell_inside = pt.tensor([[0.175, 0.175, 0.5], [0.175, 0.225, 0.5], [0.225, 0.225, 0.5], [0.225, 0.175, 0.5],
+                             [0.175, 0.175, 1], [0.175, 0.225, 1], [0.225, 0.225, 1], [0.225, 0.175, 1]])
+
+    # generate cell completely outside the cylinder
+    cell_outside = pt.tensor([[2, 2, 5], [3, 2, 5], [3, 3, 5], [2, 3, 5],
+                              [2, 2, 6], [3, 2, 6], [3, 3, 6], [2, 3, 6]])
+
+    # generate cell partially inside the cylinder
+    cell_part = pt.tensor([[0.2, 0.2, 1], [0.2, 0.5, 1], [0.5, 0.5, 1], [0.5, 0.2, 1],
+                           [0.2, 0.2, 3], [0.2, 0.5, 3], [0.5, 0.5, 3], [0.5, 0.2, 3]])
+
+    # valid if point is outside the geometry
+    assert triangle.check_cell(cell_outside).item() is False
+
+    # invalid if point is inside the geometry
+    assert triangle.check_cell(cell_inside).item() is True
+
+    # valid if point is partially inside the geometry
+    assert triangle.check_cell(cell_part).item() is False
