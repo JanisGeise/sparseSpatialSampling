@@ -20,9 +20,9 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
-   sparseSpatialSampling.const
-   sparseSpatialSampling.data
-   sparseSpatialSampling.export
-   sparseSpatialSampling.s_cube
    sparseSpatialSampling.sparse_spatial_sampling
+   sparseSpatialSampling.export
+   sparseSpatialSampling.data
    sparseSpatialSampling.utils
+   sparseSpatialSampling.s_cube
+   sparseSpatialSampling.const

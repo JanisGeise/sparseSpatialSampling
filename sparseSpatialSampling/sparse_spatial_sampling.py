@@ -1,5 +1,5 @@
 """
-    implements wrapper function for executing the S^3 algorithm
+    Implements the :math:`S^3` algorithm to generate grids for CFD data.
 """
 import inspect
 import textwrap
@@ -25,17 +25,19 @@ class SparseSpatialSampling:
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select_cells: bool = False):
         """
-        Class for executing the S^3 algorithm.
+        Class for executing the :math:`S^3` algorithm.
 
         Note:
-            The parameter ``geometry_objects`` needs to have at least one entry containing information about the domain.
+            The parameter ``geometry_objects`` needs to have at least one entry
+            containing information about the domain.
 
         :param coordinates: Coordinates of the original grid
         :type coordinates: pt.Tensor
         :param metric: Quantity used as an indicator for refinement of a cell
         :type metric: pt.Tensor
-        :param geometry_objects: Information about the domain and geometries in it; each geometry is passed in as dict
-        :type geometry_objects: list[dict]
+        :param geometry_objects: Information about the domain and geometries in it;
+            each geometry is passed as instance of class within the ``geometry`` module
+        :type geometry_objects: list
         :param save_path: Path where the interpolated grid and data should be saved
         :type save_path: str
         :param save_name: Base name of the files (grid & data)
@@ -44,35 +46,36 @@ class SparseSpatialSampling:
         :type grid_name: str
         :param uniform_levels: Number of uniform refinement cycles to perform
         :type uniform_levels: int
-        :param n_cells_max: Maximum number of cells of the grid; if not set, early stopping based on captured variance
-            will be used
+        :param n_cells_max: Maximum number of cells of the grid; if not set,
+            early stopping based on captured variance will be used
         :type n_cells_max: int | float | None
-        :param min_metric: Percentage of variance of the metric the generated grid should capture w.r.t. the original
-            grid; if None, the max. number of cells will be used as stopping criterion. If n_cells_max is also provided,
-            min_metric will be ignored.
+        :param min_metric: Percentage of variance of the metric the generated grid should
+            capture w.r.t. the original grid. If None, the max. number of cells will be used as
+            stopping criterion. If n_cells_max is also provided, min_metric will be ignored.
         :type min_metric: float
-        :param max_delta_level: Constraint that two adjacent cells should have a max. level difference of one
+        :param max_delta_level: Constraint that two adjacent cells should have a maximum
+            level difference of one
         :type max_delta_level: bool
-        :param write_times: Numerical time steps of the simulation; if None, time steps need to be passed when
-            calling the export method
-            :type write_times: str | list[int | float | str] | None
-        :param n_cells_iter_start: Number of cells to refine per iteration at the beginning; if None, defaults to 1%
-            of the number of vertices in the original grid
+        :param write_times: Numerical time steps of the simulation; if None, time steps need
+            to be passed when calling the export method
+        :type write_times: str | list[int | float | str] | None
+        :param n_cells_iter_start: Number of cells to refine per iteration at the
+            beginning; if None, defaults to 1% of the number of vertices in the original grid
         :type n_cells_iter_start: int | None
-        :param n_cells_iter_end: Number of cells to refine per iteration at the end; if None, defaults to 5% of
-            n_cells_iter_start
+        :param n_cells_iter_end: Number of cells to refine per iteration at the end;
+            if None, defaults to 5% of n_cells_iter_start
         :type n_cells_iter_end: int | None
         :param n_jobs: Number of CPUs to use; if None, all available CPUs will be used
         :type n_jobs: int
         :param relTol: Minimum improvement between two consecutive iterations
         :type relTol: int | float
-        :param reach_at_least: Minimum percentage of the target metric / number of cells to reach before activating
-            the relTol stopping criterion
+        :param reach_at_least: Minimum percentage of the target metric / number of cells
+            to reach before activating the relTol stopping criterion
         :type reach_at_least: float
-        :param pre_select_cells: Optimization for geometry objects (e.g., 'GeometrySTL3D', 'GeometryCoordinates2D')
-            that reduces runtime when bounding box volume is close to geometry volume
+        :param pre_select_cells: Optimization for geometry objects (e.g., 'GeometrySTL3D',
+            'GeometryCoordinates2D') that reduces runtime when bounding box volume is close
+            to geometry volume
         :type pre_select_cells: bool
-
         :return: None
         :rtype: None
         """
@@ -118,7 +121,7 @@ class SparseSpatialSampling:
 
     def execute_grid_generation(self) -> None:
         """
-        executed the S^3 algorithm
+        Execute the :math:`S^3` algorithm.
 
         :return: None
         :rtype: None
@@ -150,7 +153,8 @@ class SparseSpatialSampling:
 
     def _check_input(self) -> None:
         """
-        Check the user input for S^3 for invalid settings and adjust / correct them if possible
+        Check the user input for :math:`S^3` for invalid settings and adjust or correct
+        them if possible.
 
         :return: None
         :rtype: None
@@ -184,12 +188,11 @@ class SparseSpatialSampling:
 
 def list_geometries() -> None:
     """
-    lists all available geometry objects along with a short description thereof
+    List all available geometry objects along with a short description of each.
 
     :return: None
     :rtype: None
     """
-    #
     from . import geometry
     from .geometry.geometry_base import GeometryObject
 
