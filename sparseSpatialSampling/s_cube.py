@@ -1742,7 +1742,7 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
         - 'i in _unused_idx' or (i == _unused_idx).any() takes longer than the loop for assigning 'check'
         - set() is not supported by numba, so we need to convert '_unused_idx' into a numpy array
         - np.isin() is not supported by numba
-        - using an explizit loop (in 'if check') significantly speeds up the execution compared to advanced indexing
+        - using an explicit loop (in 'if check') significantly speeds up the execution compared to advanced indexing
         'all_idx[all_idx > i - _visited] -= 1'
     """
     _unique_node_coord = np.zeros((all_nodes.shape[0] - _unused_idx.shape[0], dims))

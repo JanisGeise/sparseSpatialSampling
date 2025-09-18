@@ -123,7 +123,7 @@ class TriangleGeometry(GeometryObject):
                                                         "the x- and y-coordinates.")
 
         # make sure the coordinates are unique
-        assert len(self._points) == len(set(self._points)), "The coordinates of the triangle hae to be unique."
+        assert len(self._points) == len(set(self._points)), "The coordinates of the triangle have to be unique."
 
         # make sure that the area of the triangle is larger than zero, pyTorch doesn't support cross product in 2D,
         # so do it manually

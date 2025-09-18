@@ -87,7 +87,7 @@ class GeometryObject(ABC):
         """
 
         # check if name is empty string
-        assert self._name != "", "Found emtpy string for the geometry object name. Please provide a name."
+        assert self._name != "", "Found empty string for the geometry object name. Please provide a name."
 
         # check if keep_inside is bool
         assert type(self._keep_inside) is bool, (f"Invalid type for argument keep_inside. Expected bool but "

@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath('../..'))  # allow "import sparseSpatialSampl
 
 # -- Project information -----------------------------------------------------
 project = 'Sparse Spatial Sampling'
-author = 'sparse spatial smapling contributors'
+author = 'sparse spatial sampling contributors'
 
 # -- General configuration ---------------------------------------------------
 extensions = [
