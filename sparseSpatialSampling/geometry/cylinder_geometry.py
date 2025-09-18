@@ -1,5 +1,5 @@
 """
-implements a class for using cylinders, cones and conical objects (3D) as geometry objects
+Implements a class for using cylinders, cones and conical objects (3D) as geometry object.
 """
 from typing import Union, List
 from torch import Tensor, tensor, cross, logical_and, where, float64
@@ -12,35 +12,33 @@ class CylinderGeometry3D(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, position: List[Union[list, tuple]],
                  radius: Union[int, float, list, tuple], refine: bool = False, min_refinement_level: int = None):
         """
-        Implements a class for using cylinders with a constant radius, cones, and conical objects (3D) as geometry
-        objects representing the numerical domain or geometries inside the domain.
+        Implement a class for using cylinders with a constant radius, cones, and conical objects (3D)
+        as geometry objects representing the numerical domain or geometries inside the domain.
 
         Note:
-            The length and orientation of the cylinder is inferred by two circles representing the start and end
-            point of the cylinder. The two circles don't have to be aligned, so it is possible to create *oblique*
-            cylinders in space along arbitrary directions as long as both circles are defined in the same coordinate
-            plane.
+            The length and orientation of the cylinder is inferred from two circles representing the start and end
+            points of the cylinder. The circles do not have to be aligned, allowing the creation of *oblique*
+            cylinders along arbitrary directions, as long as both circles are defined in the same coordinate plane.
 
         :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: Flag if the points inside the object should be masked out (False) or kept (True).
+        :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param position: Position of the two circles ``[x, y, z]`` (center coordinates) spanning the cylinder
-                         (start and end of the cylinder).
-        :type position: List[Union[list, tuple]]
+        :param position: Coordinates of the circles center ``[(x1, y1, z1), (x2, y2, z2)]``
+            representing the start and end points of the cylinder
+        :type position: list[Union[list, tuple]]
         :param radius: Radius/radii of the cylinder(s):
 
-            - If only one radius is given, it is assumed to be constant over the extrusion axis of the cylinder.
-            - For conical objects, 2 radii are required (one for each position).
-            - For cones, the radius associated with the tip of the cone has to be set to zero.
-
+            - If only one radius is given, it is assumed to be constant along the extrusion axis of the cylinder.
+            - For conical objects, two radii are required (one for each position).
+            - For cones, the radius associated with the tip must be set to zero.
         :type radius: Union[int, float, list, tuple]
-        :param refine: Flag if the mesh around the geometry object should be refined after S^3 generates the mesh.
+        :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
-        :param min_refinement_level: Option to define a minimum refinement level with which the geometry should be
-                                     resolved. If ``None`` and ``refine=True``, the geometry will be resolved with
-                                     the maximum refinement level present at its surface after S^3 has generated the grid.
-        :type min_refinement_level: int
+        :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
+            ``refine=True``, the geometry will be resolved with the maximum refinement level present at its surface
+            after :math:`S^3` has generated the grid.
+        :type min_refinement_level: int | None
         """
         super().__init__(name, keep_inside, refine, min_refinement_level)
         self._position = position
@@ -61,15 +59,15 @@ class CylinderGeometry3D(GeometryObject):
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to check if a cell is valid or invalid based on the specified settings
+        Check if a cell is valid or invalid based on the specified settings.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         # create a mask, the mask is expected to be always 'False' outside the geometry and always 'True' inside it
@@ -82,7 +80,7 @@ class CylinderGeometry3D(GeometryObject):
 
     def _check_geometry(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
 
         :return: None
         :rtype: None
@@ -123,10 +121,11 @@ class CylinderGeometry3D(GeometryObject):
 
     def _mask_cylinder(self, vertices: Tensor) -> Tensor:
         """
-        select all vertices, which are located inside a cylinder or on its surface
+        Select all vertices that are located inside a cylinder or on its surface.
 
-        :param vertices: tensor of vertices where each column corresponds to a coordinate
-        :type vertices: boolean mask that's 'True' for every vertex inside the cylinder or on the cylinder's surface
+        :param vertices: Tensor of vertices, where each column corresponds to a coordinate.
+        :type vertices: pt.Tensor
+        :return: Boolean mask that is ``True`` for every vertex inside the cylinder or on its surface.
         :rtype: pt.Tensor
         """
         # compute the normal distance of the point to an arbitrary (here starting point) point on the centerline
@@ -156,9 +155,9 @@ class CylinderGeometry3D(GeometryObject):
     @property
     def type(self) -> str:
         """
-        returns name of the geometry object
+        Return the name of the geometry object.
 
-        :return: name of the geometry object
+        :return: Name of the geometry object.
         :rtype: str
         """
         return self._type

@@ -1,5 +1,5 @@
 """
-    implements a class for using circles (2D) or spheres (3D) as geometry objects
+ Implements a class for using circles (2D) or spheres (3D) as geometry object.
 """
 from typing import Union
 from torch import Tensor
@@ -14,23 +14,23 @@ class SphereGeometry(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
                  min_refinement_level: int = None):
         """
-        implements a class for using circles (2D) or spheres (3D) as geometry objects representing the numerical
-        domain or geometries inside the domain
+        Implement a class for using circles (2D) or spheres (3D) as geometry objects
+        representing the numerical domain or geometries inside the domain.
 
-        :param name: name of the geometry object
+        :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param position: position of the circle or sphere as [x, y, z] (center of sphere)
+        :param position: Position of the circle or sphere as ``[x, y, z]`` (center coordinates).
         :type position: list
-        :param radius: radius of the circle or sphere
+        :param radius: Radius of the circle or sphere.
         :type radius: Union[int, float]
-        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
-        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
-                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
-                                     refinement level present at its surface after S^3 has generated the grid
-        :type min_refinement_level: int
+        :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
+            ``refine=True``, the geometry will be resolved with the maximum refinement level present at its surface
+            after :math:`S^3` has generated the grid.
+        :type min_refinement_level: int | None
         """
         super().__init__(name, keep_inside, refine, min_refinement_level)
         self._position = position
@@ -42,15 +42,15 @@ class SphereGeometry(GeometryObject):
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to check if a cell is valid or invalid based on the specified settings
+        Check if a cell is valid or invalid based on the specified settings.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         # check if the number of boundaries matches the number of physical dimensions;
@@ -69,7 +69,7 @@ class SphereGeometry(GeometryObject):
 
     def _check_geometry(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
 
         :return: None
         :rtype: None
@@ -88,9 +88,9 @@ class SphereGeometry(GeometryObject):
     @property
     def type(self) -> str:
         """
-        returns name of the geometry object
+        Return the name of the geometry object.
 
-        :return: name of the geometry object
+        :return: Name of the geometry object.
         :rtype: str
         """
         return self._type

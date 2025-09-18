@@ -19,12 +19,31 @@ from .export import ExportData
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# TODO: refactor to load_foam_fields and remove other function to avoid ambiguity
+
 def load_original_Foam_fields(load_dir: str, n_dimensions: int, boundaries: list,
                               field_names: Union[list, str] = None, write_times: Union[list, str] = None,
                               get_field_names_and_times: bool = False):
     """
-    Load fields from OpenFOAM for a single field, multiple fields, a single time step, or multiple time steps.
+    Load one or multiple OpenFOAM fields for arbitrary write times, with flexible options for returning either:
+        - available field names and times, or
+        - actual field data (scalar or vector).
+
+    Differences from `load_foam_data`:
+        - Supports **multiple fields** at once, or a single field.
+        - Supports **custom lists of write times** instead of only filtering by t_start.
+        - Can return only **metadata** (field names + times) without loading data
+          via `get_field_names_and_times=True`.
+        - Returns a **list of (coord, data)** pairs when multiple fields are requested.
+        - Handles variable dimensionality of fields (scalar or vector) dynamically.
+
+    Use this function if:
+        - You need more general-purpose access to OpenFOAM data.
+        - You want to query available fields/times before loading.
+        - You want to load multiple fields in one call.
+
+    Note:
+        This function is used in `export_openfoam_fields` to easily export all fields and time steps to :math:`S^3` data formats.
+        For loading OpenFOAM data, e.g., to pass it to :math:`S^3` for grid generation it is recommended to use `load_foam_data`.
 
     :param load_dir: Path to the original CFD data
     :type load_dir: str
@@ -206,15 +225,25 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
                 datawriter.export(coordinates, data, f, n_snapshots_total=len(datawriter.write_times))
             counter += 1
 
-# TODO: this function seems redundant since we also have load_original_foam_fields -> check
 def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
                    scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
     """
-    Load the specified field from OpenFOAM and mask out the defined area.
+    Load a single OpenFOAM field (scalar or vector) from all write times greater than or equal to `t_start`.
 
-    Note:
-        Vector fields are always loaded with all three components (even for 3D cases) because the plane of the
-        flow problem is not known in advance.
+    Differences from `load_original_Foam_fields`:
+        - Designed for a **single field only**.
+        - Time filtering is based on a **numerical threshold (t_start)**,
+          instead of requiring explicit lists of times.
+        - Input requires explicit **scalar/vector flag** rather than inferring
+          from field data.
+        - Always returns the simulation **weights** in addition to field data
+          and coordinates.
+        - Has a simpler interface but less flexibility.
+
+    Use this function if:
+        - You want a streamlined way to load one field from a time window.
+        - You already know whether the field is scalar or vector.
+        - You specifically need the `weights` array from the loader.
 
     :param load_dir: Path to the simulation data
     :type load_dir: str
@@ -224,7 +253,7 @@ def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int 
     :type field_name: str
     :param n_dims: Number of physical dimensions (2 for 2D, 3 for 3D)
     :type n_dims: int
-    :param t_start: Starting time; all snapshots with time >= t_start will be loaded
+    :param t_start: Starting time; all snapshots with ``time >= t_start`` will be loaded
     :type t_start: int | float
     :param scalar: Flag indicating whether the field is scalar (True) or vector (False)
     :type scalar: bool

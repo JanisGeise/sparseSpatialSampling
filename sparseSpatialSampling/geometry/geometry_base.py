@@ -1,8 +1,6 @@
 """
-    implements the base class for geometry objects from which all geometry objects should be derived
+Implements a common base class for geometry objects from which all other geometry objects should be derived.
 
-    Note: it is expected that the mask passed into the _apply_mask method is always False outside the geometry and
-          always True inside it (independently if it is a geometry or domain)
 """
 import logging
 
@@ -18,18 +16,18 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 class GeometryObject(ABC):
     def __init__(self, name: str, keep_inside: bool, refine: bool = False, min_refinement_level: int = None):
         """
-        implements the base class for geometry objects from which all geometry objects should be derived
+        Implement the base class for geometry objects from which all other geometry objects should be derived.
 
-        :param name: name of the geometry object
+        :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
-        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
-                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
-                                     refinement level present at its surface after S^3 has generated the grid
-        :type min_refinement_level: int
+        :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
+            ``refine=True``, the geometry will be resolved with the maximum refinement level present at its surface
+            after :math:`S^3` has generated the grid.
+        :type min_refinement_level: int | None
         """
         self._name = name
         self._keep_inside = keep_inside
@@ -41,20 +39,21 @@ class GeometryObject(ABC):
 
     def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> Tensor:
         """
-        check if a given cell is invalid based on a given mask and settings,
-        will return 'False' if the cell is valid, else 'True'
+        Check if a given cell is invalid based on a provided mask and settings.
+
+        This method returns ``False`` if the cell is valid, and ``True`` if it is invalid.
 
         Note:
-            It is expected that the mask passed into the _apply_mask method is always 'False' outside the mask and
-            always 'True' inside it (independently if it is a geometry or domain)
+            It is expected that the mask passed into the `_apply_mask` method is always ``False`` outside
+            the mask and always ``True`` inside it (regardless of whether it is a geometry or domain).
 
-        :param mask: mask created by the geometry object
+        :param mask: Mask created by the geometry object.
         :type mask: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         if not refine_geometry:
@@ -78,8 +77,15 @@ class GeometryObject(ABC):
 
     def _check_common_arguments(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
+
+        This method validates common arguments of the geometry object and raises
+        errors if any input is invalid.
+
+        :return: None
+        :rtype: None
         """
+
         # check if name is empty string
         assert self._name != "", "Found emtpy string for the geometry object name. Please provide a name."
 
@@ -96,32 +102,56 @@ class GeometryObject(ABC):
 
     @property
     def keep_inside(self):
+        """
+        Get the `keep_inside` flag for the geometry object.
+
+        :return: ``True`` if points inside the object are kept; ``False`` if they are masked out.
+        :rtype: bool
+        """
         return self._keep_inside
 
     @property
     def name(self):
+        """
+        Get the name of the geometry object.
+
+        :return: Name of the geometry object.
+        :rtype: str
+        """
         return self._name
 
     @property
     def refine(self):
+        """
+        Get the `refine` flag for the geometry object.
+
+        :return: ``True`` if the mesh around the geometry object should be refined; ``False`` otherwise.
+        :rtype: bool
+        """
         return self._refine
 
     @property
     def min_refinement_level(self):
+        """
+        Get the minimum refinement level for resolving the geometry.
+
+        :return: Minimum refinement level, or ``None`` if not explicitly set.
+        :rtype: int | None
+        """
         return self._min_refinement_level
 
     @abstractmethod
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
-        method to check if a cell is valid or invalid based on the specified settings
+        Check if a cell is valid or invalid based on the specified settings.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid or invalid based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         pass
@@ -129,16 +159,16 @@ class GeometryObject(ABC):
     @abstractmethod
     def _check_geometry(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
         """
         pass
 
     @abstractmethod
     def type(self) -> str:
         """
-        returns name of the geometry object
+        Return the name of the geometry object.
 
-        :return: name of the geometry object
+        :return: Name of the geometry object.
         :rtype: str
         """
         pass

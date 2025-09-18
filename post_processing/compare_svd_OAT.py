@@ -213,7 +213,7 @@ if __name__ == "__main__":
                              "plots_SVD_paper_final")
 
     # the actual metric may differ from the filename
-    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
+    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{approx} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
 
     # load the field of the original CFD data
     if area == "large":

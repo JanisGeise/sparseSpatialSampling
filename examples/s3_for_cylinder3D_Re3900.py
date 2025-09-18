@@ -60,8 +60,8 @@ def export_fields_snapshot_wise(load_dir: str, datawriter: ExportData, field_nam
             n_batches = int(len(datawriter.write_times) / batch_size) + 1
         for i in pt.arange(0, len(datawriter.write_times), step=batch_size).tolist():
             logger.info(f"Exporting batch {counter} / {n_batches}")
-            coordinates, data = load_original_Foam_fields(load_dir, datawriter.n_dimensions, boundaries, _field_names=f,
-                                                          _write_times=datawriter.write_times[i:i + batch_size])
+            coordinates, data = load_original_Foam_fields(load_dir, datawriter.n_dimensions, boundaries, field_names=f,
+                                                          write_times=datawriter.write_times[i:i + batch_size])
 
             # in case the field is not available, the export()-method will return None
             if data is not None:

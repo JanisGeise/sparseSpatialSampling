@@ -1,5 +1,5 @@
 """
-    implements a class for using 2D coordinates as geometry object
+Implement a class for using 2D coordinates as a geometry object.
 """
 from numpy import ndarray
 from typing import Union
@@ -17,24 +17,24 @@ class GeometryCoordinates2D(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
                  min_refinement_level: int = None):
         """
-        implements a class for using coordinates as geometry objects representing the numerical
-        domain or geometries inside the domain for a 2D case only
+        Implements a class for using coordinates as geometry objects representing the numerical
+        domain or geometries inside the domain (2D case only).
 
         Note:
-            The coordinates need to form an enclosed area
+            The coordinates need to form an enclosed area.
 
-        :param name: name of the geometry object
+        :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :param keep_inside: If True, the points inside the object are kept; if False, they are masked out.
         :type keep_inside: bool
-        :param coordinates: coordinates of the geometry or domain; they need to form an enclosed area
-        :type coordinates: any
-        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :param coordinates: Coordinates of the geometry or domain. They need to form an enclosed area.
+        :type coordinates: list | numpy.ndarray
+        :param refine: If True, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
-        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
-                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
-                                     refinement level present at its surface after S^3 has generated the grid
-        :type keep_inside: int
+        :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
+            ``refine=True``, the geometry is resolved with the maximum refinement level present at its surface
+            after S³ has generated the grid.
+        :type min_refinement_level: int | None
         """
         super().__init__(name, keep_inside, refine, min_refinement_level)
         self._coordinates = Polygon(coordinates)
@@ -49,15 +49,15 @@ class GeometryCoordinates2D(GeometryObject):
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to check if a cell is valid or invalid based on the specified settings
+        Check if a cell is valid or invalid based on the specified settings.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by  :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         # Create a mask. We can't compute this for all nodes at once, because within() method only returns a single
@@ -70,17 +70,18 @@ class GeometryCoordinates2D(GeometryObject):
 
     def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to pre-check if a cell is within a rectangular bounding box of the geometry object
-        -> much faster than check the polygon directly if it is expected to generate large numbers of cells outside
-        the bounding box
+        Pre-check if a cell is within the rectangular bounding box of the geometry object.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        This method is faster than checking the polygon directly and is especially useful
+        when generating large numbers of cells outside the bounding box.
+
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
@@ -90,7 +91,7 @@ class GeometryCoordinates2D(GeometryObject):
 
     def _check_geometry(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
 
         :return: None
         :rtype: None
@@ -102,9 +103,9 @@ class GeometryCoordinates2D(GeometryObject):
     @property
     def type(self) -> str:
         """
-        returns name of the geometry object
+        Return the name of the geometry object.
 
-        :return: name of the geometry object
+        :return: Name of the geometry object.
         :rtype: str
         """
         return self._type

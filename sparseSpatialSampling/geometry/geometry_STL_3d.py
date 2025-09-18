@@ -1,5 +1,5 @@
 """
-    implements a class for using an STL file (3D) as geometry objects
+Implements a class for using an STL file (3D) as geometry object.
 """
 import logging
 
@@ -22,29 +22,28 @@ class GeometrySTL3D(GeometryObject):
     def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
                  min_refinement_level: int = None, reduce_by: Union[int, float] = 0):
         """
-        implements a class for using an STL file as geometry objects representing the numerical domain or geometries
-        inside the domain for a 3D case
+        Implement a class for using an STL file as a geometry object representing the numerical domain
+        or geometries inside the domain (3D case).
 
         Note:
-                pyVista requires the STL file to have a closed surface
+            pyVista requires the STL file to have a closed surface.
 
-        :param name: name of the geometry object
+        :param name: Name of the geometry object.
         :type name: str
-        :param keep_inside: flag if the points inside the object should be masked out (False) or kept (True)
+        :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param path_stl_file: path to the STL file
+        :param path_stl_file: Path to the STL file.
         :type path_stl_file: str
-        :param refine: flag if the mesh around the geometry object should be refined after S^3 generated the mesh
+        :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
-        :param min_refinement_level: option to define a min. refinement level with which the geometry should be
-                                     resolved; if 'None' and 'refine = True' the geometry will be resolved with the max.
-                                     refinement level present at its surface after S^3 has generated the grid
-        :type min_refinement_level: int
-        :param reduce_by: reduce the STL file by a factor, recommended for larger STL files since the number of points
-                          within the STL file increases the runtime significantly.
-                          A value of zero means no compression, a value of 0.9 ... 0.98 should work for most STL files.
-                          Note: this factor has to be 0 <= reduce_by < 1
-        :type min_refinement_level: Union[int, float]
+        :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
+            ``refine=True``, the geometry will be resolved with the maximum refinement level present at its surface
+            after :math:`S^3` has generated the grid.
+        :type min_refinement_level: int or None
+        :param reduce_by: Factor to reduce the STL file. Recommended for larger STL files, as the number of points
+            increases runtime significantly. A value of 0 means no compression; values between 0.9 and 0.98 typically
+            work for most STL files. Must satisfy ``0 <= reduce_by < 1``.
+        :type reduce_by: Union[int, float]
         """
         # make sure the compression factor is in a valid range
         if reduce_by < 0:
@@ -68,15 +67,15 @@ class GeometrySTL3D(GeometryObject):
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to check if a cell is valid or invalid based on the specified settings
+        Check if a cell is valid or invalid based on the specified settings.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         # for 3D geometries represented by STL files, we need to mask using pyVista; here we don't check for closed
@@ -92,27 +91,28 @@ class GeometrySTL3D(GeometryObject):
 
     def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
         """
-        method to pre-check if a cell is within a rectangular bounding box of the geometry object
-        ->  much faster than check the STL directly if it is expected to generate large numbers of cells outside
-        the bounding box
+        Pre-check if a cell is within the rectangular bounding box of the geometry object.
 
-        :param cell_nodes: vertices of the cell which should be checked
+        This method is faster than checking the polygon directly and is especially useful
+        when generating large numbers of cells outside the bounding box.
+
+        :param cell_nodes: Vertices of the cell to be checked.
         :type cell_nodes: pt.Tensor
-        :param refine_geometry: flag if we are currently generating the grid (and mask out cells, False) or if we want
-                                to check if a cell is located in the vicinity of the geometry surface (True) to refine
-                                it subsequently. S^3 will provide this parameter.
+        :param refine_geometry: If ``False``, cells are masked out while generating the grid.
+            If ``True``, checks whether a cell is located in the vicinity of the geometry surface
+            to refine it subsequently. This parameter is provided by :math:`S^3`.
         :type refine_geometry: bool
-        :return: flag if the cell is valid ('False') or invalid ('True') based on the specified settings
+        :return: ``True`` if the cell is invalid, ``False`` if the cell is valid.
         :rtype: bool
         """
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
 
-        # check if the cell is valid or invali
+        # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
     def _check_geometry(self) -> None:
         """
-        method to check the user input for correctness
+        Check the user input for correctness.
 
         :return: None
         :rtype: None
@@ -129,9 +129,9 @@ class GeometrySTL3D(GeometryObject):
     @property
     def type(self) -> str:
         """
-        returns name of the geometry object
+        Return the name of the geometry object.
 
-        :return: name of the geometry object
+        :return: Name of the geometry object.
         :rtype: str
         """
         return self._type
