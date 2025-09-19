@@ -6,7 +6,8 @@ import pytest
 import torch as pt
 from os.path import join
 
-from ..geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D, PrismGeometry3D
+from ..geometry import CubeGeometry, SphereGeometry, GeometrySTL3D, CylinderGeometry3D, PrismGeometry3D, \
+    TetrahedronGeometry3D
 
 
 def test_spherical_domain_3d():
@@ -108,27 +109,54 @@ def test_cylindrical_domain_3d():
     # valid if point is partially inside the domain
     assert cylinder.check_cell(cell_part).item() is False
 
+
 def test_prism_geometry_3d():
-    triangle = PrismGeometry3D("prism", True,
+    prism = PrismGeometry3D("prism", True,
                                [[(0.5, 1, 0), (1, 0, 0), (0, 0, 0)], [(0.5, 1, 2), (1, 0, 2), (0, 0, 2)]])
 
-    # generate cell completely inside the cylinder
+    # generate cell completely inside the prism
     cell_inside = pt.tensor([[0.175, 0.175, 0.5], [0.175, 0.225, 0.5], [0.225, 0.225, 0.5], [0.225, 0.175, 0.5],
                              [0.175, 0.175, 1], [0.175, 0.225, 1], [0.225, 0.225, 1], [0.225, 0.175, 1]])
 
-    # generate cell completely outside the cylinder
+    # generate cell completely outside the prism
     cell_outside = pt.tensor([[2, 2, 5], [3, 2, 5], [3, 3, 5], [2, 3, 5],
                               [2, 2, 6], [3, 2, 6], [3, 3, 6], [2, 3, 6]])
 
-    # generate cell partially inside the cylinder
+    # generate cell partially inside the prism
     cell_part = pt.tensor([[0.2, 0.2, 1], [0.2, 0.5, 1], [0.5, 0.5, 1], [0.5, 0.2, 1],
                            [0.2, 0.2, 3], [0.2, 0.5, 3], [0.5, 0.5, 3], [0.5, 0.2, 3]])
 
     # valid if point is outside the geometry
-    assert triangle.check_cell(cell_outside).item() is True
+    assert prism.check_cell(cell_outside).item() is True
 
     # invalid if point is inside the geometry
-    assert triangle.check_cell(cell_inside).item() is False
+    assert prism.check_cell(cell_inside).item() is False
 
     # valid if point is partially inside the geometry
-    assert triangle.check_cell(cell_part).item() is False
+    assert prism.check_cell(cell_part).item() is False
+
+
+def test_tetrahedron_geometry_3d():
+    tetrahedron = TetrahedronGeometry3D("tetrahedron", True,
+                                        [(4, 4, 0), (5, 5, 0), (6, 4, 0), (5, 4.5, 2)])
+
+    # generate cell completely inside the tetrahedron
+    cell_inside = pt.tensor([[4.8, 4.3, 0.5], [4.9, 4.3, 0.5], [4.9, 4.4, 0.5], [4.8, 4.4, 0.5],
+                             [4.8, 4.3, 1.0], [4.9, 4.3, 1.0], [4.9, 4.4, 1.0], [4.8, 4.4, 1.0]])
+
+    # generate cell completely outside the tetrahedron
+    cell_outside = pt.tensor([[6.5, 5.5, 3], [6.6, 5.5, 3], [6.6, 5.6, 3], [6.5, 5.6, 3],
+                              [6.5, 5.5, 4], [6.6, 5.5, 4], [6.6, 5.6, 4], [6.5, 5.6, 4]])
+
+    # generate cell partially inside the tetrahedron
+    cell_part = pt.tensor([[4.9, 4.4, 1.5], [5.1, 4.4, 1.5], [5.1, 4.6, 1.5], [4.9, 4.6, 1.5],
+                           [4.9, 4.4, 2.5], [5.1, 4.4, 2.5], [5.1, 4.6, 2.5], [4.9, 4.6, 2.5]])
+
+    # valid if point is outside the geometry
+    assert tetrahedron.check_cell(cell_outside).item() is True
+
+    # invalid if point is inside the geometry
+    assert tetrahedron.check_cell(cell_inside).item() is False
+
+    # valid if point is partially inside the geometry
+    assert tetrahedron.check_cell(cell_part).item() is False

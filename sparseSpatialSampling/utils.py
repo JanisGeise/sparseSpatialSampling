@@ -2,7 +2,7 @@
 Helper functions for loading OpenFOAM fields and for encapsulating the complete workflow of
 loading, interpolating, and exporting fields.
 
-Additionally, provides a function to compute the SVD of data from :math:`s\_cube` for a given
+Additionally, provides a function to compute the SVD of data from :math:`S^3` for a given
 data matrix and associated weights.
 """
 import logging

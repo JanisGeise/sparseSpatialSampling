@@ -1722,12 +1722,12 @@ def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
 def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_idx: np.ndarray,
                           dims: int) -> Tuple[np.ndarray, np.ndarray]:
     """
-    remove all unused nodes and center coordinates from the list, re-number the node coordinates.
+    Remove unused nodes and their corresponding coordinates, and re-number the remaining node indices.
 
     :param all_idx: Array containing all node indices used within the grid
     :type all_idx: np.ndarray
     :param all_nodes: Array of all node coordinates created during the refinement process
-    type all_nodes: np.ndarray
+    :type all_nodes: np.ndarray
     :param _unused_idx: Set of node indices that are no longer present in the final grid
     :type _unused_idx: set[int]
     :param dims: Number of physical dimensions (2 for 2D, 3 for 3D)
@@ -1737,6 +1737,7 @@ def renumber_node_indices(all_idx: np.ndarray, all_nodes: np.ndarray, _unused_id
         - Array of re-numbered node indices pointing to these coordinates
     :rtype: Tuple[np.ndarray, np.ndarray]
     """
+
     """
     some things regarding numba:
         - 'i in _unused_idx' or (i == _unused_idx).any() takes longer than the loop for assigning 'check'
