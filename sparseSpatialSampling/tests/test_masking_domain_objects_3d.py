@@ -26,13 +26,13 @@ def test_spherical_domain_3d():
                            [-0.25, -0.25, 5.25], [-0.25, 0.25, 5.25], [0.25, 0.25, 5.25], [0.25, -0.25, 5.25]])
 
     # invalid if point is outside the domain
-    assert cylinder.check_cell(cell_outside).item() is True
+    assert cylinder.check_cell(cell_outside) is True
 
     # valid if point is inside the domain
-    assert cylinder.check_cell(cell_inside).item() is False
+    assert cylinder.check_cell(cell_inside) is False
 
     # valid if point is partially inside the domain
-    assert cylinder.check_cell(cell_part).item() is False
+    assert cylinder.check_cell(cell_part) is False
 
 
 def test_cubic_domain_3d():
@@ -50,13 +50,13 @@ def test_cubic_domain_3d():
                            [0.5, 0.5, 1.5], [0.5, 1.5, 1.5], [1.5, 1.5, 1.5], [1.5, 0.5, 1.5]])
 
     # invalid if point is outside the domain
-    assert domain.check_cell(cell_outside).item() is True
+    assert domain.check_cell(cell_outside) is True
 
     # valid if point is inside the domain
-    assert domain.check_cell(cell_inside).item() is False
+    assert domain.check_cell(cell_inside) is False
 
     # valid if point is partially inside the domain
-    assert domain.check_cell(cell_part).item() is False
+    assert domain.check_cell(cell_part) is False
 
 
 def test_domain_3d_stl():
@@ -76,13 +76,13 @@ def test_domain_3d_stl():
                            [3.75, 4.25, 0.25], [3.75, 4.75, 0.25], [3.75, 4.25, 0.75], [3.75, 4.75, 0.75]])
 
     # invalid if point is outside the domain
-    assert cube.check_cell(cell_outside).item() is True
+    assert cube.check_cell(cell_outside) is True
 
     # valid if point is inside the domain
-    assert cube.check_cell(cell_inside).item() is False
+    assert cube.check_cell(cell_inside) is False
 
     # valid if point is partially inside the domain
-    assert cube.check_cell(cell_part).item() is False
+    assert cube.check_cell(cell_part) is False
 
 
 def test_cylindrical_domain_3d():
@@ -101,13 +101,13 @@ def test_cylindrical_domain_3d():
                            [0.25, -0.25, 5.25], [0.25, 0.25, 5.25], [0.5, 0.25, -5.25], [0.5, -0.25, 5.25]])
 
     # invalid if point is outside the domain
-    assert cylinder.check_cell(cell_outside).item() is True
+    assert cylinder.check_cell(cell_outside) is True
 
     # valid if point is inside the domain
-    assert cylinder.check_cell(cell_inside).item() is False
+    assert cylinder.check_cell(cell_inside) is False
 
     # valid if point is partially inside the domain
-    assert cylinder.check_cell(cell_part).item() is False
+    assert cylinder.check_cell(cell_part) is False
 
 
 def test_prism_geometry_3d():
@@ -127,13 +127,13 @@ def test_prism_geometry_3d():
                            [0.2, 0.2, 3], [0.2, 0.5, 3], [0.5, 0.5, 3], [0.5, 0.2, 3]])
 
     # valid if point is outside the geometry
-    assert prism.check_cell(cell_outside).item() is True
+    assert prism.check_cell(cell_outside) is True
 
     # invalid if point is inside the geometry
-    assert prism.check_cell(cell_inside).item() is False
+    assert prism.check_cell(cell_inside) is False
 
     # valid if point is partially inside the geometry
-    assert prism.check_cell(cell_part).item() is False
+    assert prism.check_cell(cell_part) is False
 
 
 def test_tetrahedron_geometry_3d():
@@ -153,10 +153,10 @@ def test_tetrahedron_geometry_3d():
                            [4.9, 4.4, 2.5], [5.1, 4.4, 2.5], [5.1, 4.6, 2.5], [4.9, 4.6, 2.5]])
 
     # valid if point is outside the geometry
-    assert tetrahedron.check_cell(cell_outside).item() is True
+    assert tetrahedron.check_cell(cell_outside) is True
 
     # invalid if point is inside the geometry
-    assert tetrahedron.check_cell(cell_inside).item() is False
+    assert tetrahedron.check_cell(cell_inside) is False
 
     # valid if point is partially inside the geometry
-    assert tetrahedron.check_cell(cell_part).item() is False
+    assert tetrahedron.check_cell(cell_part) is False

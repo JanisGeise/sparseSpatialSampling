@@ -95,7 +95,7 @@ class TetrahedronGeometry3D(GeometryObject):
         normals[:, where(tensor(_check) < 0)[0]] *= -1
         self._normals = normals
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
         Check if a cell is valid or invalid based on the specified settings.
 
@@ -120,8 +120,7 @@ class TetrahedronGeometry3D(GeometryObject):
         :return: Boolean mask that is ``True`` for every vertex inside the tetrahedron or on its surface.
         :rtype: pt.Tensor
         """
-        # for each triangle check -> vector point to tet node then scalar product
-        # compute all vectors
+        # compute all vectors between all nodes of the cell and all nodes of the tetrahedron
         _vectors = vertices.unsqueeze(1) - self._positions.unsqueeze(0)
 
         # compute all dot products between all nodes of the tetrahedron and all normal vectors for each node of the cell

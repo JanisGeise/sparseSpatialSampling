@@ -37,7 +37,7 @@ class GeometryObject(ABC):
         # check the arguments which should be present for all geometry objects
         self._check_common_arguments()
 
-    def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> Tensor:
+    def _apply_mask(self, mask: Tensor, refine_geometry: bool) -> bool:
         """
         Check if a given cell is invalid based on a provided mask and settings.
 
@@ -73,7 +73,7 @@ class GeometryObject(ABC):
             else:
                 invalid = ~mask.all(0)
 
-        return invalid
+        return invalid.item()
 
     def _check_common_arguments(self) -> None:
         """
@@ -90,7 +90,7 @@ class GeometryObject(ABC):
         assert self._name != "", "Found empty string for the geometry object name. Please provide a name."
 
         # check if keep_inside is bool
-        assert type(self._keep_inside) is bool, (f"Invalid type for argument keep_inside. Expected bool but "
+        assert isinstance(self._keep_inside, bool), (f"Invalid type for argument keep_inside. Expected bool but "
                                                  f"{type(self._keep_inside)} was given.")
 
         # in case a min_refinement_level is defined, but refine is kept False, we assume that the geometry should be
@@ -99,6 +99,12 @@ class GeometryObject(ABC):
             logger.warning(f"Found value refine={self._refine} while a min_refinement_level of "
                            f"{self._min_refinement_level} was provided for geometry {self._name}. Changing refine from"
                            f" {self._refine} to refine=True.")
+            self._refine = True
+
+        # make sure the refinement level is >= 1
+        if self._refine and self._min_refinement_level is not None:
+            assert self._min_refinement_level > 0, (f"Expected min_refinement_level > 0 but found "
+                                                    f"min_refinement_level={self.min_refinement_level}.")
 
     @property
     def keep_inside(self):

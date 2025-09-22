@@ -67,7 +67,7 @@ class PrismGeometry3D(GeometryObject):
             TriangleGeometry(f"{name}_second", keep_inside=True, points=self._positions[1][:, self._dim])
         ]
 
-    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+    def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
         Check if a cell is valid or invalid based on the specified settings.
 
