@@ -89,7 +89,7 @@ class GeometrySTL3D(GeometryObject):
         # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
-    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
         Pre-check if a cell is within the rectangular bounding box of the geometry object.
 

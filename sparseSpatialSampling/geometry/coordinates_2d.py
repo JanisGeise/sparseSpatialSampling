@@ -68,7 +68,7 @@ class GeometryCoordinates2D(GeometryObject):
         # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
-    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> Tensor:
+    def pre_check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
         Pre-check if a cell is within the rectangular bounding box of the geometry object.
 
@@ -97,6 +97,7 @@ class GeometryCoordinates2D(GeometryObject):
         :rtype: None
         """
         # check if an enclosed area is provided (is_closed property only available for line strings in shapely)
+        # usually it is closed automatically, but sometimes not so we need to make sure
         assert self._coordinates.boundary.is_closed, (f"Expected an enclosed area formed by the provided coordinates "
                                                       f"for geometry {self.name}.")
 

@@ -122,9 +122,6 @@ class TriangleGeometry(GeometryObject):
         assert all(len(p) == 2 for p in self._points), ("All given coordinates have to contain exactly 2 entries with "
                                                         "the x- and y-coordinates.")
 
-        # make sure the coordinates are unique
-        assert len(self._points) == len(set(self._points)), "The coordinates of the triangle have to be unique."
-
         # make sure that the area of the triangle is larger than zero, pyTorch doesn't support cross product in 2D,
         # so do it manually
         _a = self._points[1] - self._points[0]

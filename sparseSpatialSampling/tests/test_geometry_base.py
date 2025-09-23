@@ -4,9 +4,9 @@ Unit tests for the GeometryObject base class.
 This module provides tests to ensure that the base geometry class behaves as expected.
 It includes:
 
-- Validation of constructor arguments (e.g., name, keep_inside, min_refinement_level).
+- Validation of constructor arguments (e.g., ``name``, ``keep_inside``, ``min_refinement_level``).
 - Automatic adjustment of the refine flag when a minimum refinement level is provided.
-- Correct behavior of the `_apply_mask` method for both `keep_inside=True` and `keep_inside=False`.
+- Correct behavior of the `_apply_mask` method for both ``keep_inside=True`` and ``keep_inside=False``.
 """
 import pytest
 from torch import tensor

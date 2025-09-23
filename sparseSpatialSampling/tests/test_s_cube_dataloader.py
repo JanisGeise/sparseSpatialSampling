@@ -1,5 +1,16 @@
 """
- class for testing the s_cube_dataloader
+Unit tests for the ``Dataloader`` class using the synthetic ``s_cube_test_dataset.h5`` file.
+
+These tests verify that the dataloader:
+- Correctly loads metadata such as write times and field names.
+- Provides consistent shapes for vertices, faces, nodes, weights, and refinement levels.
+- Correctly loads snapshots for a given field and time.
+
+The test dataset is expected to contain:
+- 209 cells,
+- 247 nodes,
+- A single pressure field ``p`` at time ``t = 0.4``,
+- Associated grid, metric, and refinement level information (implicitly checked via weights).
 """
 import pytest
 from os.path import join
@@ -10,8 +21,22 @@ FILENAME = r"s_cube_test_dataset.h5"
 
 
 def test_dataloader():
-    # the file should contain 209 cells, 247 nodes, pressure field, t = 0.4, metric, levels (can be checked implicitly
-    # via weights) and the grid
+    """
+    Test that the ``Dataloader`` correctly loads the synthetic test dataset.
+
+    This test verifies:
+    - The number of write times matches the expected single entry.
+    - The field names dictionary matches the expected structure.
+    - The shapes of vertices, faces, nodes, weights, and levels are consistent with the dataset.
+    - The snapshot loader correctly retrieves the pressure field ``p`` at ``t = 0.4`` with the expected shape.
+
+    Expected dataset properties:
+    - Cells: 209
+    - Nodes: 247
+    - Dimensions: 2
+    - Write times: ["0.4"]
+    - Fields: {"0.4": ["p"]}
+    """
     n_cells = 209
     n_nodes = 247
     n_dimensions = 2
