@@ -609,6 +609,7 @@ class SamplingTree(object):
             if len(self._metric) >= 2:
                 self._compute_n_cells_per_iter()
 
+            # TODO: can we just insert the new leaf cells instead of sorting everything again?
             _leaf_cells_sorted = sorted(list(self._leaf_cells), key=lambda x: self._cells[x].gain, reverse=True)
             to_refine = set()
             for i in _leaf_cells_sorted[:min(self._cells_per_iter, self._n_cells)]:
@@ -627,37 +628,8 @@ class SamplingTree(object):
                     # constraint violations between a nb and its nb cells
                     to_refine.update(self._check_constraint(nb_to_refine_as_well))
 
-            new_cells, all_parents, all_children = [], set(), set()
-            new_index = len(self._cells)
-
-            # compute cell centers
-            loc_center = self._compute_cell_centers(to_refine, _keep_parent_center=False)
-
-            for idx, i in enumerate(to_refine):
-                cell = self._cells[i]
-
-                # assign the neighbors of current cell and add all new cells as children
-                cell.children = tuple(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
-                all_children.update(list(range(new_index, new_index + len(cell.children))))
-                all_parents.add(cell.index)
-
-                # assign idx for the newly created nodes
-                self._assign_indices(cell.children)
-
-                new_cells.extend(cell.children)
-                self._n_cells += 2 ** self._n_dimensions
-                self._current_max_level = max(self._current_max_level, cell.level + 1)
-
-                # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
-                new_index += 2 ** self._n_dimensions
-
-            # add the newly generated cell to the list of all existing cells and update everything
-            self._cells.extend(new_cells)
-            self._update_leaf_cells(all_parents, all_children)
-            self._update_gain(all_children)
-
             # check the newly generated cells if they are outside the domain or inside a geometry, if so, delete them
-            self._remove_invalid_cells({c.index for c in new_cells})
+            self._remove_invalid_cells({c.index for c in self._refine_cells(to_refine)})
 
             # compute global gain after refinement to check if we can stop the refinement
             # if the metric is selected as a stopping criterion
@@ -863,28 +835,13 @@ class SamplingTree(object):
                     # but still check the constraint for the nb cells if specified
                     if self._max_delta_level:
                         # check if the nb cells have the same level
+                        # TODO: here we need an improved documentation
                         nb_to_refine_as_well = set(self._check_nb(i))
                         nb_to_refine_as_well.update(self._check_constraint(nb_to_refine_as_well))
                         to_refine.update(nb_to_refine_as_well)
                         checked.update(nb_to_refine_as_well)
 
-                new_cells, all_parents, all_children = [], set(), set()
-                new_index = len(self._cells)
-                for i in to_refine:
-                    cell = self._cells[i]
-                    loc_center = self._compute_cell_centers(i, _keep_parent_center=False)
-                    cell.children = tuple(self._assign_neighbors(cell, loc_center, new_index))
-                    all_children.update(list(range(new_index, new_index + len(cell.children))))
-                    all_parents.add(cell.index)
-                    self._assign_indices(cell.children)
-                    new_cells.extend(cell.children)
-                    self._n_cells += (2 ** self._n_dimensions - 1)
-                    new_index += 2 ** self._n_dimensions
-
-                self._cells.extend(new_cells)
-                self._update_leaf_cells(all_parents, all_children)
-                self._update_gain(all_children)
-                _idx_new = {c.index for c in new_cells}
+                _idx_new = {c.index for c in self._refine_cells(to_refine)}
                 self._remove_invalid_cells(_idx_new, _geometry_no=g)
 
                 # update '_all_cells' after every iteration, we need to check again which of the refined cells are in
@@ -899,6 +856,45 @@ class SamplingTree(object):
         # update the global max. level
         self._current_max_level = max({self._cells[cell].level for cell in self._leaf_cells})
         logger.info("Finished geometry refinement.")
+
+    def _refine_cells(self, to_refine: set) -> list:
+        """
+        Refine the cells within ``to_refine``.
+
+        :param to_refine: Cell indices of the cells to refine.
+        :type to_refine: set
+        :return: Cell indices of the newly created cells.
+        :rtype: list
+        """
+        # compute cell centers
+        loc_center = self._compute_cell_centers(to_refine, _keep_parent_center=False)
+
+        new_cells, all_parents, all_children = [], set(), set()
+        new_index = len(self._cells)
+        for idx, i in enumerate(to_refine):
+            cell = self._cells[i]
+
+            # assign the neighbors of current cell and add all new cells as children
+            cell.children = tuple(self._assign_neighbors(cell, loc_center[:, :, idx], new_index))
+            all_children.update(list(range(new_index, new_index + len(cell.children))))
+            all_parents.add(cell.index)
+
+            # assign idx for the newly created nodes
+            self._assign_indices(cell.children)
+
+            new_cells.extend(cell.children)
+            self._n_cells += 2 ** self._n_dimensions
+            self._current_max_level = max(self._current_max_level, cell.level + 1)
+
+            # for each cell in to_refine, we added 4 cells in 2D (2 cells in 1D), 8 cells in 3D
+            new_index += 2 ** self._n_dimensions
+
+        # add the newly generated cell to the list of all existing cells and update everything
+        self._cells.extend(new_cells)
+        self._update_leaf_cells(all_parents, all_children)
+        self._update_gain(all_children)
+
+        return new_cells
 
     def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor = None, new_idx: int = None,
                           children: Union[Tuple, list] = None) -> list:
