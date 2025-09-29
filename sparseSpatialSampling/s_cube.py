@@ -1,6 +1,7 @@
 """
 Implementation of the sparse spatial sampling algorithm (:math:`S^3`) for 2D and 3D CFD data.
 """
+import heapq
 import logging
 import numpy as np
 import torch as pt
@@ -529,6 +530,7 @@ class SamplingTree(object):
         :return: None
         :rtype: None
         """
+        logger.info("Starting uniform refinement.")
         self._times["t_start_uniform"] = time()
         for j in range(self._min_level):
             logger.info(f"\r\tStarting iteration no. {j}, N_cells = {len(self._leaf_cells)}")
@@ -580,7 +582,7 @@ class SamplingTree(object):
         :return: None
         :rtype: None
         """
-        logger.info("Starting refinement:")
+        logger.info("Starting grid generation.")
         # execute uniform refinement, the stopping criteria requires at least one uniform refinement cycle which is
         # checked and set beforehand
         self._refine_uniform()
@@ -595,7 +597,7 @@ class SamplingTree(object):
         self._n_cells_log.append(len(self._leaf_cells))
 
         # start the adaptive refinement
-        logger.info("Starting adaptive refinement.")
+        logger.info("Starting metric-based refinement.")
         self._times["t_start_adaptive"] = time()
 
         while self._check_stopping_criteria():
@@ -609,10 +611,12 @@ class SamplingTree(object):
             if len(self._metric) >= 2:
                 self._compute_n_cells_per_iter()
 
-            # TODO: can we just insert the new leaf cells instead of sorting everything again?
-            _leaf_cells_sorted = sorted(list(self._leaf_cells), key=lambda x: self._cells[x].gain, reverse=True)
+            # take the first N cells which maximize the gain, we use a heap to avoid copying large lists and then
+            # sorting them. We use the negative gain to refine cells with a smaller idx in case the gain is the same
+            _leaf_cells_sorted = heapq.nlargest(min(self._cells_per_iter, self._n_cells), self._leaf_cells,
+                                                key=lambda idx: (self._cells[idx].gain, -idx))
             to_refine = set()
-            for i in _leaf_cells_sorted[:min(self._cells_per_iter, self._n_cells)]:
+            for i in _leaf_cells_sorted:
                 cell = self._cells[i]
                 to_refine.add(cell.index)
 
@@ -650,7 +654,7 @@ class SamplingTree(object):
             self._compute_captured_metric()
 
         # refine the grid near geometry objects is specified
-        logger.info("Finished adaptive refinement.")
+        logger.info("Finished metric-based refinement.")
 
         # refine geometries if specified
         self._refine_geometries()
