@@ -2,8 +2,9 @@
 import os
 import sys
 import sphinx_rtd_theme
-sys.path.insert(0, os.path.abspath('./../..'))  # allow "import sparseSpatialSampling"
-
+this_dir = os.path.dirname(__file__)
+repo_root = os.path.abspath(os.path.join(this_dir, '../..'))
+sys.path.insert(0, repo_root)
 
 # -- Project information -----------------------------------------------------
 project = 'Sparse Spatial Sampling'
