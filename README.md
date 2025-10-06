@@ -25,6 +25,9 @@ To get started with $S^3$ you can check out the tutorials provided:
 | 3 | How to select the best settings and advanced options                     | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)   |
 | 4 | Loading existing *s_cube* objects and export options                     | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)    |
 
+To view out all the available workflows, as well as the $S^3$ API, you can check out the 
+[documentation](https://sparsespatialsampling.readthedocs.io/en/latest/) of $S^3$. 
+
 **Note:** There are some issues, which may arise when visualizing the results of $S^3$ in Paraview. 
 See section [issues](#Issues) for known issues and their solution.
 
