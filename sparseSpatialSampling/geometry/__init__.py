@@ -6,3 +6,4 @@ from .cylinder_geometry import CylinderGeometry3D
 from .triangle_geometry import TriangleGeometry
 from .prism_geometry import PrismGeometry3D
 from .tetrahedron_geometry import TetrahedronGeometry3D
+from .pyramid_geometry import PyramidGeometry3D

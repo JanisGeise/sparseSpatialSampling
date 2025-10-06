@@ -10,8 +10,8 @@ from .geometry_base import GeometryObject
 class TetrahedronGeometry3D(GeometryObject):
     __short_description__ = "tetrahedrons (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, positions: List[Union[list, tuple]], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, positions: Union[List[Union[list, tuple]], Tensor],
+                 refine: bool = False, min_refinement_level: int = None):
         """
         Implement a class for using tetrahedrons (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.
@@ -20,8 +20,8 @@ class TetrahedronGeometry3D(GeometryObject):
         :type name: str
         :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param positions: List of four 3D coordinates, each representing one vertex of the tetrahedron.
-        :type positions: list[list[float]] | list[tuple[float]]
+        :param positions: List or tensor of four 3D coordinates, each representing one vertex of the tetrahedron.
+        :type positions: list[list[float]] | list[tuple[float]] | pt.Tensor
         :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
         :param min_refinement_level: Minimum refinement level for resolving the geometry. If ``None`` and
@@ -37,8 +37,11 @@ class TetrahedronGeometry3D(GeometryObject):
         # check the user input based on the specified settings
         self._check_geometry()
 
-        # convert positions to tensor
-        self._positions = tensor(self._positions, dtype=float64)
+        # convert positions to tensor, otherwise make sure we use DP
+        if not isinstance(self._positions, Tensor):
+            self._positions = tensor(self._positions, dtype=float64)
+        else:
+            self._positions = self._positions.type(float64)
 
         # make sure the volume is larger zero -> v = 1/6 det(points)
         # since we have a 4x3 matrix, we have to add another column, compare: https://de.wikipedia.org/wiki/Tetraeder
@@ -132,6 +135,18 @@ class TetrahedronGeometry3D(GeometryObject):
         # Since we have to return False outside the geometry, we have to negate the tensor
         return ~(_dots < 0).bool().any(1)
 
+    def check_tetrahedron(self, vertices: Tensor) -> Tensor:
+        """
+        Check if the given vertices are inside this tetrahedron. This method provides access
+        to the `_mask_tetrahedron` method from other classes.
+
+        :param vertices: Tensor of vertices, where each column corresponds to a coordinate.
+        :type vertices: pt.Tensor
+        :return: Boolean mask that is ``True`` for every vertex inside the tetrahedron or on its surface.
+        :rtype: pt.Tensor
+        """
+        return self._mask_tetrahedron(vertices)
+
     def _check_geometry(self) -> None:
         """
         Check the user input for correctness.
@@ -140,7 +155,11 @@ class TetrahedronGeometry3D(GeometryObject):
         :rtype: None
         """
         # check if positions is an empty list
-        assert self._positions, "Found empty list for the positions. Please provide values for the tetrahedron."
+        if isinstance(self._positions, list):
+            assert self._positions, "Found empty list for the positions. Please provide values for the tetrahedron."
+        else:
+            assert isinstance(self._positions, Tensor), (f"Expected the points to be either a list, tuple or pt.Tensor,"
+                                                         f" but found type {type(self._positions)}.")
 
         # make sure each point is int, float or tensor type
         assert isinstance(self._positions, Union[list, Tensor]), (f"Expected the points to be a list or pt.Tensor, "

@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Sparse Spatial Sampling (:math:`S^3`) documentation
-===================================
+===================================================
 
 Welcome to the sparseSpatialSampling documentation. Here you can find tutorials on how to use :math:`S^3` and the documentation of the Python API.
 

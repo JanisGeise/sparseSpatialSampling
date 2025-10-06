@@ -20,4 +20,5 @@ Submodules
    sparseSpatialSampling.geometry.cylinder_geometry
    sparseSpatialSampling.geometry.prism_geometry
    sparseSpatialSampling.geometry.tetrahedron_geometry
+   sparseSpatialSampling.geometry.pyramid_geometry
    sparseSpatialSampling.geometry.geometry_STL_3d
