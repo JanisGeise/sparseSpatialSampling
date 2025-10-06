@@ -2,7 +2,7 @@
 import os
 import sys
 import sphinx_rtd_theme
-sys.path.insert(0, os.path.abspath('../..'))  # allow "import sparseSpatialSampling"
+sys.path.insert(0, os.path.abspath('./../..'))  # allow "import sparseSpatialSampling"
 
 
 # -- Project information -----------------------------------------------------
@@ -23,7 +23,15 @@ autosummary_generate = True
 
 # If your code imports heavy/optional deps not installed during docs build,
 # list them here to avoid import errors while autodoc runs:
-autodoc_mock_imports = [
+autodoc_mock_imports = ["numpy>=1.22",
+                        "torch",
+                        "numba",
+                        "scikit-learn",
+                        "git+https://github.com/FlowModelingControl/flowtorch.git@aweiner",
+                        "shapely",
+                        "h5py",
+                        "matplotlib",
+                        "pyvista"
 ]
 
 # Exclude tests and any junk from the docs build
