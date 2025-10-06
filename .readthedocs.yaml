@@ -17,5 +17,5 @@ sphinx:
 # Install Python packages needed for the docs build
 python:
   install:
-    - requirements: docs/requirements.txt
+    - requirements: docs/source/requirements.txt
 
