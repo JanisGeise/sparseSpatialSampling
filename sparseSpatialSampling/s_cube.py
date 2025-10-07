@@ -12,8 +12,6 @@ from typing import Tuple, Union
 from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
 
-from .const import NEIGHBOR_RELATIONS_2D, NEIGHBOR_RELATIONS_3D
-
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     force=True)

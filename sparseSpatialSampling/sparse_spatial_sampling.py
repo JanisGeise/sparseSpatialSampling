@@ -72,8 +72,8 @@ class SparseSpatialSampling:
         :param reach_at_least: Minimum percentage of the target metric / number of cells
             to reach before activating the relTol stopping criterion
         :type reach_at_least: float
-        :param pre_select_cells: Optimization for geometry objects (e.g., 'GeometrySTL3D',
-            'GeometryCoordinates2D') that reduces runtime when bounding box volume is close
+        :param pre_select_cells: Optimization for geometry objects (e.g., ``GeometrySTL3D``,
+            ``GeometryCoordinates2D``) that reduces runtime when bounding box volume is close
             to geometry volume
         :type pre_select_cells: bool
         :return: None

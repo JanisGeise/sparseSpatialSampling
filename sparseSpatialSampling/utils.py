@@ -168,7 +168,7 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
         In that case, the time steps and field name must be provided directly to the ``export_data`` method,
         as shown in Tutorial 2.
 
-        Example usage::
+        Example usage without this function::
 
             times = [0.1, 0.2, 0.3]
             export = execute_grid_generation(...)
@@ -228,11 +228,11 @@ def export_openfoam_fields(datawriter: ExportData, load_path: str, boundaries: l
 def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int = 2, t_start: Union[int, float] = 0.4,
                    scalar: bool = True) -> Tuple[pt.Tensor, pt.Tensor, pt.Tensor, list]:
     """
-    Load a single OpenFOAM field (scalar or vector) from all write times greater than or equal to `t_start`.
+    Load a single OpenFOAM field (scalar or vector) from all write times greater than or equal to ``t_start``.
 
     Differences from `load_original_Foam_fields`:
         - Designed for a **single field only**.
-        - Time filtering is based on a **numerical threshold (t_start)**,
+        - Time filtering is based on a numerical threshold (``t_start``),
           instead of requiring explicit lists of times.
         - Input requires explicit **scalar/vector flag** rather than inferring
           from field data.

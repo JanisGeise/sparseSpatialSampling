@@ -1,3 +1,4 @@
+![for2895_logo.png](for2895_logo.png)
 # Sparse Spatial Sampling ($S^3$)
 A different version of the existing $S^3$ algorithm (see [references](#References)) for processing large amounts of CFD data. 
 The idea is to create a grid based on a metric provided by the user, e.g., the standard deviation of the pressure fields 
@@ -18,12 +19,12 @@ accurately since it only generates cells in regions where the gradient of the me
 ## Getting started
 To get started with $S^3$ you can check out the tutorials provided:
 
-| # | topic                                                                    | notebook                                                          |
-|--:|:-------------------------------------------------------------------------|:------------------------------------------------------------------|
-| 1 | 2D flow past a cylinder                                                  | [view](./docs/source/tutorials/tutorial1_cylinder2D_Re100.ipynb)  |
-| 2 | OAT15 at high speed stall conditions                                     | [view](./docs/source/tutorials/tutorial2_oat15_buffet.ipynb)      |
-| 3 | How to select the best settings and advanced options                     | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)   |
-| 4 | Loading existing *s_cube* objects and export options                     | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)    |
+| # | topic                                                | notebook                                                         |
+|--:|:-----------------------------------------------------|:-----------------------------------------------------------------|
+| 1 | 2D flow past a cylinder                              | [view](./docs/source/tutorials/tutorial1_cylinder2D_Re100.ipynb) |
+| 2 | *ONERA OAT15A* at high speed stall conditions        | [view](./docs/source/tutorials/tutorial2_oat15_buffet.ipynb)     |
+| 3 | How to select the best settings and advanced options | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)  |
+| 4 | Loading existing *s_cube* objects and export options | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)   |
 
 To view out all the available workflows, as well as the $S^3$ API, you can check out the 
 [documentation](https://sparsespatialsampling.readthedocs.io/en/latest/) of $S^3$. 
@@ -210,3 +211,13 @@ values of `reduce_by=0.9 ... 0.98` were tested successfully (`0` means no compre
 - Idea & 1D implementation of the current version taken from [Andre Weiner](https://github.com/AndreWeiner)
 - the [flow_data](https://github.com/AndreWeiner/flow_data/) repository containing the implementation of the 
 *cylinder2D_Re100* and *cylinder3D_Re3900* test cases
+- The data for the *ONERA OAT15A* was kindly provided by research partners of the
+[TU Stuttgart](https://www.for2895.uni-stuttgart.de/), the numerical setup can be found in:
+  - **Kleinert, Johannes and Ehrle, Maximilian and Waldmann, Andreas and Lutz, Thorsten**.
+  *Wake tail plane interactions for a tandem wing configuration in high-speed stall conditions*, 
+  DOI: https://link.springer.com/article/10.1007/s13272-023-00670-1 (June, 2023).
+
+## Acknowledgement
+$S^3$ and all tools available in this repository were created as part of the research program 
+[FOR 2895 - Unsteady flow interaction phenomena at high speed stall conditions](https://www.for2895.uni-stuttgart.de/), 
+financed by the German Research Foundation (DFG).
