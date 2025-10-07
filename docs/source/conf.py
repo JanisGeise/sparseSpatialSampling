@@ -24,16 +24,7 @@ autosummary_generate = True
 
 # If your code imports heavy/optional deps not installed during docs build,
 # list them here to avoid import errors while autodoc runs:
-autodoc_mock_imports = ["numpy>=1.22",
-                        "torch",
-                        "numba",
-                        "scikit-learn",
-                        "git+https://github.com/FlowModelingControl/flowtorch.git@aweiner",
-                        "shapely",
-                        "h5py",
-                        "matplotlib",
-                        "pyvista"
-]
+autodoc_mock_imports = ["numpy" "torch", "numba", "sklearn", "shapely", "h5py", "matplotlib", "pyvista", "flowtorch"]
 
 # Exclude tests and any junk from the docs build
 exclude_patterns = [
@@ -55,4 +46,4 @@ autodoc_typehints = 'description'
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+# html_static_path = ['_static']
