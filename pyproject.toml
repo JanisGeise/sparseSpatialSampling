@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Sparse Spatial Sampling"
+version = "1.0"
+description = "Sparse Spatial Sampling library"
+authors = [{ name = "Sparse Spatial Sampling contributors" }]
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sparseSpatialSampling*"]
+
