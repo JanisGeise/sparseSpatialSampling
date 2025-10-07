@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Sparse Spatial Sampling"
+name = "sparse-spatial-sampling"
 version = "1.0"
 description = "Sparse Spatial Sampling library"
 authors = [{ name = "Sparse Spatial Sampling contributors" }]
