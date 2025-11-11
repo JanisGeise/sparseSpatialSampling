@@ -152,7 +152,7 @@ def interpolate_plane(vertices: pt.Tensor, modes: pt.Tensor, direction: int, tar
 if __name__ == "__main__":
     # which fields and settings to use
     field_name = "U"
-    metric = ["0.25", "0.50", "0.75"]
+    metric = ["0.25", "0.75"]
     diameter = 0.1
 
     # path to the HDF5 file
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     file_name = [f"cylinder3D_Re3900_metric_{m}_{field_name}_svd.h5" for m in metric]
 
     # the actual captured metric may differ from the filename
-    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{approx} = " + f"{m}$" for m in ["0.27", "0.53", "0.77"]]
+    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{min} = " + f"{m}$" for m in ["0.25", "0.75"]]
 
     # path to the directory to which the plots should be saved to
     save_path_results = join("..", "run", "final_benchmarks", "cylinder3D_Re3900_local_TKE",

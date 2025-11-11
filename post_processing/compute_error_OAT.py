@@ -12,6 +12,7 @@ from os.path import join
 from os import path, makedirs
 from matplotlib.patches import Polygon
 from sklearn.neighbors import KNeighborsRegressor
+import matplotlib.colors as colors
 
 from sparseSpatialSampling.data import Dataloader
 
@@ -83,43 +84,36 @@ def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_ori
 
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: list, save_name: str, save_dir: str,
                         geometry_: list = None, field: str = "p", chord: float = 0.15) -> None:
-    label = [r"$\mu(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$",
-             r"$\sigma(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$"]
+    label = [r"$|\mathrm{mean}(\Delta \mathbf{" + field + "})| / " + field + r"_{\infty}$",
+             r"$\mathrm{std}(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$"]
+
+    # set global vmin/vmax for consistency
+    vmin_global = 1e-8
+    vmax_global = 1e-4
+
+    # define levels, logarithmically spaced
+    levels = np.logspace(np.log10(vmin_global), np.log10(vmax_global), 5)
+
     fig, ax = plt.subplots(ncols=2, sharey="row", figsize=(6, 2))
-
     for i in range(2):
-        vmin, vmax = error_field[i].min().item(), error_field[i].max().item()
-
-        # determine the tick format for the colorbar manually because otherwise the format is messed up
-        fmt = [abs(int("{:.0e}".format(vmin).split("e")[-1])), abs(int("{:.0e}".format(vmax).split("e")[-1]))]
-        pre = [int("{:.0e}".format(vmin).split("e")[0]), int("{:.0e}".format(vmax).split("e")[0])]
-        if i == 0:
-            ticks = pt.linspace(round(vmin, fmt[0]), round(vmax, fmt[1]), len(list(range(pre[0], pre[1])))+1)
-        else:
-            # std. dev. starts always at zero
-            ticks = pt.linspace(0, round(vmax, fmt[1]), 6)
-
-        tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i], vmin=vmin, vmax=vmax,
-                                levels=pt.linspace(vmin, vmax, 100))
-        cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, label=label[i], location="bottom", pad=0.3, ticks=ticks)
-
-        # force scientific notation, taken from:
-        cbar.formatter.set_powerlimits((0, 0))
+        tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i].abs(),
+                                norm=colors.LogNorm(vmin=error_field[i].abs().min(), vmax=error_field[i].abs().max()),
+                                levels=levels, extend="both")
+        cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, location="top", pad=0.1, ticks=levels)
+        cbar.set_label(label[i], labelpad=10)
 
         if geometry_ is not None:
             [ax[i].add_patch(Polygon(g / chord, facecolor="white")) for g in geometry_]
-
         ax[i].set_aspect("equal")
-        ax[i].set_xlabel("$x / c$")
     ax[0].set_ylabel("$z / c$")
-    # fig.supxlabel("$x / c$")
+    fig.supxlabel("$x / c$", y=0.025)
     fig.tight_layout()
     fig.subplots_adjust()
     plt.savefig(join(save_dir, f"{save_name}.png"), dpi=340)
     plt.close("all")
 
 
-def plot_error_in_time(time_steps: any, errors: list, metrics: list, save_name: str, save_dir: str,
+def plot_error_in_time(time_steps: list, errors: list, metrics: list, save_name: str, save_dir: str,
                        field_: str = "p") -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     for e, m in zip(errors, metrics):
@@ -199,12 +193,14 @@ if __name__ == "__main__":
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
 
     # get all the generated grids in the directory
-    # files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
-    # variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
+    files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
+    variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
+    """
     files_hdf = [join(load_path, "OAT15_large_area_variance_0.25.h5"),
                  join(load_path, "OAT15_large_area_variance_0.50.h5"),
                  join(load_path, "OAT15_large_area_variance_0.75.h5")]
     variances = ["0.25", "0.50", "0.75"]
+    # """
 
     # create empty lists for L2-errors vs. metrics
     error_time_vs_metric, error_total_vs_metric = [], []
@@ -240,7 +236,6 @@ if __name__ == "__main__":
         plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],
                             f"error_metric_{v}_{field_name}", save_path_results, geometry_=geometry,
                             field=field_name)
-
 
     # save the errors
     pt.save({"L2_error_time": error_time_vs_metric, "L2_error_total": error_total_vs_metric},

@@ -165,15 +165,15 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
     # OAT 15
     if oat:
         V[1][:, [1, 2, 3]] *= -1
-        V[2][:, [0, 1, 2, 3]] *= -1
-        V[3][:, [0, 4, 6, 8, 10]] *= -1
+        # V[2][:, [0, 1, 2, 3]] *= -1
+        V[2][:, [0, 4, 6, 8, 10]] *= -1
 
     # cylinder3D
     else:
         V[0][:, [6, 8, 10]] *= -1
         V[1][:, [2, 3, 4]] *= -1
+        # V[2][:, [2, 3, 4]] *= -1
         V[2][:, [2, 3, 4]] *= -1
-        V[3][:, [2, 3, 4]] *= -1
 
     # non-dimensionalize the time steps
     write_times = write_times * (u_inf / chord)
@@ -188,6 +188,7 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
             else:
                 ax[row].plot(write_times[:v.shape[0]], v[:, m], color=color[i], ls=ls[i])
         ax[row].set_xlim(write_times.min(), write_times.max())
+        ax[row].set_ylabel(r"$v_{" + str(m + 1) + "}$")
     fig.legend(loc="upper center", framealpha=1.0, ncols=4)
     ax[-1].set_xlabel(r"$\tau$")
     fig.tight_layout()
@@ -201,7 +202,7 @@ if __name__ == "__main__":
     # which fields and settings to use
     field_name = "Ma"
     area = "large"
-    metric = ["0.25", "0.50", "0.75"]
+    metric = ["0.25", "0.75"]
 
     # path to the HDF5 file
     load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
@@ -213,7 +214,7 @@ if __name__ == "__main__":
                              "plots_SVD_paper_final")
 
     # the actual metric may differ from the filename
-    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{approx} = " + f"{m}$" for m in ["0.27", "0.50", "0.75"]]
+    legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{min} = " + f"{m}$" for m in ["0.25", "0.75"]]
 
     # load the field of the original CFD data
     if area == "large":

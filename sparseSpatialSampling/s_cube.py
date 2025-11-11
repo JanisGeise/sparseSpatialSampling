@@ -378,7 +378,8 @@ class SamplingTree(object):
         self.all_centers.append(centers_[0, :])
 
         # add the initial cell to the list of created cells
-        self._cells = [Cell(0, None, self._knn.n_neighbors * [None], centers_[0, :], 0, None, metric[0], gain,
+        _n_nb = 8 if self._n_dimensions == 2 else 26
+        self._cells = [Cell(0, None, _n_nb * [None], centers_[0, :], 0, None, metric[0], gain,
                             dimensions=self._n_dimensions, node_idx=list(range(nodes.size(0))))]
 
         # update the leaf cells, so the initial cell is now seen as leaf cell

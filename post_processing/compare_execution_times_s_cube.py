@@ -117,7 +117,7 @@ def plot_n_cells_and_t_exec(_data: list, _save_path: str, case: list, save_name:
     # ax[0].set_xlabel(r"$\mathcal{M}_{\mathrm{approx}}$")
     # ax[1].set_xlabel(r"$\mathcal{M}_{\mathrm{approx}}$")
     fig.supxlabel(r"$\mathcal{M}_{\mathrm{approx}}$")
-    ax[0].set_ylabel(r"$N_{\mathcal{C}} \, / \, N_{\mathcal{C}, \mathrm{orig}}$")
+    ax[0].set_ylabel(r"$N_\ell \, / \, N_{\ell, \mathrm{orig}}$")
     ax[1].set_ylabel(r"$t \, / \, t_{\mathrm{tot}}$")
     ax[1].set_ylim(0.01, 1)
     ax[0].set_xlim(0.2, 1)
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     save_path = join("..", "run", "final_benchmarks", "plots_final")
     cases = [join("OAT15_large_new", "results_geometry_refinement_no_dl_constraint_fully_parallelized"),
              join("cylinder3D_Re3900_local_TKE", "results_with_geometry_refinement_no_dl_constraint_fully_parallel")]
-    legend = [r"$\mathrm{OAT}$", r"$\mathrm{cylinder}$"]
+    legend = [r"$\mathrm{tandem}$", r"$\mathrm{cylinder}$"]
 
     # load the data
     data = [load_results(join(load_path, c)) for c in cases]

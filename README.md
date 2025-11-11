@@ -6,7 +6,7 @@ over time. The $S^3$ algorithm then generates a grid which captures *x%* of the 
 a specified max. number of cells, depending on the setup given by the user. After generating the grid, the original CFD 
 data is interpolated onto the sampled grid and exported to HDF5 & XDMF files.
 
-When applying $S^3$ to an OAT15 airfoil at high-speed stall conditions, it efficiently decreases the mesh size with minimal
+When applying $S^3$ to an *ONERA OAT15A* airfoil at high-speed stall conditions, it efficiently decreases the mesh size with minimal
 loss of information:
 
 ![comparison_oat15.jpeg](comparison_oat15.jpeg)
