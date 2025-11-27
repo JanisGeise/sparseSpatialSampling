@@ -237,4 +237,4 @@ $S^3$ and all tools available in this repository were created as part of the res
 financed by the German Research Foundation (DFG).
 
 ## Licence
-*S^3* is [GPLv3](https://en.wikipedia.org/wiki/GNU_General_Public_License)-licensed, for more information it is referred to the [LICENSE](LICENSE) file.
+$S^3$ is [GPLv3](https://en.wikipedia.org/wiki/GNU_General_Public_License)-licensed, for more information it is referred to the [LICENSE](LICENSE) file.
