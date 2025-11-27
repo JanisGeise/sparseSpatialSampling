@@ -84,7 +84,7 @@ def plot_grid_and_metric(_faces, _vertices, coord_x_orig: pt.Tensor, coord_y_ori
 
 def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: list, save_name: str, save_dir: str,
                         geometry_: list = None, field: str = "p", chord: float = 0.15) -> None:
-    label = [r"$|\mathrm{mean}(\Delta \mathbf{" + field + "})| / " + field + r"_{\infty}$",
+    label = [r"$\mathrm{mean}(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$",
              r"$\mathrm{std}(\Delta \mathbf{" + field + "}) / " + field + r"_{\infty}$"]
 
     # set global vmin/vmax for consistency
@@ -96,8 +96,8 @@ def plot_error_in_space(coord_x: pt.Tensor, coord_y: pt.Tensor, error_field: lis
 
     fig, ax = plt.subplots(ncols=2, sharey="row", figsize=(6, 2))
     for i in range(2):
-        tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i].abs(),
-                                norm=colors.LogNorm(vmin=error_field[i].abs().min(), vmax=error_field[i].abs().max()),
+        tcf = ax[i].tricontourf(coord_x / chord, coord_y / chord, error_field[i],
+                                norm=colors.LogNorm(vmin=error_field[i].min(), vmax=error_field[i].max()),
                                 levels=levels, extend="both")
         cbar = fig.colorbar(tcf, ax=ax[i], shrink=0.9, location="top", pad=0.1, ticks=levels)
         cbar.set_label(label[i], labelpad=10)
@@ -229,8 +229,8 @@ if __name__ == "__main__":
 
         # compute the avg. & std. error of the metric for each cell (= wrt space) and scale it with the free stream
         # parameter
-        error_space_vs_metric_avg = pt.mean(fields_fitted - orig_field, dim=1) / param_infinity
-        error_space_vs_metric_std = pt.std(fields_fitted - orig_field, dim=1) / param_infinity
+        error_space_vs_metric_avg = pt.mean((fields_fitted - orig_field).abs(), dim=1) / param_infinity
+        error_space_vs_metric_std = pt.std((fields_fitted - orig_field).abs(), dim=1)/ param_infinity
 
         # plot the L2-error wrt each cell
         plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],

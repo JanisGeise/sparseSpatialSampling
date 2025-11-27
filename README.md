@@ -204,6 +204,20 @@ decreases the number of points within the STL file
 - since the final grid will only be an approximation of the geometry, this factor can be set very high (depending on the STL file),
 values of `reduce_by=0.9 ... 0.98` were tested successfully (`0` means no compression)
 
+## Reference
+If you find $S^3$ helpful, please consider referencing the following article:
+```
+@misc{geise2025octreebasedsamplingalgorithmanalyzing,
+      title={An octree-based sampling algorithm for analyzing big simulation data}, 
+      author={Janis Geise and Sebastian Spinner and Richard Semaan and Andre Weiner},
+      year={2025},
+      eprint={2511.21352},
+      archivePrefix={arXiv},
+      primaryClass={physics.flu-dyn},
+      url={https://arxiv.org/abs/2511.21352}, 
+}
+```
+
 ## References
 - Existing version of the $S^3$ algorithm can be found under: 
   - **D. Fernex, A. Weiner, B. R. Noack and R. Semaan.** *Sparse Spatial Sampling: A mesh sampling algorithm for efficient 
@@ -221,3 +235,6 @@ values of `reduce_by=0.9 ... 0.98` were tested successfully (`0` means no compre
 $S^3$ and all tools available in this repository were created as part of the research program 
 [FOR 2895 - Unsteady flow interaction phenomena at high speed stall conditions](https://www.for2895.uni-stuttgart.de/), 
 financed by the German Research Foundation (DFG).
+
+## Licence
+*S^3* is [GPLv3](https://en.wikipedia.org/wiki/GNU_General_Public_License)-licensed, for more information it is referred to the [LICENSE](LICENSE) file.

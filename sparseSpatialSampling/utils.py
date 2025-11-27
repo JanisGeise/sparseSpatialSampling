@@ -287,14 +287,14 @@ def load_foam_data(load_dir: str, boundaries: list, field_name="p", n_dims: int 
         data = pt.zeros((mask.sum().item(), n_dims, len(write_time)), dtype=pt.float32)
 
         # we always load the vector in 3 dimensions first, so we always need to expand in 3 dimensions
-        mask = mask.unsqueeze(-1).expand([xyz.size(0), 3])
+        mask = mask.unsqueeze(-1).expand([_loader.vertices.size(0), 3])
 
     for i, t in enumerate(write_time):
         # load the specified field
         if scalar:
             data[:, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask)
         else:
-            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(mask.size())[:, :n_dims]
+            data[:, :, i] = pt.masked_select(_loader.load_snapshot(field_name, t), mask).reshape(data.size(0), 3)[:, :n_dims]
 
     return data, xyz, _loader.weights, write_time
 

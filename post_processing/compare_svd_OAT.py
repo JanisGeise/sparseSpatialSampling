@@ -188,7 +188,7 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
             else:
                 ax[row].plot(write_times[:v.shape[0]], v[:, m], color=color[i], ls=ls[i])
         ax[row].set_xlim(write_times.min(), write_times.max())
-        ax[row].set_ylabel(r"$v_{" + str(m + 1) + "}$")
+        ax[row].set_ylabel(r"$\mathbf{v}_{" + str(m + 1) + "}$")
     fig.legend(loc="upper center", framealpha=1.0, ncols=4)
     ax[-1].set_xlabel(r"$\tau$")
     fig.tight_layout()
