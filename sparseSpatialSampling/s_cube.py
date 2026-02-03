@@ -648,6 +648,13 @@ class SamplingTree(object):
         # print info
         logger.info(self)
 
+        # if we use n_cells_max as stopping criterion and the approximated metric is > 1, then display info msg that the
+        # mesh can be coarser
+        if self._n_cells_max is not None and self._metric[-1] > 1:
+            logger.info("Detected a captured metric > 100%. This means that the current number of 'n_cells_max' can be"
+                        " reduced without further loss of information for this metric field, since the metric field is "
+                        "over-approximated.")
+
     def _remove_invalid_cells(self, _refined_cells: set, _refine_geometry: bool = False,
                               _geometry_no: Union[int, list] = None) -> Union[None, set]:
         """
@@ -1600,6 +1607,7 @@ class SamplingTree(object):
                                     Captured metric of original grid: {:.2f} %
                   """.format(len(self._leaf_cells), self._current_min_level, self._current_max_level,
                              self._metric[-1] * 100)]
+
         return "\n\t\t\t\t\t\t\t\t".join(message)
 
     @property
@@ -1645,6 +1653,16 @@ class SamplingTree(object):
         omit = ["_times", "all_centers", "data_final_mesh", "_width", "_pool", "_knn", "_cells", "_leaf_cells",
                 "_n_cells_after_uniform", "_N_cells_per_iter", "all_nodes", "face_ids", "_metric", "_current_min_level",
                 "_current_max_level", "_vertices", "_n_cells", "_n_cells_log"]
+
+        # display only the used stopping criterion and omit the other one, also print info msg about the criterion
+        # we are using
+        if self._n_cells_max is not None:
+            omit.append("_min_metric")
+            logger.info("Selecting max. number of cells as stopping criterion.")
+        else:
+            omit.append("_n_cells_max")
+            logger.info("Selecting min. approximation of the metric as stopping criterion.")
+
         max_key_len = max(len(key) for key in self.__dict__ if key not in omit)
 
         atts = ["\n\tSelected settings:"]
@@ -1654,7 +1672,7 @@ class SamplingTree(object):
                     val_str = str([v.name for v in value])
                 else:
                     val_str = str(value)
-                atts.append(f"\t\t{key:<{max_key_len}}:\t{val_str}")
+                atts.append(f"\t\t{key[1:]:<{max_key_len}}:\t{val_str}")
         logger.info("\n".join(atts))
 
 

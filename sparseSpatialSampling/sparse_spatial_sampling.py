@@ -185,6 +185,13 @@ class SparseSpatialSampling:
             logger.warning(f"Lower level bound of {self._level_bounds} is invalid. Changed lower level bound to 1.")
             self._level_bounds = 1
 
+        # in case the user passes n_cells_max stopping criterion, print a warning regarding the deactivation of min_metric
+        if self._n_cells_max is not None:
+            logger.warning("Detected stopping criterion 'n_cells_max'. Passing this stopping criterion deactivates the"
+                           " 'min_metric' stopping criterion. To use 'min_metric' as stopping criterion, remove "
+                           "'n_cells_max' or set 'n_cells_max = None'.")
+
+
 
 def list_geometries() -> None:
     """
