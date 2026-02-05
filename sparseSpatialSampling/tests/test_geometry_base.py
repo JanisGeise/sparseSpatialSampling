@@ -39,6 +39,29 @@ class DummyGeometry(GeometryObject):
         """
         pass
 
+    @property
+    def main_width(self):
+        """
+        Dummy implementation of type (does nothing).
+        """
+        return None
+
+    @property
+    def center(self):
+        return None
+
+    def _compute_main_width(self):
+        """
+        Dummy implementation of type (does nothing).
+        """
+        pass
+
+    def _compute_center(self):
+        """
+        Dummy implementation of type (does nothing).
+        """
+        pass
+
 class TestGeometryBase:
     """
     Unit tests for the GeometryObject base class.

@@ -45,6 +45,10 @@ class PyramidGeometry3D(GeometryObject):
         # create two tetrahedrons from the pyramid
         self._create_tetrahedrons()
 
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = None if not keep_inside else self._compute_main_width()
+        self._center = None if not keep_inside else self._compute_center()
+
     def _create_tetrahedrons(self) -> None:
         """
         Decompose the given pyramid into two tetrahedrons.
@@ -194,6 +198,43 @@ class PyramidGeometry3D(GeometryObject):
         """
         return self._type
 
+    @property
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the pyramid.
+
+        :return: Main width of the pyramid.
+        :rtype: float
+        """
+        return self._main_width
+
+    @property
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the pyramid.
+
+        :return: center coordinates of the pyramid.
+        :rtype: pt.Tensor
+        """
+        return self._center
+
+    def _compute_main_width(self) -> float:
+        """
+        Compute the center coordinates based on the main width of the pyramid.
+
+        :return: center coordinates of the pyramid.
+        :rtype: pt.Tensor
+        """
+        return max([t.main_width for t in self._tets])
+
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates based on the main dimension of the pyramid.
+
+        :return: center coordinates of the pyramid.
+        :rtype: pt.Tensor
+        """
+        return cat([t.center.unsqueeze(-1) for t in self._tets], -1).mean(1)
 
 if __name__ == "__main__":
     pass

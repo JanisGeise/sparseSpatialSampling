@@ -52,6 +52,10 @@ class TetrahedronGeometry3D(GeometryObject):
         # compute the normal vectors of each triangle within the tetrahedron
         self._compute_normals()
 
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = None if not keep_inside else self._compute_main_width()
+        self._center = None if not keep_inside else self._compute_center()
+
     def _compute_normals(self) -> None:
         """
         Compute the inward-pointing face normals of the tetrahedron.
@@ -69,9 +73,9 @@ class TetrahedronGeometry3D(GeometryObject):
         :rtype: None
         """
         # compute the centroid of the tetrahedron
-        _centroid = 1/4 * self._positions.sum(dim=0)
+        _centroid = self._positions.mean(dim=0)
 
-        # compute the face normals of the three triangles making up the prism
+        # compute the face normals of the three triangles making up the tetrahedron
         # n1 = (B - A) x (C - A)
         n1 = cross(self._positions[1, :] - self._positions[0, :], self._positions[2, :] - self._positions[0, :],
                    dim=0).unsqueeze(-1)
@@ -180,3 +184,44 @@ class TetrahedronGeometry3D(GeometryObject):
         :rtype: str
         """
         return self._type
+
+    @property
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the tetrahedron.
+
+        :return: Main width of the tetrahedron.
+        :rtype: float
+        """
+        return self._main_width
+
+    @property
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the tetrahedron.
+
+        :return: center coordinates of the tetrahedron.
+        :rtype: pt.Tensor
+        """
+        return self._center
+
+    def _compute_main_width(self) -> float:
+        """
+        Compute the center coordinates based on the main width of the tetrahedron.
+
+        :return: center coordinates of the tetrahedron.
+        :rtype: pt.Tensor
+        """
+        return (self._positions.max(dim=0).values - self._positions.min(dim=0).values).max().item()
+
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates based on the main dimension of the tetrahedron.
+
+        :return: center coordinates of the tetrahedron.
+        :rtype: pt.Tensor
+        """
+        return self._positions.mean(dim=0)
+
+if __name__ == "__main__":
+    pass

@@ -62,6 +62,10 @@ class GeometrySTL3D(GeometryObject):
         self._lower_bound = list(self._stl_file.bounds)[::2]
         self._upper_bound = list(self._stl_file.bounds)[1::2]
 
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = None if not keep_inside else self._compute_main_width()
+        self._center = None if not keep_inside else self._compute_center()
+
         # check the user input based on the specified settings
         self._check_geometry()
 
@@ -136,6 +140,43 @@ class GeometrySTL3D(GeometryObject):
         """
         return self._type
 
+    @property
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the cube.
+
+        :return: Main width of the cube.
+        :rtype: float
+        """
+        return self._main_width
+
+    @property
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the cube.
+
+        :return: center coordinates of the cube.
+        :rtype: pt.Tensor
+        """
+        return self._center
+
+    def _compute_main_width(self) -> float:
+        """
+        Compute the center coordinates based on the main width of the cube.
+
+        :return: center coordinates of the cube.
+        :rtype: pt.Tensor
+        """
+        return max([abs(u - l) for l, u in zip(self._lower_bound, self._upper_bound)])
+
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates based on the main dimension of the cube.
+
+        :return: center coordinates of the cube.
+        :rtype: pt.Tensor
+        """
+        return (tensor(self._lower_bound) + tensor(self._upper_bound)) / 2.0
 
 if __name__ == "__main__":
     pass

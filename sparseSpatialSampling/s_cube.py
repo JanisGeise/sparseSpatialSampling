@@ -344,13 +344,18 @@ class SamplingTree(object):
         :return: None
         :rtype: None
         """
-        # determine the main dimensions of the domain (cells are all rectangular, so len_x == len_y == len_z)
-        self._width = max([(self._vertices[:, i].max() - self._vertices[:, i].min()).item() for i in
-                           range(self._n_dimensions)])
+        middle_ = None
+        for g in self._geometry:
+            if g.keep_inside:
+                self._width = g.main_width
+                middle_ = g.center
+
+        # even though we checked that already, just make sure we capture everything
+        if middle_ is None:
+            raise ValueError("No GeometryObject with 'keep_inside=True', representing the numerical domain, was found.")
 
         # we can't use '_compute_cell_centers()', because we don't have any cells yet, so create tensor with
         # [n_parent + n_child, n_dimensions] entries
-        middle_ = (self._vertices.max(dim=0).values + self._vertices.min(dim=0).values) / 2.0
         centers_ = middle_.unsqueeze(0).repeat(2 ** self._n_dimensions + 1, 1).type(pt.float64)
 
         # now correct cell centers of children with offset -> in each direction +- 0.25 of cell width

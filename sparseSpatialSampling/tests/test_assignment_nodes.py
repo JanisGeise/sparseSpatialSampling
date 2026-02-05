@@ -4,6 +4,7 @@
 import pytest
 import torch as pt
 
+from ..geometry import CubeGeometry
 from ..s_cube import SamplingTree
 
 
@@ -12,8 +13,9 @@ def test_assignment_nodes_uniform_grid_2d():
     xy = pt.randint(0, 11, (25, 2))
     metric = pt.ones(xy.size(0))
 
-    # instantiate sampling tree
-    sampling = SamplingTree(xy, metric, uniform_level=2, geometry_obj=[])
+    # instantiate sampling tree, we need a geometry obj, otherwise assertion error
+    domain = CubeGeometry("domain", True, [0, 0], [10, 10])
+    sampling = SamplingTree(xy, metric, uniform_level=2, geometry_obj=[domain])
 
     # do two uniform refinement cycles, so we get a 4x4 uniform grid, cell 0 is the initial cell, cell 1-4 are its
     # child cells and cells 5-20 are the child cells of the child cells
@@ -89,7 +91,8 @@ def test_assignment_nodes_uniform_grid_3d_single_level():
     metric = pt.ones(xy.size(0))
 
     # instantiate sampling tree, test for one level
-    sampling = SamplingTree(xy, metric, uniform_level=1, geometry_obj=[])
+    domain = CubeGeometry("domain", True, [0, 0, 0], [10, 10, 10])
+    sampling = SamplingTree(xy, metric, uniform_level=1, geometry_obj=[domain])
 
     # do two uniform refinement cycles, so we get a 2x2x2 uniform grid with 8 cells
     sampling._refine_uniform()

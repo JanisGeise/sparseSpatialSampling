@@ -179,6 +179,48 @@ class GeometryObject(ABC):
         """
         pass
 
+    @property
+    @abstractmethod
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the geometry object.
+
+        :return: Main width of the geometry object.
+        :rtype: float
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the geometry object.
+
+        :return: center coordinates of the geometry object.
+        :rtype: pt.Tensor
+        """
+        pass
+
+    @abstractmethod
+    def _compute_main_width(self) -> float:
+        """
+        Compute the width of the main dimension of the geometry object.
+
+        :return: Main width of the geometry object.
+        :rtype: float
+        """
+        pass
+
+    @abstractmethod
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates based on the main dimension of the geometry object.
+
+        :return: center coordinates of the geometry object.
+        :rtype: pt.Tensor
+        """
+        pass
+
 
 if __name__ == "__main__":
     pass

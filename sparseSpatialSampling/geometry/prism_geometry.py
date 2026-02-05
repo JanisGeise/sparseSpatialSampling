@@ -2,7 +2,7 @@
 Implements a class for using prisms (3D) as geometry object.
 """
 from typing import List, Union
-from torch import Tensor, tensor, float64, logical_and, where, allclose
+from torch import Tensor, tensor, float64, logical_and, where, allclose, cat, zeros
 
 from .geometry_base import GeometryObject
 from .triangle_geometry import TriangleGeometry
@@ -67,6 +67,10 @@ class PrismGeometry3D(GeometryObject):
             TriangleGeometry(f"{name}_second", keep_inside=True, points=self._positions[1][:, self._dim])
         ]
 
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = None if not keep_inside else self._compute_main_width()
+        self._center = None if not keep_inside else self._compute_center()
+
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """
         Check if a cell is valid or invalid based on the specified settings.
@@ -105,9 +109,11 @@ class PrismGeometry3D(GeometryObject):
         _inside_triangle_1 = self._triangles[0].check_triangle(vertices[:, self._dim])
 
         # in case the triangles are not aligned along a coordinate axis, linearly interpolate a new triangle at the
-        # requested position TODO: how to determine self._dim in these cases?
+        # requested position
+        # TODO: how to determine self._dim in these cases? -> self._axis.nonzero()[0].item() not working since multiple entries
         if not allclose(self._positions[0][:, self._dim], self._positions[1][:, self._dim]):
-            pass
+            raise NotImplementedError("The triangles are not aligned along a coordinate axis, which is currently not"
+                                      " supported.")
 
         return logical_and(_within_height, _inside_triangle_1)
 
@@ -138,3 +144,59 @@ class PrismGeometry3D(GeometryObject):
         :rtype: str
         """
         return self._type
+
+    @property
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the prism.
+
+        :return: Main width of the prism.
+        :rtype: float
+        """
+        return self._main_width
+
+    @property
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the prism.
+
+        :return: center coordinates of the prism.
+        :rtype: pt.Tensor
+        """
+        return self._center
+
+    def _compute_main_width(self) -> float:
+        """
+        Compute the center coordinates based on the main width of the prism.
+
+        :return: center coordinates of the prism.
+        :rtype: pt.Tensor
+        """
+        return max(self._axis.norm().item(), max([t.main_width for t in self._triangles]))
+
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates based on the main dimension of the prism.
+
+        :return: center coordinates of the prism.
+        :rtype: pt.Tensor
+        """
+        # get the 2D centers of the triangles
+        _triangle_centers = cat([t.center.unsqueeze(-1) for t in self._triangles], -1).mean(1)
+
+        # check the direction of the axis
+        _ax_dim = self._axis.nonzero()[0]
+        if len(_ax_dim) > 1:
+            raise NotImplementedError("The triangles are not aligned along a coordinate axis, which is currently not"
+                                      " supported.")
+        else:
+            # compute the mean position on the axis, then insert it into the correct dimension. Since the ax_dim point
+            # is the same in all points per triangle, it is sufficient to take the first entry per triangle
+            _ax_avg_pos = (self._positions[1][0, _ax_dim.item()] + self._positions[0][0, _ax_dim.item()]) / 2
+            _ax_avg_pos_vec = zeros((3, ), dtype=self._axis.dtype)
+            _ax_avg_pos_vec[_ax_dim.item()] = _ax_avg_pos
+            _ax_avg_pos_vec[self._dim] = _triangle_centers
+            return _ax_avg_pos_vec
+
+if __name__ == "__main__":
+    pass

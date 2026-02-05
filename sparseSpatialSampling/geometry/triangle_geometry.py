@@ -4,7 +4,7 @@ Implements a class for using triangles (2D) as geometry object.
 import logging
 from typing import Union
 
-from torch import Tensor, tensor, float64
+from torch import Tensor, tensor, float64, cat
 from .geometry_base import GeometryObject
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,10 @@ class TriangleGeometry(GeometryObject):
             points[i].type(float64)
 
         self._points = points
+
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = None if not keep_inside else self._compute_main_width()
+        self._center = None if not keep_inside else self._compute_center()
 
         # check the user input based on the specified settings
         self._check_geometry()
@@ -150,3 +154,47 @@ class TriangleGeometry(GeometryObject):
         :rtype: str
         """
         return self._type
+
+    @property
+    def main_width(self) -> float:
+        """
+        Return the width of the main dimension of the triangle.
+
+        :return: Main width of the triangle.
+        :rtype: float
+        """
+        return self._main_width
+
+    @property
+    def center(self) -> Tensor:
+        """
+        Return the center coordinates based on the main width of the triangle.
+
+        :return: center coordinates of the triangle.
+        :rtype: pt.Tensor
+        """
+        return self._center
+
+    def _compute_main_width(self) -> float:
+        """
+        Compute the center coordinates based on the main width of the triangle.
+
+        :return: center coordinates of the triangle.
+        :rtype: pt.Tensor
+        """
+        #
+        _p = cat([p.unsqueeze(0) for p in self._points], dim=0)
+        return (_p.max(0).values - _p.min(0).values).abs().max().item()
+
+    def _compute_center(self) -> Tensor:
+        """
+        Compute the geometric center coordinates of the triangle based on its main dimension.
+
+        :return: center coordinates of the triangle.
+        :rtype: pt.Tensor
+        """
+        _p = cat([p.unsqueeze(0) for p in self._points], dim=0)
+        return _p.mean(0)
+
+if __name__ == "__main__":
+    pass
