@@ -350,6 +350,12 @@ class SamplingTree(object):
                 self._width = g.main_width
                 middle_ = g.center
 
+            # make sure there is no dimension mismatch
+            if g.center.size(0) != self._n_dimensions:
+                raise ValueError(f"The number of dimensions for geometry object '{g.name}' with dim = {middle_.size(0)} "
+                                 f"is not matching the number of dimensions within the CFD grid with dim = "
+                                 f"{self._n_dimensions}.")
+
         # even though we checked that already, just make sure we capture everything
         if middle_ is None:
             raise ValueError("No GeometryObject with 'keep_inside=True', representing the numerical domain, was found.")

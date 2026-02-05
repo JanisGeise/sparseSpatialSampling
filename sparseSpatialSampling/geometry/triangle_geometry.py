@@ -46,16 +46,16 @@ class TriangleGeometry(GeometryObject):
                     logger.error(f"Could not convert coordinate {i} of type {type(p)} to a tensor.")
 
             # since we use the cross product, we need to cast everything to float
-            points[i].type(float64)
+            points[i] = points[i].type(float64)
 
         self._points = points
 
-        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
-        self._main_width = None if not keep_inside else self._compute_main_width()
-        self._center = None if not keep_inside else self._compute_center()
-
         # check the user input based on the specified settings
         self._check_geometry()
+
+        # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
+        self._main_width = self._compute_main_width()
+        self._center = self._compute_center()
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """

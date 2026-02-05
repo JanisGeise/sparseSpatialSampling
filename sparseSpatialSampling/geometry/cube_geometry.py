@@ -44,8 +44,8 @@ class CubeGeometry(GeometryObject):
         self._check_geometry()
 
         # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
-        self._main_width = None if not keep_inside else self._compute_main_width()
-        self._center = None if not keep_inside else self._compute_center()
+        self._main_width = self._compute_main_width()
+        self._center = self._compute_center()
 
     def check_cell(self, cell_nodes: Tensor, refine_geometry: bool = False) -> bool:
         """

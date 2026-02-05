@@ -46,8 +46,8 @@ class PyramidGeometry3D(GeometryObject):
         self._create_tetrahedrons()
 
         # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
-        self._main_width = None if not keep_inside else self._compute_main_width()
-        self._center = None if not keep_inside else self._compute_center()
+        self._main_width = self._compute_main_width()
+        self._center = self._compute_center()
 
     def _create_tetrahedrons(self) -> None:
         """

@@ -38,8 +38,8 @@ class SphereGeometry(GeometryObject):
         self._type = "sphere"
 
         # we have to compute the main dimension and the midpoint if the name of the GeometryObject is domain
-        self._main_width = None if not keep_inside else self._compute_main_width()
-        self._center = None if not keep_inside else self._compute_center()
+        self._main_width = self._compute_main_width()
+        self._center = self._compute_center()
 
         # check the user input based on the specified settings
         self._check_geometry()
