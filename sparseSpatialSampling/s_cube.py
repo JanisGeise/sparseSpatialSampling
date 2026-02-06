@@ -352,7 +352,7 @@ class SamplingTree(object):
 
             # make sure there is no dimension mismatch
             if g.center.size(0) != self._n_dimensions:
-                raise ValueError(f"The number of dimensions for geometry object '{g.name}' with dim = {middle_.size(0)} "
+                raise ValueError(f"The number of dimensions for geometry object '{g.name}' with dim = {g.center.size(0)} "
                                  f"is not matching the number of dimensions within the CFD grid with dim = "
                                  f"{self._n_dimensions}.")
 

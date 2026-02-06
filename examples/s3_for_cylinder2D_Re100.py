@@ -33,7 +33,7 @@ from sparseSpatialSampling.utils import load_foam_data, export_openfoam_fields, 
 if __name__ == "__main__":
     # load paths to the CFD data
     load_path = join("..", "data", "2D", "cylinder_2D_Re100")
-    save_path = join("..", "run", "final_benchmarks", "cylinder2D_new")
+    save_path = join("..", "run", "final_benchmarks", "TEST_cylinder2D")
 
     # how much of the metric within the original grid should be captured at least
     min_metric = 0.75

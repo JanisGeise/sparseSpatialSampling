@@ -20,8 +20,7 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 class SparseSpatialSampling:
     def __init__(self, coordinates: pt.Tensor, metric: pt.Tensor, geometry_objects: list, save_path: str,
                  save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5,
-                 n_cells_max: Union[int, float] = None,
-                 min_metric: float = 0.75, max_delta_level: bool = False, write_times: Union[str, list] = None,
+                 n_cells_max: Union[int, float] = None, min_metric: float = 0.75, max_delta_level: bool = False,
                  n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
                  relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select_cells: bool = False):
         """
@@ -56,9 +55,6 @@ class SparseSpatialSampling:
         :param max_delta_level: Constraint that two adjacent cells should have a maximum
             level difference of one
         :type max_delta_level: bool
-        :param write_times: Numerical time steps of the simulation; if None, time steps need
-            to be passed when calling the export method
-        :type write_times: str | list[int | float | str] | None
         :param n_cells_iter_start: Number of cells to refine per iteration at the
             beginning; if None, defaults to 1% of the number of vertices in the original grid
         :type n_cells_iter_start: int | None
@@ -85,8 +81,6 @@ class SparseSpatialSampling:
         self.save_path = save_path
         self.save_name = save_name
         self.grid_name = grid_name
-
-        self.write_times = write_times if isinstance(write_times, list) else [write_times]
 
         # results we get from SamplingTree
         self.centers = None

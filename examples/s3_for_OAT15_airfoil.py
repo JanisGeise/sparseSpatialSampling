@@ -116,13 +116,13 @@ if __name__ == "__main__":
 
         # instantiate an S^3 object
         s_cube = SparseSpatialSampling(xz, metric, geometry, save_path_results, save_name, "OAT15", min_metric=v,
-                                       write_times=times.tolist(), n_jobs=8, max_delta_level=False)
+                                       n_jobs=8, max_delta_level=False)
 
         # execute S^3
         s_cube.execute_grid_generation()
 
         # create export instance, export all fields into the same HFD5 file and create single XDMF from it
-        export = ExportData(s_cube)
+        export = ExportData(s_cube, write_times=times.tolist())
 
         # we need to add one dimension if we have a scalar field
         if len(field.size()) == 2:
