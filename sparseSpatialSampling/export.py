@@ -9,7 +9,7 @@ import torch as pt
 from time import time
 from typing import Union
 from os import makedirs, path
-from sklearn.neighbors import KNeighborsRegressor, NearestNeighbors
+from sklearn.neighbors import NearestNeighbors
 
 from .data import Datawriter
 from .sparse_spatial_sampling import SparseSpatialSampling
@@ -73,7 +73,7 @@ class ExportData:
         self._save_name = s_cube.save_name
         self._grid_name = s_cube.grid_name
 
-        # TODO: remove write_times from Scube, only use in export, adjust doks and examples
+        # set the write_times if passed, else print warning msg
         if write_times is not None:
             self._write_times = write_times if isinstance(write_times, list) else [write_times]
         else:
@@ -85,20 +85,24 @@ class ExportData:
         self._interpolated_fields = Fields()
         self._field_name = None
         self._datawriter = None
-        if n_neighbors is None:
-            n_neighbors = 8 if self.n_dimensions == 2 else 26
-        self._knn = KNeighborsRegressor(n_neighbors=n_neighbors, weights="distance",
-                                        n_jobs=s_cube.n_jobs if n_jobs is None else n_jobs)
         self._snapshot_counter = 0
         self._field_name = None
         self._initialized_hdf5 = False
         self._initialized_weights = False
+        self._interpolated_metric = False
         self._finished = False
         self._n_snapshots_total = None
         self._t_start = time()
 
-        # TODO: compute the weights once, since both CFD and Scube mesh are static in time
-        # self._knn = NearestNeighbors(n_neighbors=n_neighbors,  n_jobs=s_cube.n_jobs if n_jobs is None else n_jobs)
+        # initialize everything regarding the KNN interpolation
+        if n_neighbors is None:
+            n_neighbors = 8 if self.n_dimensions == 2 else 26
+        self._knn = NearestNeighbors(n_neighbors=n_neighbors,  n_jobs=s_cube.n_jobs if n_jobs is None else n_jobs)
+        self._knn_idx_centers = None
+        self._knn_w_centers = None
+        self._knn_idx_vertices = None
+        self._knn_w_vertices = None
+        self._coord_shape = None
 
     def export(self, coordinates: pt.Tensor, data: pt.Tensor, field_name: str, n_snapshots_total: int = None) -> None:
         """
@@ -126,6 +130,10 @@ class ExportData:
         if self._write_times is None:
             raise ValueError("Couldn't find any ``write_times`` for export. Make sure to pass the write times "
                              "when instantiating the export object or set it before calling the ``export method``.")
+
+        # no GPU support
+        if data.is_cuda:
+            raise RuntimeError("ExportData currently requires CPU tensors. Detected GPU tensor for ``data``.")
 
         # make sure the field name is always up to date
         self._field_name = field_name
@@ -165,45 +173,29 @@ class ExportData:
                            f" dimension of '[N_cells, 1, N_snapshots]'.")
             _data = _data.unsqueeze(1)
 
-        # TODO: compute the weights and cache for later
-        #       -> instead of KNN regressor use nearestNB class and compute the weights on initialization once
+        # initialize KNN weights if this is the first call
         if not self._initialized_weights:
-            logger.info(f"Initializing KNN and computing interpolation weights.")
-
-            # if we call the fit method the first time, we have to compute the interpolation weights. Since both the CFD
-            # and the S^3 mesh are static in time, we can re-use these weights for all snapshots and fields to export
-            # self._build_knn_cache(_coord)
-            self._initialized_weights = True
+            self._build_knn_cache(_coord)
 
         if self._snapshot_counter == 0:
             logger.info(f"Starting interpolation and export of field {self._field_name}.")
 
         # fit the metric at some point. If the number of coordinates is still the same as the CFD grid, then we haven't
         # fitted it yet.
-        if self._metric.size(0) == _coord.size(0):
-            self._knn.fit(_coord, self._metric)
+        if not self._interpolated_metric:
+            self._metric = (self._knn_w_centers * self._metric[self._knn_idx_centers]).sum(dim=1)
+            self._interpolated_metric = True
 
-            # overwrite the metric with the interpolated one
-            self._metric = pt.from_numpy(self._knn.predict(self._centers))
+        # determine the required size of the data matrix if not yet initialized
+        if self._snapshot_counter == 0:
+            self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size(-1)
 
-        # determine the required size of the data matrix
-        self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size(-1)
-
-        # create empty tensors for the field values at centers and vertices with dimensions
-        # [N_cells, N_dimensions, N_snapshots_currently] each call to allow variable batch sizes
-        self._interpolated_fields.centers = pt.zeros((self._centers.size(0), _data.size(1), _data.size(2)))
-
-        # optionally interpolate solution at the cell vertices
+        # fit the KNN and interpolate the data
+        self._interpolated_fields.centers = (self._knn_w_centers[:, :, None, None] *
+                                             _data[self._knn_idx_centers]).sum(dim=1)
         if self._interpolate_at_vertices:
-            self._interpolated_fields.vertices = pt.zeros((self._vertices.size(0), _data.size(1), _data.size(2)))
-
-        # fit the KNN and interpolate the data, we need to predict each dimension separately (otherwise dim. mismatch)
-        for dimension in range(_data.size(1)):
-            self._knn.fit(_coord, _data[:, dimension, :])
-            self._interpolated_fields.centers[:, dimension, :] = pt.from_numpy(self._knn.predict(self._centers))
-
-            if self._interpolate_at_vertices:
-                self._interpolated_fields.vertices[:, dimension, :] = pt.from_numpy(self._knn.predict(self._vertices))
+            self._interpolated_fields.vertices = (self._knn_w_vertices[:, :, None, None] *
+                                                  _data[self._knn_idx_vertices]).sum(dim=1)
 
         # update the number of snapshots we already interpolated
         self._snapshot_counter += _data.size(-1)
@@ -367,9 +359,47 @@ class ExportData:
         if not path.exists(self._save_dir):
             makedirs(self._save_dir)
 
-    def _build_knn_cache(self, _coord: pt.Tensor):
-        # TODO: implement caching of weights
-        pass
+    def _build_knn_cache(self, _coord: pt.Tensor) -> None:
+        """
+        Compute the interpolation weights base on an inverse distance for the KNN. Caches the weights for later usage.
+
+        :param _coord: Coordinate tensor containing the original grid from CFD
+        :type _coord: pt.Tensor
+        :return: None
+        :rtype: None
+        """
+        logger.info(f"Initializing KNN and computing interpolation weights.")
+
+        # check and detect if CFD grid changes, this means our computed weights become invalid
+        if self._coord_shape is not None and _coord.shape != self._coord_shape:
+            logger.warning(f"CFD grid change detected. Re-computing interpolation weights of the KNN.")
+
+        # if we call the fit method the first time, we have to compute the interpolation weights. Since both the CFD
+        # and the S^3 mesh are static in time, we can re-use these weights for all snapshots and fields to export
+        self._coord_shape = _coord.shape
+
+        # fit the KNN
+        self._knn.fit(_coord.cpu().numpy())
+
+        _distance_centers, _idx_centers = self._knn.kneighbors(self._centers.cpu().numpy())
+
+        # inverse distance weighting
+        _w_c = 1.0 / pt.clamp(pt.from_numpy(_distance_centers), min=1e-12)
+        _w_c /= _w_c.sum(axis=1, keepdim=True)
+
+        self._knn_idx_centers = pt.from_numpy(_idx_centers)
+        self._knn_w_centers = _w_c
+
+        self._initialized_weights = True
+
+        if self._interpolate_at_vertices:
+            _distance_vertices, _idx_vertices = self._knn.kneighbors(self._vertices.cpu().numpy())
+
+            _w_v = 1.0 / pt.clamp(pt.from_numpy(_distance_vertices), min=1e-12)
+            _w_v /= _w_v.sum(axis=1, keepdim=True)
+
+            self._knn_idx_vertices = pt.from_numpy(_idx_vertices)
+            self._knn_w_vertices = _w_v
 
 
 if __name__ == "__main__":
