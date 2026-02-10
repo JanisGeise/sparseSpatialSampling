@@ -52,7 +52,7 @@ class GeometrySTL3D(GeometryObject):
             logger.warning(f"Found invalid negative value for 'reduce_by' of {reduce_by}. Disabling compression.")
             reduce_by = 0
         elif reduce_by >= 1:
-            logger.warning(f"Found invalid value for 'reduce_by ' of {reduce_by}. Compression factor needs to be "
+            logger.warning(f"Found invalid value for 'reduce_by' of {reduce_by}. Compression factor needs to be "
                            f"0 <= reduce_by < 1. Correcting 'reduce_by' to reduce_by=0.99")
             reduce_by = 0.99
 
@@ -60,6 +60,12 @@ class GeometrySTL3D(GeometryObject):
         self._stl_file = read(path_stl_file).decimate(reduce_by)
         self._type = "STL"
         self._pwd = path_stl_file
+
+        # save reduced STL file
+        if reduce_by > 0:
+            logger.info(f"Saving reduced STL file to disk. The name of the reduced STL file is "
+                        f"{'.'.join([self._pwd.split('.stl')[0], '_reduced_by_Scube.stl'])}")
+            self._stl_file.save(join(".".join([self._pwd.split(".stl")[0], "_reduced_by_Scube.stl"])))
 
         # xmin, xmax, ymin, ymax, zmin, zmax
         self._lower_bound = list(self._stl_file.bounds)[::2]
@@ -132,12 +138,25 @@ class GeometrySTL3D(GeometryObject):
         except RuntimeError:
             logger.warning(f"Expected an STL file with a closed and manifold surface for geometry {self.name}. "
                            f"Attempting to close the STL file. This may lead to unexpected behavior. The closed STL "
-                           f"file will be saved to disk.")
+                           f"file will be saved to disk. The name of the closed STL file is "
+                           f"{'.'.join([self._pwd.split('.stl')[0], '_closed_by_Scube.stl'])}.")
 
             # now try to close it using pv.MeshFix()
             mFix = MeshFix(self._stl_file)
             mFix.repair()
             mFix.save(join(".".join([self._pwd.split(".stl")[0], "_closed_by_Scube.stl"])))
+
+            # replace the STL with the fixed one
+            self._stl_file = mFix.mesh
+
+        # check if the fix worked, if not exit
+        try:
+            # pyVista will throw a RuntimeError if the surface is not closed and manifold
+            _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
+        except RuntimeError:
+            logger.critical("Was not able no close the STL file.")
+            exit(0)
+
 
         # print a warning if the STL file contains many points, since it will slow down S^3 significantly
         if self._stl_file.n_points > 5e4:
