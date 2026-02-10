@@ -6,6 +6,8 @@ import logging
 from pyvista import PolyData, read
 from typing import Union
 from torch import Tensor, tensor
+from os.path import join
+from pymeshfix import MeshFix
 
 from flowtorch.data import mask_box
 
@@ -57,6 +59,7 @@ class GeometrySTL3D(GeometryObject):
         super().__init__(name, keep_inside, refine, min_refinement_level)
         self._stl_file = read(path_stl_file).decimate(reduce_by)
         self._type = "STL"
+        self._pwd = path_stl_file
 
         # xmin, xmax, ymin, ymax, zmin, zmax
         self._lower_bound = list(self._stl_file.bounds)[::2]
@@ -127,8 +130,21 @@ class GeometrySTL3D(GeometryObject):
             # pyVista will throw a RuntimeError if the surface is not closed and manifold
             _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
         except RuntimeError:
-            logger.critical(f"Expected an STL file with a closed and manifold surface for geometry {self.name}.")
-            exit(0)
+            logger.warning(f"Expected an STL file with a closed and manifold surface for geometry {self.name}. "
+                           f"Attempting to close the STL file. This may lead to unexpected behavior. The closed STL "
+                           f"file will be saved to disk.")
+
+            # now try to close it using pv.MeshFix()
+            mFix = MeshFix(self._stl_file)
+            mFix.repair()
+            mFix.save(join(".".join([self._pwd.split(".stl")[0], "_closed_by_Scube.stl"])))
+
+        # print a warning if the STL file contains many points, since it will slow down S^3 significantly
+        if self._stl_file.n_points > 5e4:
+            logger.warning(f"STL files contains {self._stl_file.n_points} points. This will slow down the grid "
+                           f"generation process significantly. Consider passing a value for `reduce_by` on "
+                           f"instantiation to decrease the number of points within the STL file. The number of points "
+                           f"should be < 5e4 to achieve a good performance.")
 
     @property
     def type(self) -> str:
