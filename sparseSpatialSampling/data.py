@@ -374,7 +374,10 @@ class Datawriter:
                 self._data = self._file[f"{DATA}/{time_step}"]
 
             # write the data to HDF
-            self._data.create_dataset(name, data=data)
+            try:
+                self._data.create_dataset(name, data=data)
+            except ValueError:
+                logger.warning(f"Field {name} already exists in the HDF file. Skipping field {name}.")
 
         # do the same for the constant properties...
         elif group == CONST:
@@ -383,7 +386,10 @@ class Datawriter:
             else:
                 self._const = self._file[CONST]
 
-            self._const.create_dataset(name, data=data)
+            try:
+                self._const.create_dataset(name, data=data)
+            except ValueError:
+                logger.warning(f"Field {name} already exists in time step {time_step}. Skipping field {name}.")
 
         # ... and the grid
         elif group == GRID:
@@ -561,7 +567,7 @@ class XDMFWriter:
                 for k in self._file[f"{DATA}/{t}"].keys():
                     # assuming data is written out by s_cube as <field_name>_<position>, otherwise the name is taken
                     # as it is
-                    _name = k.split("_")[0] if len(k.split("_")) > 1 else k
+                    _name = "_".join(k.split("_")[:-1]) if len(k.split("_")) > 1 else k
 
                     # determine if scalar or vector field
                     _shape = self._file.get(f"{DATA}/{t}/{k}")[()].shape
@@ -722,7 +728,7 @@ class XDMFWriter:
                              f"present and named {VERTICES}.")
                 exit(0)
         else:
-            logger.error("Found no grid in the provided HDF5 file. Unable to create XDMF file.without a grid.")
+            logger.error("Found no grid in the provided HDF5 file. Unable to create XDMF file without a grid.")
             exit(0)
 
 
