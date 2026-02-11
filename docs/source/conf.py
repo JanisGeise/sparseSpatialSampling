@@ -24,7 +24,8 @@ autosummary_generate = True
 
 # If your code imports heavy/optional deps not installed during docs build,
 # list them here to avoid import errors while autodoc runs:
-autodoc_mock_imports = ["numpy", "torch", "numba", "sklearn", "shapely", "h5py", "matplotlib", "pyvista", "flowtorch"]
+autodoc_mock_imports = ["numpy", "torch", "numba", "sklearn", "shapely", "h5py", "matplotlib", "pyvista", "flowtorch",
+                        "pymeshfix"]
 
 # Exclude tests and any junk from the docs build
 exclude_patterns = [
