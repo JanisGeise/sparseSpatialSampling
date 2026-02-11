@@ -150,6 +150,7 @@ For the interpolation and export of fields, the RAM needs to be large enough to 
 To build the documentation for $S^3$ first `sphinx` has to be installed:
 
 ````
+source s_cube_venv/bin/activate
 pip3 install sphinx sphinx_rtd_theme nbsphinx recommonmark
 ````
 you can then build the documentation by running

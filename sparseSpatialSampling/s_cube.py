@@ -802,6 +802,7 @@ class SamplingTree(object):
                 logger.info("Finished geometry refinement.")
                 return
 
+            # get the current min level at the geometry
             _global_min_level = min([self._cells[cell].level for cell in _all_cells])
 
             # determine the max. refinement level for the geometries:
@@ -811,7 +812,11 @@ class SamplingTree(object):
                 # global max level, bc min. level is the max level we want to reach
                 _global_max_level = self._geometry[g].min_refinement_level
 
+            # add some info for the user
+            logger.info(f"Found a minimum cell level of {_global_min_level}. Target level is {_global_max_level}.")
+
             while _global_max_level > _global_min_level:
+                logger.info(f"\r\t\t\t\t\t\t\t\t\tRefining level {_global_min_level+1} / {_global_max_level}.")
                 to_refine, checked = set(), set()
 
                 for i in _all_cells:

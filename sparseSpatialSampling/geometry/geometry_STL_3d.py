@@ -154,7 +154,7 @@ class GeometrySTL3D(GeometryObject):
             # pyVista will throw a RuntimeError if the surface is not closed and manifold
             _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
         except RuntimeError:
-            logger.critical("Was not able no close the STL file.")
+            logger.critical("Was not able to close the STL file.")
             exit(0)
 
 
