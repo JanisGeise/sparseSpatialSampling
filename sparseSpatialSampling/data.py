@@ -41,7 +41,10 @@ class Dataloader:
         with File(join(self._load_path, self._file_name), "r") as f:
             self._n_cells = f.get(f"{GRID}/{CENTERS}")[()].shape[0]
             self._n_dimensions = f.get(f"{GRID}/{CENTERS}")[()].shape[1]
-            self._size_initial_cell = f.get(f"{CONST}/size_initial_cell")[()]
+            try:
+                self._size_initial_cell = f.get(f"{CONST}/size_initial_cell")[()]
+            except TypeError:
+                logger.warning("Could not load initial cell size.")
 
         # placeholders for properties which are only loaded if requested
         self._write_times = None
@@ -329,6 +332,7 @@ class Datawriter:
         self._data = None if DATA not in self._file.keys() else self._file[DATA]
         self._const = None if CONST not in self._file.keys() else self._file[CONST]
         self._grid = None if GRID not in self._file.keys() else self._file[GRID]
+        self._n_cells = None
 
     def close(self) -> None:
         """
@@ -348,6 +352,8 @@ class Datawriter:
         :return: None
         :rtype: None
         """
+        # cache the number of cells
+        self._n_cells = loader.vertices.shape[0]
         self.write_data("centers", group="grid", data=loader.vertices)
         self.write_data("vertices", group="grid", data=loader.nodes)
         self.write_data("faces", group="grid", data=loader.faces)
@@ -379,6 +385,11 @@ class Datawriter:
 
         # make sure that we write all snapshots to the temporal structure of DATA if a time step is given
         if time_step is not None or group == DATA:
+            # remains None if we use the ExportData class, but if we use the Datawriter class directly,
+            # we have access to the grid since we have to use a Dataloader object. The Dataloader expects these suffixes.
+            if self._n_cells is not None and not name.endswith("center") or name.endswith("vertices"):
+                name = f"{name}_center" if data.shape[0] == self._n_cells else f"{name}_vertices"
+
             # if the group for data or the current time step doesn't exist yet, write it
             if self._data is None or str(time_step) not in self._file[DATA].keys():
                 self._data = self._file.create_group(f"{DATA}/{time_step}")
