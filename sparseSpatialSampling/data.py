@@ -47,6 +47,7 @@ class Dataloader:
         self._write_times = None
         self._weights = None  # cell areas (2D) / volumes (3D)
         self._levels = None
+        self._metric = None
         self._field_names = None
 
         # properties of the grid
@@ -159,6 +160,20 @@ class Dataloader:
                 self._levels = pt.from_numpy(f.get(f"{CONST}/levels")[()]).squeeze()
 
         return self._levels
+
+    @property
+    def metric(self) -> pt.Tensor:
+        """
+        Load the metric field used to generate the grid
+
+        :return: Tensor containing the metric field used to generate the grid
+        :rtype: pt.Tensor
+        """
+        if self._metric is None:
+            with File(join(self._load_path, self._file_name), "r") as f:
+                self._metric = pt.from_numpy(f.get(f"{CONST}/metric")[()]).squeeze()
+
+        return self._metric
 
     @property
     def load_path(self) -> str:
