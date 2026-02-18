@@ -387,8 +387,8 @@ class Datawriter:
         if time_step is not None or group == DATA:
             # remains None if we use the ExportData class, but if we use the Datawriter class directly,
             # we have access to the grid since we have to use a Dataloader object. The Dataloader expects these suffixes.
-            if self._n_cells is not None and not name.endswith("center") or name.endswith("vertices"):
-                name = f"{name}_center" if data.shape[0] == self._n_cells else f"{name}_vertices"
+            # if self._n_cells is not None and not (name.endswith("center") or name.endswith("vertices")):
+            #     name = f"{name}_center" if data.shape[0] == self._n_cells else f"{name}_vertices"
 
             # if the group for data or the current time step doesn't exist yet, write it
             if self._data is None or str(time_step) not in self._file[DATA].keys():
