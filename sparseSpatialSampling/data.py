@@ -420,6 +420,7 @@ class Datawriter:
         logger.info(f"Writing XDMF file for file {self._file_name}")
         xdmf_writer = XDMFWriter(self._file_path, self._file_name, mixed=self._mixed)
         xdmf_writer.write_xdmf()
+        self.close()
 
     @property
     def mode(self) -> str:
