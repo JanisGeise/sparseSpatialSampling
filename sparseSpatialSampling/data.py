@@ -387,8 +387,8 @@ class Datawriter:
         if time_step is not None or group == DATA:
             # remains None if we use the ExportData class, but if we use the Datawriter class directly,
             # we have access to the grid since we have to use a Dataloader object. The Dataloader expects these suffixes.
-            # if self._n_cells is not None and not (name.endswith("center") or name.endswith("vertices")):
-            #     name = f"{name}_center" if data.shape[0] == self._n_cells else f"{name}_vertices"
+            if self._n_cells is not None and not (name.endswith("center") or name.endswith("vertices")):
+                name = f"{name}_center" if data.shape[0] == self._n_cells else f"{name}_vertices"
 
             # if the group for data or the current time step doesn't exist yet, write it
             if self._data is None or str(time_step) not in self._file[DATA].keys():
@@ -481,6 +481,24 @@ class Datawriter:
         """
         self._mode = value
         self._file = File(join(self._file_path, self._file_name), self._mode)
+
+    @property
+    def n_cells(self) -> Union[int, None]:
+        """
+        Get the number of cells in the grid from :math:`S^3`.
+        :return: Number of cells from the :math:`S^3` `Dataloader`.
+        :rtype: Union[int, None]
+        """
+        return self._n_cells
+
+    @n_cells.setter
+    def n_cells(self, value: int) -> None:
+        """
+        Set the number of cells in the grid from :math:`S^3`.
+        :value: Number of cells from the :math:`S^3` `Dataloader`.
+        :rtype: Union[int, None]
+        """
+        self._n_cells = value
 
 
 class XDMFWriter:

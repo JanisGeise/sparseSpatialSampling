@@ -16,6 +16,7 @@ Welcome to the sparseSpatialSampling documentation. Here you can find tutorials 
    tutorials/tutorial2_oat15_buffet
    tutorials/tutorial3_select_settings
    tutorials/tutorial4_export_options
+   tutorials/tutorial5_data_loader_writer
 
 .. toctree::
    :maxdepth: 1

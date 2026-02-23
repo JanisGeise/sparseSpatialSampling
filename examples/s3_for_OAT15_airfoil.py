@@ -73,8 +73,7 @@ if __name__ == "__main__":
     load_path = join("..", "data", "2D", "OAT15")
     field_name = "Ma"
     area = "large"
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
-                             "results_geometry_refinement_no_dl_constraint_fully_parallelized")
+    save_path_results = join("..", "run", "final_benchmarks", "TEST_OAT")
 
     # execute S^3 for range of variances (for parameter study)
     min_variance = pt.arange(0.2, 1.05, 0.05)

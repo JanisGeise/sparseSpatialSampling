@@ -19,12 +19,13 @@ accurately since it only generates cells in regions where the gradient of the me
 ## Getting started
 To get started with $S^3$ you can check out the tutorials provided:
 
-| # | topic                                                | notebook                                                         |
-|--:|:-----------------------------------------------------|:-----------------------------------------------------------------|
-| 1 | 2D flow past a cylinder                              | [view](./docs/source/tutorials/tutorial1_cylinder2D_Re100.ipynb) |
-| 2 | *ONERA OAT15A* at high speed stall conditions        | [view](./docs/source/tutorials/tutorial2_oat15_buffet.ipynb)     |
-| 3 | How to select the best settings and advanced options | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)  |
-| 4 | Loading existing *s_cube* objects and export options | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)   |
+| # | topic                                                | notebook                                                           |
+|--:|:-----------------------------------------------------|:-------------------------------------------------------------------|
+| 1 | 2D flow past a cylinder                              | [view](./docs/source/tutorials/tutorial1_cylinder2D_Re100.ipynb)   |
+| 2 | *ONERA OAT15A* at high speed stall conditions        | [view](./docs/source/tutorials/tutorial2_oat15_buffet.ipynb)       |
+| 3 | How to select the best settings and advanced options | [view](./docs/source/tutorials/tutorial3_select_settings.ipynb)    |
+| 4 | Loading existing `s_cube` objects and export options | [view](./docs/source/tutorials/tutorial4_export_options.ipynb)     |
+| 5 | $S^3$ `Dataloader`and `Datawriter`                   | [view](./docs/source/tutorials/tutorial5_data_loader_writer.ipynb) |
 
 To view out all the available workflows, as well as the $S^3$ API, you can check out the 
 [documentation](https://sparsespatialsampling.readthedocs.io/en/latest/) of $S^3$. If you want to get the latest features and bug fixes, check out the
