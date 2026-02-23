@@ -4,8 +4,13 @@ sampled using the :math:`S^3` algorithm. Export the interpolated data to HDF5 an
 to enable visualization in ParaView.
 """
 import logging
+from multiprocessing import cpu_count, get_context
+
+import numpy as np
 import torch as pt
 
+from numpy import ndarray
+from numba import njit, prange
 from time import time
 from typing import Union
 from os import makedirs, path
@@ -115,7 +120,8 @@ class ExportData:
         # initialize everything regarding the KNN interpolation
         if n_neighbors is None:
             n_neighbors = 8 if self.n_dimensions == 2 else 26
-        self._knn = NearestNeighbors(n_neighbors=n_neighbors,  n_jobs=s_cube.n_jobs if n_jobs is None else n_jobs)
+        self._n_jobs = n_jobs if n_jobs is not None else cpu_count()
+        self._knn = NearestNeighbors(n_neighbors=n_neighbors,  n_jobs=self._n_jobs)
         self._knn_idx_centers = None
         self._knn_w_centers = None
         self._knn_idx_vertices = None
@@ -209,11 +215,10 @@ class ExportData:
             self._n_snapshots_total = _n_snapshots_total if _n_snapshots_total is not None else _data.size(-1)
 
         # fit the KNN and interpolate the data
-        self._interpolated_fields.centers = (self._knn_w_centers[:, :, None, None] *
-                                             _data[self._knn_idx_centers]).sum(dim=1)
+        self._interpolated_fields.centers = interpolate_chunks(self._knn_w_centers, self._knn_idx_centers, _data)
+
         if self._interpolate_at_vertices:
-            self._interpolated_fields.vertices = (self._knn_w_vertices[:, :, None, None] *
-                                                  _data[self._knn_idx_vertices]).sum(dim=1)
+            self._interpolated_fields.vertices = interpolate_chunks(self._knn_w_vertices, self._knn_idx_vertices, _data)
 
         # update the number of snapshots we already interpolated
         self._snapshot_counter += _data.size(-1)
@@ -424,6 +429,17 @@ class ExportData:
 
             self._knn_idx_vertices = pt.from_numpy(_idx_vertices)
             self._knn_w_vertices = _w_v
+
+def interpolate_chunks(weights: pt.Tensor, idx_weights: pt.Tensor, data: pt.Tensor, chunk_size: int = 10000) -> pt.Tensor:
+    # data.shape = [N_snapshots_CFD, N_dims, N_snapshots], weights.shape = [N_cells_s_cube, N_nb]
+    Nc = weights.shape[0]
+    _interpolated = pt.empty((Nc, data.shape[1], data.shape[2]), dtype=weights.dtype, device="cpu")
+
+    # TODO: use multiprocessing to compute all chunks in parallel -> only pass start+end idx, use shared memory
+    for start in range(0, Nc, chunk_size):
+        end = min(start + chunk_size, Nc)
+        _interpolated[start:end] = (weights[start:end, :, None, None] * data[idx_weights[start:end]]).sum(dim=1)
+    return _interpolated
 
 
 if __name__ == "__main__":
