@@ -142,12 +142,18 @@ def plot_total_error(errors: list, metrics: list, save_name: str, save_dir: str,
 
 if __name__ == "__main__":
     # path to the CFD data and path to directory the results should be saved to TODO: clean up script
-    field_name = "Ma"
+    field_name = "rho"
     area = "large"
+    load_path_cfd = join("..", "data", "2D", "OAT15")
+    # """
     load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                      "results_with_geometry_refinement_no_dl_constraint")
     save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
                              "plots_with_geometry_refinement_no_dl_constraint")
+    # """
+
+    # load_path = join("..", "run", "final_benchmarks", f"OAT15_{area}_new", "results_generic_metrics")
+    # save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new", "plots_generic_metrics")
 
     # load the coordinates of the original grid used in CFD
     xz = pt.load(join("..", "data", "2D", "OAT15", "vertices_and_masks.pt"), weights_only=False)
@@ -161,18 +167,28 @@ if __name__ == "__main__":
                         dimensions="xz"))
 
     # load the pressure field of the original CFD data, small area around the leading airfoil
-    if area == "large":
-        # load_path_ma_large = join("/media", "janis", "Elements", "FOR_data", "oat15_aoa5_tandem_Johannes")
-        load_path_ma_large = join("..", "data", "2D", "OAT15")
-        orig_field = pt.load(join(load_path_ma_large, f"ma_{area}_every10.pt"), weights_only=False)
-    else:
-        orig_field = pt.load(join("..", "data", "2D", "OAT15", "p_small_every10.pt"), weights_only=False)
+    orig_field = pt.load(join(load_path_cfd, f"{field_name}_{area}_every10.pt"), weights_only=False)
+
+    # component for the velocity field u
+    cmp = 2
+    if field_name == "u":
+        orig_field = orig_field[:, cmp, :]
 
     # compute the metric
-    metric = pt.std(orig_field, dim=1)
+    # metric = pt.std(orig_field, dim=1)
 
     # scale both fields with free stream quantities
-    param_infinity = 75229.6 if field_name == "p" else 0.72
+    if field_name == "p":
+        param_infinity = 75230
+    elif field_name.lower() == "ma":
+        param_infinity = 0.72
+    elif field_name.startswith("u"):
+        param_infinity = 238.59
+    elif field_name == "rho":
+        param_infinity = 0.959635
+    else:
+        print("Unknown field name.")
+        exit(0)
 
     # use latex fonts
     plt.rcParams.update({"text.usetex": True})
@@ -193,13 +209,13 @@ if __name__ == "__main__":
     l2_time_orig = pt.linalg.norm(orig_field, ord=2, dim=0)
 
     # get all the generated grids in the directory
-    files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
-    variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
-    """
-    files_hdf = [join(load_path, "OAT15_large_area_variance_0.25.h5"),
-                 join(load_path, "OAT15_large_area_variance_0.50.h5"),
-                 join(load_path, "OAT15_large_area_variance_0.75.h5")]
-    variances = ["0.25", "0.50", "0.75"]
+    # files_hdf = sorted([f for f in glob(join(load_path, f"*.h5")) if "svd" not in f])
+    # variances = [re.findall(r"\d+.\d+", f)[0] for f in files_hdf]
+    # """
+    # files_hdf = [join(load_path, "metric_mu_only_variance_0.75.h5"),
+    #              join(load_path, "metric_sigma_only_variance_0.75.h5")]
+    files_hdf = [join(load_path, "OAT15_large_area_variance_0.75.h5")]
+    variances = [0.75]
     # """
 
     # create empty lists for L2-errors vs. metrics
@@ -211,7 +227,6 @@ if __name__ == "__main__":
     for v, h in zip(variances, files_hdf):
         # load the generated grid and its values at the cell center from HDF5 file and construct the data matrix
         dataloader = Dataloader("/".join(h.split("/")[:-1]), h.split("/")[-1])
-        cell_area_inter = dataloader.weights.sqrt()
 
         # plot the grid along with the metric from the original field as overlay (uncomment if wanted)
         # plot_grid_and_metric(dataloader.faces, dataloader.nodes, xz[:, 0], xz[:, 1], metric, f"grid_metric_{v}",
@@ -219,13 +234,19 @@ if __name__ == "__main__":
 
         # interpolate the fields back onto the original grid. In case the data is not fitting into the RAM all at once,
         # then the data has to be loaded and interpolated as it is done in the fit method of S^3's export routine
-        knn.fit(dataloader.vertices, dataloader.load_snapshot(field_name))
+        field = dataloader.load_snapshot(field_name)
+        if field_name == "u":
+            field = field[:, cmp, :]
+
+        knn.fit(dataloader.vertices, field)
+        del field
         fields_fitted = pt.from_numpy(knn.predict(xz)) * cell_area_orig
 
         # compute the L2 error wrt time and normalize it with number of time steps
         error_time_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2, dim=0) / l2_time_orig)
         # compute the total L2-error and normalize it with l2 norm of the original field
         error_total_vs_metric.append(pt.linalg.norm(fields_fitted - orig_field, ord=2) / l2_total_orig)
+        print(field_name, (pt.linalg.norm(fields_fitted - orig_field, ord=2) / orig_field.norm(p=2)).item())
 
         # compute the avg. & std. error of the metric for each cell (= wrt space) and scale it with the free stream
         # parameter
@@ -234,7 +255,7 @@ if __name__ == "__main__":
 
         # plot the L2-error wrt each cell
         plot_error_in_space(xz[:, 0], xz[:, 1], [error_space_vs_metric_avg, error_space_vs_metric_std],
-                            f"error_metric_{v}_{field_name}", save_path_results, geometry_=geometry,
+                            f"error_metric_{v}_{field_name}{cmp}", save_path_results, geometry_=geometry,
                             field=field_name)
 
     # save the errors

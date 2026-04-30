@@ -21,6 +21,7 @@ from matplotlib.patches import Polygon
 
 from sparseSpatialSampling.data import Dataloader
 from post_processing.compute_error_OAT import load_airfoil_as_stl_file
+import matplotlib.colors as colors
 
 # use latex fonts
 plt.rcParams.update({"text.usetex": True})
@@ -197,6 +198,26 @@ def plot_mode_coefficients(write_times: pt.Tensor, V: list, _save_path: str, _sa
                 dpi=340)
     plt.close("all")
 
+def plot_error_map_coefficients(rel_error: pt.Tensor, write_times, _save_path: str, _save_name: str, n: int = 100,
+                                chord: float = 0.15, u_inf: float = 238.59) -> None:
+    write_times = write_times * (u_inf / chord)
+    vmin, vmax = 1e-5, 1e-1
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    pm = ax.pcolormesh(write_times, range(n), rel_error[:, :n].T, norm=colors.LogNorm(vmin=vmin, vmax=vmax))
+    ax.set_xlabel(r"$\tau$")
+    ax.set_ylabel(r"$\mathbf{v}_i$")
+    ax.set_ylim(0, n)
+    plt.gca().invert_yaxis()
+    cbar = plt.colorbar(pm, ax=ax, location="top", orientation="horizontal", shrink=0.8, extend="both")
+    cbar.set_label(r"$|\,|\mathbf{V}| - |\mathbf{\tilde{V}}|\,| \, / \, || \mathbf{V} ||_F$",
+                   labelpad=15)
+
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
+    plt.savefig(join(_save_path, f"{_save_name}.png"), dpi=340)
+    plt.close("all")
+
 
 if __name__ == "__main__":
     # which fields and settings to use
@@ -210,8 +231,7 @@ if __name__ == "__main__":
     file_name = [f"OAT15_{area}_area_variance_{m}.h5" for m in metric]
 
     # path to the directory to which the plots should be saved to
-    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new",
-                             "plots_SVD_paper_final")
+    save_path_results = join("..", "run", "final_benchmarks", f"OAT15_{area}_new", "plots_with_geometry_refinement_no_dl_constraint")
 
     # the actual metric may differ from the filename
     legend = [r"$\mathrm{original}$"] + [r"$\mathcal{M}_\mathrm{min} = " + f"{m}$" for m in ["0.25", "0.75"]]
@@ -260,6 +280,11 @@ if __name__ == "__main__":
     if not path.exists(save_path_results):
         makedirs(save_path_results)
 
+    # plot relative error within the mode coefficients
+    error = [(svd_orig.V.abs() - sv.V.abs()).abs() / svd_orig.V.norm() for sv in svd_inter]
+    for i, m in enumerate(metric):
+        plot_error_map_coefficients(error[i], times, save_path_results, f"relative_error_map_coefficients_metric_{m}")
+
     # plot frequency spectrum
     plot_psd([svd_orig.V.numpy()]+[sv.V.numpy() for sv in svd_inter], (times[1] - times[0]).item(), len(times),
              save_path_results, f"comparison_psd_metric_{metric[0]}_{metric[-1]}",
@@ -275,7 +300,7 @@ if __name__ == "__main__":
                            legend=legend, n_modes=6)
 
     # plot the first N POD modes (left singular vectors) for a specific case
-    for no in range(2, len(metric)):
+    for no in range(len(metric)):
         plot_pod_modes(xz, dataloader[no].vertices, svd_orig.U / cell_area_orig, svd_inter[no].U / cell_area_inter[no],
                        svd_orig.s, svd_inter[no].s, save_path_results,
                        f"comparison_pod_modes_metric_{metric[no]}", _geometry=geometry, n_modes=6)
