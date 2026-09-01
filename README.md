@@ -208,16 +208,22 @@ decreases the number of points within the STL file
 values of `reduce_by=0.9 ... 0.98` were tested successfully (`0` means no compression)
 
 ## Reference
-If you find $S^3$ helpful, please consider referencing the following article:
+You can find the accompanying research article to this project under
+
+https://www.sciencedirect.com/science/article/pii/S0045793026003038
+
+If you find $S^3$ helpful, please consider referencing the article as
 ```
-@misc{geise2025octreebasedsamplingalgorithmanalyzing,
-      title={An octree-based sampling algorithm for analyzing big simulation data}, 
-      author={Janis Geise and Sebastian Spinner and Richard Semaan and Andre Weiner},
-      year={2025},
-      eprint={2511.21352},
-      archivePrefix={arXiv},
-      primaryClass={physics.flu-dyn},
-      url={https://arxiv.org/abs/2511.21352}, 
+@article{GEISE2026107261,
+title = {An octree-based sampling algorithm for analyzing big simulation data},
+journal = {Computers & Fluids},
+volume = {319},
+pages = {107261},
+year = {2026},
+issn = {0045-7930},
+doi = {https://doi.org/10.1016/j.compfluid.2026.107261},
+url = {https://www.sciencedirect.com/science/article/pii/S0045793026003038},
+author = {Janis Geise and Sebastian Spinner and Richard Semaan and Andre Weiner}
 }
 ```
 

@@ -120,11 +120,12 @@ if __name__ == "__main__":
     ax.set_yscale("log")
     ax.set_ylim(1e-3, 1e-1)
     ax.set_xlabel(r"$\tau$")
-    ax.set_ylabel(r"$|| \Delta \mathbf{f} ||_2 \, / \, || \mathbf{f}_\mathrm{orig} ||_2$")
+    # ax.set_ylabel(r"$|| \Delta \mathbf{f} ||_2 \, / \, || \mathbf{f} ||_2$")
+    ax.set_ylabel(r"$\Delta f_n$")
     fig.tight_layout()
     fig.legend(loc="upper center", framealpha=1, ncol=6)
     fig.subplots_adjust(top=0.86)
     if weighted:
-        plt.savefig(join(save_path, f"comparison_temporal_error_weighted.png"), dpi=340)
+        plt.savefig(join(save_path, f"comparison_temporal_error_weighted_new.png"), dpi=340)
     else:
         plt.savefig(join(save_path, f"comparison_temporal_error.png"), dpi=340)

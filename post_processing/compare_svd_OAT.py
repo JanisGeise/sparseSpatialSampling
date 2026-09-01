@@ -206,11 +206,11 @@ def plot_error_map_coefficients(rel_error: pt.Tensor, write_times, _save_path: s
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     pm = ax.pcolormesh(write_times, range(n), rel_error[:, :n].T, norm=colors.LogNorm(vmin=vmin, vmax=vmax))
     ax.set_xlabel(r"$\tau$")
-    ax.set_ylabel(r"$\mathbf{v}_i$")
+    ax.set_ylabel(r"$\mathrm{no.}~\#$")
     ax.set_ylim(0, n)
     plt.gca().invert_yaxis()
     cbar = plt.colorbar(pm, ax=ax, location="top", orientation="horizontal", shrink=0.8, extend="both")
-    cbar.set_label(r"$|\,|\mathbf{V}| - |\mathbf{\tilde{V}}|\,| \, / \, || \mathbf{V} ||_F$",
+    cbar.set_label(r"$|\,|\mathbf{V}| - |\mathbf{\widehat{V}}|\,| \, / \, || \mathbf{V} ||_F$",
                    labelpad=15)
 
     fig.tight_layout()
