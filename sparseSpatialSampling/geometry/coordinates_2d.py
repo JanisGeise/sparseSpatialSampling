@@ -20,7 +20,7 @@ class GeometryCoordinates2D(GeometryObject):
         Implements a class for using coordinates as geometry objects representing the numerical
         domain or geometries inside the domain (2D case only).
 
-        Note:
+        .. note::
             The coordinates need to form an enclosed area.
 
         :param name: Name of the geometry object.

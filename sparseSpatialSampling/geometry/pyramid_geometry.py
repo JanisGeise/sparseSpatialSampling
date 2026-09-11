@@ -17,7 +17,7 @@ class PyramidGeometry3D(GeometryObject):
         Implement a class for using square pyramids (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.
 
-        Note:
+        .. note::
             It is expected that four out of the five nodes form a planar plane representing the base of the pyramid.
             The order of the nodes doesn't matter.
 

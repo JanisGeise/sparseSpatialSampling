@@ -136,7 +136,7 @@ class TriangleGeometry(GeometryObject):
     def check_triangle(self, vertices: Tensor) -> Tensor:
         """
         Check if the given vertices are inside this triangle. This method provides access
-        to the `_mask_triangle` method from other classes.
+        to the ``_mask_triangle`` method from other classes.
 
         :param vertices: Tensor of vertices, where each column corresponds to a coordinate.
         :type vertices: pt.Tensor

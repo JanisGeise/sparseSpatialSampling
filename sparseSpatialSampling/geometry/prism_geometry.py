@@ -16,7 +16,7 @@ class PrismGeometry3D(GeometryObject):
         Implement a class for using prisms (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.
 
-        Note:
+        .. note::
             The prism is defined by two triangles connected by an extrusion axis.
             The triangles must be aligned along a coordinate axis.
 

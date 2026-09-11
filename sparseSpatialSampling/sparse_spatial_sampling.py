@@ -26,7 +26,7 @@ class SparseSpatialSampling:
         """
         Class for executing the :math:`S^3` algorithm.
 
-        Note:
+        .. note::
             The parameter ``geometry_objects`` needs to have at least one entry
             containing information about the domain.
 
@@ -41,7 +41,7 @@ class SparseSpatialSampling:
         :type save_path: str
         :param save_name: Base name of the files (grid & data)
         :type save_name: str
-        :param grid_name: Name of the grid (used in XDMF file)
+        :param grid_name: Name of the grid (used in ``XDMF`` file)
         :type grid_name: str
         :param uniform_levels: Number of uniform refinement cycles to perform
         :type uniform_levels: int

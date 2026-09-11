@@ -142,7 +142,7 @@ class TetrahedronGeometry3D(GeometryObject):
     def check_tetrahedron(self, vertices: Tensor) -> Tensor:
         """
         Check if the given vertices are inside this tetrahedron. This method provides access
-        to the `_mask_tetrahedron` method from other classes.
+        to the ``_mask_tetrahedron`` method from other classes.
 
         :param vertices: Tensor of vertices, where each column corresponds to a coordinate.
         :type vertices: pt.Tensor

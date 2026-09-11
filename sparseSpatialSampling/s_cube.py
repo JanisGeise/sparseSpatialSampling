@@ -35,7 +35,7 @@ class Cell(object):
         """
         Initialize a cell object.
 
-        Note:
+        .. note::
             All cells are rectangular (``len_x == len_y == len_z``).
             Each cell has attributes describing its position, refinement level, neighbors, and metric values.
 
@@ -402,7 +402,7 @@ class SamplingTree(object):
         """
         Compute the cell centers of child cells for a given parent cell, or the vertices of a given cell.
 
-        Note:
+        .. note::
             Although this method is called ``_compute_cell_centers()``, it can also compute
             the vertices of a cell if ``_factor=0.5`` (half the distance between two adjacent cell centers).
             If ``_factor=0.25``, it computes the centers of all child cells relative to the parent cell center.
@@ -410,13 +410,14 @@ class SamplingTree(object):
         :param _idx: Index of the cell(s) to compute for
         :type _idx: int | list[int] | set[int]
         :param _factor: Factor determining the computation:
+
             - 0.5: compute the vertices (nodes) of the current cell
             - 0.25: compute the centers of child cells relative to the parent cell
         :type _factor: float
         :param _keep_parent_center: If True, the parent cell center is retained;
             if False, it is removed from the result
         :type _keep_parent_center: bool
-        :param _cell: Specific cell to compute for; if None, defaults to all cells in `_idx`
+        :param _cell: Specific cell to compute for; if None, defaults to all cells in ``_idx``
         :type _cell: Cell | None
         :return: Computed coordinates: either the centers of child cells (``_factor=0.25``)
                  or the vertices of the current cell (``_factor=0.5``)
@@ -683,6 +684,7 @@ class SamplingTree(object):
             to check or refine
         :type _geometry_no: int | list[int] | None
         :return:
+
             - None if all invalid cells were removed
             - Set of cell indices that are neighbors of geometries or domain boundaries
               if ``_refine_geometry=True``
@@ -777,6 +779,7 @@ class SamplingTree(object):
         Refine the grid near geometry objects or domain boundaries.
 
         This method extends ``refine()`` by:
+
             - Looping over all specified geometry objects
             - Determining the refinement level for each geometry object
             - Identifying cells in the vicinity of each geometry
@@ -1598,6 +1601,7 @@ class SamplingTree(object):
             Return a formatted string summarizing the refinement process and mesh statistics.
 
             Includes:
+
                 - Total refinement time and number of iterations
                 - Time spent in uniform and adaptive refinement
                 - Time spent in geometry refinement (if applicable)
@@ -1710,6 +1714,7 @@ def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
     :param dims: Number of physical dimensions (2 for 2D, 3 for 3D)
     :type dims: int
     :return:
+
         - Array of unique node coordinates used in the final grid
         - Array of re-numbered node indices pointing to these coordinates
     :rtype: Tuple[np.ndarray, np.ndarray]
@@ -1819,6 +1824,7 @@ def _check_cell_validity(args) -> Union[None, int]:
     Check whether a cell is valid or should be removed.
 
     :param args: Tuple containing the arguments required for validation:
+
         - cell: The cell to check
         - node: Node coordinates associated with the cell
         - geometries: List of geometry objects to check against
@@ -1844,6 +1850,7 @@ def _update_gain(args) -> float:
     Compute the gain of a cell based on its refinement level, size, and metric improvement.
 
     :param args: Tuple containing the parameters required for gain calculation:
+
         - _level: Refinement level of the cell
         - _n_dims: Number of physical dimensions
         - _width: Width of the cell

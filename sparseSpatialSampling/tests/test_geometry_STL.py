@@ -8,7 +8,7 @@ class TestGeometrySTL3D:
     @pytest.fixture
     def cube_keep_inside_false(self):
         """
-        Fixture providing a cube geometry from an STL file with ``keep_inside=False``.
+        Fixture providing a cube geometry from an ``STL`` file with ``keep_inside=False``.
         """
         return GeometrySTL3D("cube", keep_inside=False, path_stl_file=join("sparseSpatialSampling", "tests",
                                                                            "cube.stl"))
@@ -16,7 +16,7 @@ class TestGeometrySTL3D:
     @pytest.fixture
     def cube_keep_inside_true(self):
         """
-        Fixture providing a cube geometry from an STL file with ``keep_inside=True``.
+        Fixture providing a cube geometry from an ``STL`` file with ``keep_inside=True``.
         """
         return GeometrySTL3D("cube", keep_inside=True, path_stl_file=join("sparseSpatialSampling", "tests",
                                                                           "cube.stl"))
@@ -54,7 +54,7 @@ class TestGeometrySTL3D:
 
     def test_pre_check_cell(self, cube_keep_inside_false, dummy_cells):
         """
-        Test that `pre_check_cell` works correctly for STL files.
+        Test that ``pre_check_cell`` works correctly for ``STL`` files.
         """
         inside = dummy_cells.cell_inside_3D
         outside = dummy_cells.cell_outside_3D

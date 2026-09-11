@@ -1,5 +1,5 @@
 """
-Implements a class for using an STL file (3D) as geometry object.
+Implements a class for using an ``STL`` file (3D) as geometry object.
 """
 import logging
 
@@ -27,14 +27,14 @@ class GeometrySTL3D(GeometryObject):
         Implement a class for using an STL file as a geometry object representing the numerical domain
         or geometries inside the domain (3D case).
 
-        Note:
-            pyVista requires the STL file to have a closed surface.
+        .. note::
+            ``PyVista`` requires the ``STL`` file to have a closed surface.
 
         :param name: Name of the geometry object.
         :type name: str
         :param keep_inside: If ``True``, the points inside the object are kept; if ``False``, they are masked out.
         :type keep_inside: bool
-        :param path_stl_file: Path to the STL file.
+        :param path_stl_file: Path to the ``STL`` file.
         :type path_stl_file: str
         :param refine: If ``True``, the mesh around the geometry object is refined after :math:`S^3` generates the mesh.
         :type refine: bool
@@ -42,7 +42,7 @@ class GeometrySTL3D(GeometryObject):
             ``refine=True``, the geometry will be resolved with the maximum refinement level present at its surface
             after :math:`S^3` has generated the grid.
         :type min_refinement_level: int or None
-        :param reduce_by: Factor to reduce the STL file. Recommended for larger STL files, as the number of points
+        :param reduce_by: Factor to reduce the ``STL`` file. Recommended for larger ``STL`` files, as the number of points
             increases runtime significantly. A value of 0 means no compression; values between 0.9 and 0.98 typically
             work for most STL files. Must satisfy ``0 <= reduce_by < 1``.
         :type reduce_by: Union[int, float]
@@ -178,9 +178,9 @@ class GeometrySTL3D(GeometryObject):
     @property
     def main_width(self) -> float:
         """
-        Return the width of the main dimension of the cube.
+        Return the width of the main dimension of the geometry.
 
-        :return: Main width of the cube.
+        :return: Main width of the geometry.
         :rtype: float
         """
         return self._main_width
@@ -188,7 +188,7 @@ class GeometrySTL3D(GeometryObject):
     @property
     def center(self) -> Tensor:
         """
-        Return the center coordinates based on the main width of the cube.
+        Return the center coordinates based on the main width of the geometry.
 
         :return: center coordinates of the cube.
         :rtype: pt.Tensor
@@ -197,7 +197,7 @@ class GeometrySTL3D(GeometryObject):
 
     def _compute_main_width(self) -> float:
         """
-        Compute the center coordinates based on the main width of the cube.
+        Compute the width of the main dimension of the geometry.
 
         :return: center coordinates of the cube.
         :rtype: pt.Tensor
@@ -206,7 +206,7 @@ class GeometrySTL3D(GeometryObject):
 
     def _compute_center(self) -> Tensor:
         """
-        Compute the geometric center coordinates based on the main dimension of the cube.
+        Compute the geometric center coordinates based on the main dimension of the geometry.
 
         :return: center coordinates of the cube.
         :rtype: pt.Tensor

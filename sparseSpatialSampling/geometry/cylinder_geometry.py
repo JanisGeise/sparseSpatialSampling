@@ -15,7 +15,7 @@ class CylinderGeometry3D(GeometryObject):
         Implement a class for using cylinders with a constant radius, cones, and conical objects (3D)
         as geometry objects representing the numerical domain or geometries inside the domain.
 
-        Note:
+        .. note::
             The length and orientation of the cylinder is inferred from two circles representing the start and end
             points of the cylinder. The circles do not have to be aligned, allowing the creation of *oblique*
             cylinders along arbitrary directions, as long as both circles are defined in the same coordinate plane.

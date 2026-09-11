@@ -43,8 +43,8 @@ class GeometryObject(ABC):
 
         This method returns ``False`` if the cell is valid, and ``True`` if it is invalid.
 
-        Note:
-            It is expected that the mask passed into the `_apply_mask` method is always ``False`` outside
+        .. note::
+            It is expected that the mask passed into the ``_apply_mask`` method is always ``False`` outside
             the mask and always ``True`` inside it (regardless of whether it is a geometry or domain).
 
         :param mask: Mask created by the geometry object.
@@ -109,7 +109,7 @@ class GeometryObject(ABC):
     @property
     def keep_inside(self):
         """
-        Get the `keep_inside` flag for the geometry object.
+        Get the ``keep_inside`` flag for the geometry object.
 
         :return: ``True`` if points inside the object are kept; ``False`` if they are masked out.
         :rtype: bool
@@ -129,7 +129,7 @@ class GeometryObject(ABC):
     @property
     def refine(self):
         """
-        Get the `refine` flag for the geometry object.
+        Get the ``refine`` flag for the geometry object.
 
         :return: ``True`` if the mesh around the geometry object should be refined; ``False`` otherwise.
         :rtype: bool
