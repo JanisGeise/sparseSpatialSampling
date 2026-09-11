@@ -56,10 +56,10 @@ class SparseSpatialSampling:
             level difference of one
         :type max_delta_level: bool
         :param n_cells_iter_start: Number of cells to refine per iteration at the
-            beginning; if None, defaults to 1% of the number of vertices in the original grid
+            beginning; if None, defaults to 0.1% of the number of vertices in the original grid
         :type n_cells_iter_start: int | None
         :param n_cells_iter_end: Number of cells to refine per iteration at the end;
-            if None, defaults to 5% of n_cells_iter_start
+            if None, defaults to the same value as n_cells_iter_start
         :type n_cells_iter_end: int | None
         :param n_jobs: Number of CPUs to use; if None, all available CPUs will be used
         :type n_jobs: int

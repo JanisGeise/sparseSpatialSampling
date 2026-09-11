@@ -196,8 +196,9 @@ class SamplingTree(object):
         # create initial cell and compute its gain
         self._create_first_cell()
 
-        # remove the vertices of the original grid to free up memory since they are only required for fitting the KNN
-        # and computing the dominant width of the domain
+        # the vertices are only required for fitting the KNN and computing the dominant width of the domain; note
+        # that the KNN keeps a reference to the training data internally, so deleting this reference does not
+        # actually free up memory
         del self._vertices
 
         # overwrite the metric with its L2-Norm, because the metric itself is not needed anymore (Frobenius norm here

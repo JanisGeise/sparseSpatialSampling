@@ -70,7 +70,7 @@ class CubeGeometry(GeometryObject):
         # (independently if it is a geometry or domain)
         mask = mask_box(cell_nodes, self._lower_bound, self._upper_bound)
 
-        # check if the cell is valid or invali
+        # check if the cell is valid or invalid
         return self._apply_mask(mask, refine_geometry=refine_geometry)
 
     def _check_geometry(self) -> None:
@@ -80,7 +80,7 @@ class CubeGeometry(GeometryObject):
         :return: None
         :rtype: None
         """
-        # check is boundaries are empty list
+        # check if boundaries are empty lists
         assert self._lower_bound, "Found empty list for the lower bound. Please provide values for the lower bound."
         assert self._upper_bound, "Found empty list for the upper bound. Please provide values for the upper bound."
 
@@ -95,7 +95,7 @@ class CubeGeometry(GeometryObject):
         # check if the lower boundary is smaller than the upper boundary
         for i, v in enumerate(zip(self._lower_bound, self._upper_bound)):
             assert v[0] < v[1], (f"Value of {v[0]} for the lower bound at position {i} is larger or equal than the "
-                                 f"value of {v[1]} for the upper bound for geometry {self.name}. The the lower bound "
+                                 f"value of {v[1]} for the upper bound for geometry {self.name}. The lower bound "
                                  f"must be smaller than the upper bound!")
 
     @property

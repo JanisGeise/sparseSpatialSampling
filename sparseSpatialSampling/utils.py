@@ -133,7 +133,7 @@ def load_original_Foam_fields(load_dir: str, n_dimensions: int, boundaries: list
             # the field and the mask. The mask takes all cells in the specified area, but the field is only written out
             # in a part of this mask.
             except RuntimeError:
-                logger.warning(f"Field '{field}' is does not match the size of the masked domain. Skipping "
+                logger.warning(f"Field '{field}' does not match the size of the masked domain. Skipping "
                                f"field {field}.")
                 continue
 

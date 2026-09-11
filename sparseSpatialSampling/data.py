@@ -495,8 +495,10 @@ class Datawriter:
     def n_cells(self, value: int) -> None:
         """
         Set the number of cells in the grid from :math:`S^3`.
-        :value: Number of cells from the :math:`S^3` `Dataloader`.
-        :rtype: Union[int, None]
+
+        :param value: Number of cells from the :math:`S^3` `Dataloader`.
+        :type value: int
+        :rtype: None
         """
         self._n_cells = value
 
