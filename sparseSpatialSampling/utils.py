@@ -17,7 +17,6 @@ from .data import Dataloader, Datawriter
 from .export import ExportData
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 def load_original_Foam_fields(

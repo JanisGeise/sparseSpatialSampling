@@ -9,6 +9,9 @@ from sparseSpatialSampling.export import ExportData
 from sparseSpatialSampling.geometry import CubeGeometry, GeometryCoordinates2D
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 
+import logging
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
 
 def load_original_field(load_dir: str, field_name: str) -> pt.Tensor:
     print(f"Loading snapshots for field {field_name}.")

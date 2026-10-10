@@ -22,6 +22,8 @@ from sparseSpatialSampling.geometry import CubeGeometry, CylinderGeometry3D
 from sparseSpatialSampling.utils import load_original_Foam_fields, write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
 logger = logging.getLogger(__name__)
 
 

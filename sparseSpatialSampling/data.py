@@ -16,8 +16,6 @@ from os.path import join, isfile
 from .const import DATA, GRID, CONST, CENTERS, VERTICES, FACES
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    force=True)
 
 
 class Dataloader:
@@ -235,8 +233,11 @@ class Dataloader:
         self._write_times = None
         self._weights = None
         self._levels = None
+        self._metric = None
         self._field_names = None
         self._vertices = None
+        self._faces = None
+        self._nodes = None
 
     def _compute_cell_area(self) -> None:
         """

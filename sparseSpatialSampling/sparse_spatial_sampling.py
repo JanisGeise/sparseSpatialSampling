@@ -14,8 +14,6 @@ from os import path, makedirs
 from .s_cube import SamplingTree
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    force=True)
 
 
 class SparseSpatialSampling:
@@ -29,7 +27,7 @@ class SparseSpatialSampling:
         Class for executing the :math:`S^3` algorithm.
 
         .. note::
-            The parameter ``geometry_objects`` needs to have at least one entry
+            The parameter ``geometry_objects`` needs to have exactly one entry
             containing information about the domain.
 
         :param coordinates: Coordinates of the original grid
@@ -51,8 +49,7 @@ class SparseSpatialSampling:
             early stopping based on captured variance will be used
         :type n_cells_max: int | float | None
         :param min_metric: Percentage of variance of the metric the generated grid should
-            capture w.r.t. the original grid. If None, the max. number of cells will be used as
-            stopping criterion. If n_cells_max is also provided, min_metric will be ignored.
+            capture w.r.t. the original grid. If ```n_cells_max``` is also provided, ```min_metric``` will be ignored.
         :type min_metric: float
         :param max_delta_level: Constraint that two adjacent cells should have a maximum
             level difference of one
@@ -61,7 +58,7 @@ class SparseSpatialSampling:
             beginning; if None, defaults to 0.1% of the number of vertices in the original grid
         :type n_cells_iter_start: int | None
         :param n_cells_iter_end: Number of cells to refine per iteration at the end;
-            if None, defaults to the same value as n_cells_iter_start
+            if None, defaults to the same value as ```n_cells_iter_start```
         :type n_cells_iter_end: int | None
         :param n_jobs: Number of CPUs to use; if None, all available CPUs will be used
         :type n_jobs: int
@@ -140,8 +137,11 @@ class SparseSpatialSampling:
         self.faces = self._sampling.face_ids
         self.size_initial_cell = self._sampling.data_final_mesh["size_initial_cell"]
 
-        # reset SamplingTree
+        # reset SamplingTree and free up some memory; the coordinates are not needed anymore and would blow up the
+        # saved object, but the metric is kept because ExportData needs it to interpolate the metric onto the
+        # generated grid
         self._sampling = None
+        self.coordinates = None
 
         # save the s_cube instance, in case we want to interpolate some other fields later, we can just load it without
         # the necessity to re-run the grid generation
@@ -174,6 +174,12 @@ class SparseSpatialSampling:
         assert any([g.keep_inside for g in self._geometries]), ("No geometry for the domain provided. At least one "
                                                                 "geometry object must have 'keep_inside = True' "
                                                                 "representing the numerical domain.")
+
+        # multiple domains are not supported, the root cell creation and the validity check assume exactly one domain
+        _n_domains = sum(g.keep_inside for g in self._geometries)
+        assert _n_domains == 1, (f"Multiple geometries with 'keep_inside = True' are not supported. Exactly one "
+                                 f"geometry object must represent the numerical domain, but {_n_domains} were "
+                                 f"given.")
 
         # correct invalid level bounds
         if self._level_bounds <= 0:

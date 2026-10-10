@@ -20,6 +20,9 @@ from sparseSpatialSampling.utils import write_svd_s_cube_to_file
 from sparseSpatialSampling.sparse_spatial_sampling import SparseSpatialSampling
 from sparseSpatialSampling.geometry import CubeGeometry, GeometryCoordinates2D
 
+import logging
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
 
 def load_airfoil_from_stl_file(_load_path: str, _name: str = "oat15.stl", sf: float = 1.0, dimensions: str = "xy",
                                x_offset: float = 0.0, y_offset: float = 0.0, z_offset: float = 0.0):
