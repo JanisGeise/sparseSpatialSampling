@@ -9,7 +9,7 @@ from .const import DummyCells
 
 class TestPrismGeometry3D:
     @pytest.fixture
-    def prism_keep_inside_false(self):
+    def prism_keep_inside_false(self) -> PrismGeometry3D:
         """
         Fixture providing a prism with ``keep_inside=False``.
 
@@ -22,7 +22,7 @@ class TestPrismGeometry3D:
         return PrismGeometry3D("prism", keep_inside=False, positions=positions)
 
     @pytest.fixture
-    def prism_keep_inside_true(self):
+    def prism_keep_inside_true(self) -> PrismGeometry3D:
         """
         Fixture providing a prism with ``keep_inside=True``.
         The location of the prism is the same as in ``prism_keep_inside_false``
@@ -32,7 +32,10 @@ class TestPrismGeometry3D:
         return PrismGeometry3D("prism", keep_inside=True, positions=positions)
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
+        """
+        Fixture providing reusable 3D test cells.
+        """
         return DummyCells()
 
     @pytest.mark.parametrize(
@@ -49,7 +52,8 @@ class TestPrismGeometry3D:
             ("prism_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, prism_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, prism_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -59,7 +63,7 @@ class TestPrismGeometry3D:
         assert result is expected, (f"Expected '{expected}' for '{prism_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_invalid_positions(self):
+    def test_invalid_positions(self) -> None:
         """
         Ensure that invalid prism definitions raise AssertionError.
         """

@@ -2,6 +2,8 @@
 Implements a common base class for geometry objects from which all other geometry objects should be derived.
 
 """
+from __future__ import annotations
+
 import logging
 
 from torch import Tensor
@@ -14,7 +16,8 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 
 
 class GeometryObject(ABC):
-    def __init__(self, name: str, keep_inside: bool, refine: bool = False, min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement the base class for geometry objects from which all other geometry objects should be derived.
 
@@ -107,7 +110,7 @@ class GeometryObject(ABC):
                                                     f"min_refinement_level={self.min_refinement_level}.")
 
     @property
-    def keep_inside(self):
+    def keep_inside(self) -> bool:
         """
         Get the ``keep_inside`` flag for the geometry object.
 
@@ -117,7 +120,7 @@ class GeometryObject(ABC):
         return self._keep_inside
 
     @property
-    def name(self):
+    def name(self) -> str:
         """
         Get the name of the geometry object.
 
@@ -127,7 +130,7 @@ class GeometryObject(ABC):
         return self._name
 
     @property
-    def refine(self):
+    def refine(self) -> bool:
         """
         Get the ``refine`` flag for the geometry object.
 
@@ -137,7 +140,7 @@ class GeometryObject(ABC):
         return self._refine
 
     @property
-    def min_refinement_level(self):
+    def min_refinement_level(self) -> int | None:
         """
         Get the minimum refinement level for resolving the geometry.
 

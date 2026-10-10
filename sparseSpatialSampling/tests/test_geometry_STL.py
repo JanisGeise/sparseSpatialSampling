@@ -1,3 +1,10 @@
+"""
+Unit tests for ``GeometrySTL3D`` in 3D using the ``DummyCells`` class and the small ``cube.stl`` fixture file.
+
+.. note::
+    The tests resolve the ``STL`` file via a repository-root-relative path and therefore must be
+    executed from the repository root (see also the robustness item C8 in the test plan).
+"""
 import pytest
 from os.path import join
 
@@ -6,7 +13,7 @@ from .const import DummyCells
 
 class TestGeometrySTL3D:
     @pytest.fixture
-    def cube_keep_inside_false(self):
+    def cube_keep_inside_false(self) -> GeometrySTL3D:
         """
         Fixture providing a cube geometry from an ``STL`` file with ``keep_inside=False``.
         """
@@ -14,7 +21,7 @@ class TestGeometrySTL3D:
                                                                            "cube.stl"))
 
     @pytest.fixture
-    def cube_keep_inside_true(self):
+    def cube_keep_inside_true(self) -> GeometrySTL3D:
         """
         Fixture providing a cube geometry from an ``STL`` file with ``keep_inside=True``.
         """
@@ -22,7 +29,7 @@ class TestGeometrySTL3D:
                                                                           "cube.stl"))
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
         """
         Fixture providing reusable 3D test cells.
         """
@@ -42,7 +49,8 @@ class TestGeometrySTL3D:
             ("cube_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, cube_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, cube_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -52,7 +60,7 @@ class TestGeometrySTL3D:
         assert result is expected, (f"Expected '{expected}' for '{cube_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_pre_check_cell(self, cube_keep_inside_false, dummy_cells):
+    def test_pre_check_cell(self, cube_keep_inside_false: GeometrySTL3D, dummy_cells: DummyCells) -> None:
         """
         Test that ``pre_check_cell`` works correctly for ``STL`` files.
         """

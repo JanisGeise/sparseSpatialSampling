@@ -9,7 +9,7 @@ from .const import DummyCells
 
 class TestTetrahedronGeometry3D:
     @pytest.fixture
-    def tetra_keep_inside_false(self):
+    def tetra_keep_inside_false(self) -> TetrahedronGeometry3D:
         """
         Tetrahedron with ``keep_inside=False``.
         """
@@ -17,7 +17,7 @@ class TestTetrahedronGeometry3D:
         return TetrahedronGeometry3D("tetra", keep_inside=False, positions=positions)
 
     @pytest.fixture
-    def tetra_keep_inside_true(self):
+    def tetra_keep_inside_true(self) -> TetrahedronGeometry3D:
         """
         Tetrahedron with ``keep_inside=True``.
         """
@@ -25,7 +25,10 @@ class TestTetrahedronGeometry3D:
         return TetrahedronGeometry3D("tetra", keep_inside=True, positions=positions)
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
+        """
+        Fixture providing reusable 3D test cells.
+        """
         return DummyCells()
 
     @pytest.mark.parametrize(
@@ -42,7 +45,8 @@ class TestTetrahedronGeometry3D:
             ("tetra_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, tetra_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, tetra_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -52,7 +56,7 @@ class TestTetrahedronGeometry3D:
         assert result is expected, (f"Expected '{expected}' for '{tetra_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_invalid_positions(self):
+    def test_invalid_positions(self) -> None:
         """
         Ensure invalid tetrahedron definitions raise AssertionError.
         """

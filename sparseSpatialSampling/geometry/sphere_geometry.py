@@ -1,6 +1,8 @@
 """
  Implements a class for using circles (2D) or spheres (3D) as geometry object.
 """
+from __future__ import annotations
+
 from typing import Union
 from torch import Tensor, tensor
 
@@ -11,8 +13,8 @@ from .geometry_base import GeometryObject
 class SphereGeometry(GeometryObject):
     __short_description__ = "circles (2D) or spheres (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, position: list, radius: Union[int, float], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, position: list, radius: int | float, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using circles (2D) or spheres (3D) as geometry objects
         representing the numerical domain or geometries inside the domain.

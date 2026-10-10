@@ -39,6 +39,12 @@ class DummyCells:
              [0.5, 0.5, 1.5], [1.5, 0.5, 1.5], [1.5, 1.5, 1.5], [0.5, 1.5, 1.5]]
     """
     def __init__(self) -> None:
+        """
+        Initialize the 2D and 3D dummy test cells as ``torch`` tensors (single precision).
+
+        :return: None
+        :rtype: None
+        """
         # Test cells in 2D, make sure we have floats, otherwise issue in flowtorch
         self.cell_inside_2D = tensor([[0, 0], [0, 1], [1, 1], [1, 0]], dtype=float32)
         self.cell_outside_2D = tensor([[5, 5], [6, 5], [6, 6], [5, 6]], dtype=float32)

@@ -10,35 +10,35 @@ from .import DummyCells
 
 class TestCubeGeometry:
     @pytest.fixture
-    def cube_2d_keep_inside_false(self):
+    def cube_2d_keep_inside_false(self) -> CubeGeometry:
         """
         2D rectangle ``CubeGeometry`` with ``keep_inside=False``.
         """
         return CubeGeometry("cube2D", keep_inside=False, lower_bound=[0.0, 0.0], upper_bound=[1.0, 1.0])
 
     @pytest.fixture
-    def cube_2d_keep_inside_true(self):
+    def cube_2d_keep_inside_true(self) -> CubeGeometry:
         """
         2D rectangle ``CubeGeometry`` with ``keep_inside=True``.
         """
         return CubeGeometry("cube2D", keep_inside=True, lower_bound=[0.0, 0.0], upper_bound=[1.0, 1.0])
 
     @pytest.fixture
-    def cube_3d_keep_inside_false(self):
+    def cube_3d_keep_inside_false(self) -> CubeGeometry:
         """
         3D cube ``CubeGeometry`` with ``keep_inside=False``.
         """
         return CubeGeometry("cube3D", keep_inside=False, lower_bound=[0.0, 0.0, 0.0], upper_bound=[1.0, 1.0, 1.0])
 
     @pytest.fixture
-    def cube_3d_keep_inside_true(self):
+    def cube_3d_keep_inside_true(self) -> CubeGeometry:
         """
         3D cube ``CubeGeometry`` with ``keep_inside=True``.
         """
         return CubeGeometry("cube3D", keep_inside=True, lower_bound=[0.0, 0.0, 0.0], upper_bound=[1.0, 1.0, 1.0])
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
         """
         Reusable 2D/3D test cells.
         """
@@ -68,7 +68,8 @@ class TestCubeGeometry:
             ("cube_3d_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, cube_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, cube_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -78,7 +79,7 @@ class TestCubeGeometry:
         assert result is expected, (f"Expected '{expected}' for '{cube_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_check_cell_wrong_dimensions(self, cube_2d_keep_inside_false):
+    def test_check_cell_wrong_dimensions(self, cube_2d_keep_inside_false: CubeGeometry) -> None:
         """
         check_cell should raise AssertionError if dimensions don't match bounds.
         """
@@ -86,7 +87,7 @@ class TestCubeGeometry:
         with pytest.raises(AssertionError):
             cube_2d_keep_inside_false.check_cell(wrong_dim_cell)
 
-    def test_bounds_assertions(self):
+    def test_bounds_assertions(self) -> None:
         """
         Test that ``CubeGeometry`` raises AssertionError for invalid bounds.
         """

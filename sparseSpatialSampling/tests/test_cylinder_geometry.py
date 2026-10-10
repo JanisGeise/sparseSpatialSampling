@@ -9,7 +9,7 @@ from .const import DummyCells
 
 class TestCylinderGeometry3D:
     @pytest.fixture
-    def cylinder_keep_inside_false(self):
+    def cylinder_keep_inside_false(self) -> CylinderGeometry3D:
         """
         Cylinder along z-axis with ``radius = 0.5``, ``keep_inside=False``.
         """
@@ -18,7 +18,7 @@ class TestCylinderGeometry3D:
         return CylinderGeometry3D("cylinder", keep_inside=False, position=position, radius=radius)
 
     @pytest.fixture
-    def cone_keep_inside_true(self):
+    def cone_keep_inside_true(self) -> CylinderGeometry3D:
         """
         Cylinder along z-axis with ``radius = 0.5``, ``keep_inside=True``.
         """
@@ -27,7 +27,10 @@ class TestCylinderGeometry3D:
         return CylinderGeometry3D("cylinder", keep_inside=True, position=position, radius=radius)
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
+        """
+        Fixture providing reusable 3D test cells.
+        """
         return DummyCells()
 
     @pytest.mark.parametrize(
@@ -45,7 +48,8 @@ class TestCylinderGeometry3D:
         ]
     )
 
-    def test_check_cell(self, request, dummy_cells, geom_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, geom_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -55,7 +59,7 @@ class TestCylinderGeometry3D:
         assert result is expected, (f"Expected '{expected}' for '{geom_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_invalid_radius(self):
+    def test_invalid_radius(self) -> None:
         """
         Ensure invalid radius definitions raise AssertionError.
         """

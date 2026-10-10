@@ -1,6 +1,8 @@
 """
 Implementation of the sparse spatial sampling algorithm (:math:`S^3`) for 2D and 3D CFD data.
 """
+from __future__ import annotations
+
 import heapq
 import logging
 import numpy as np
@@ -8,7 +10,6 @@ import torch as pt
 
 from time import time
 from numba import njit, prange
-from typing import Tuple, Union
 from multiprocessing import get_context, cpu_count
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -30,8 +31,9 @@ CH = {"swu": 0, "nwu": 1, "neu": 2, "seu": 3, "swl": 4, "nwl": 5, "nel": 6, "sel
 
 
 class Cell(object):
-    def __init__(self, index: int, parent, nb: list, center: pt.Tensor, level: int, children=None, metric=None,
-                 gain=None, dimensions: int = 2, node_idx: list = None):
+    def __init__(self, index: int, parent: Cell | None, nb: list, center: pt.Tensor, level: int,
+                 children: list[Cell] | None = None, metric: float | None = None, gain: float | None = None,
+                 dimensions: int = 2, node_idx: list[int] | None = None) -> None:
         """
         Initialize a cell object.
 
@@ -84,10 +86,10 @@ class Cell(object):
 
 
 class SamplingTree(object):
-    def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int = None,
+    def __init__(self, vertices: pt.Tensor, target: pt.Tensor, geometry_obj: list, n_cells: int | None = None,
                  uniform_level: int = 5, min_metric: float = 0.75, max_delta_level: bool = False,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select: bool = False):
+                 n_cells_iter_start: int | None = None, n_cells_iter_end: int | None = None, n_jobs: int = 1,
+                 relTol: int | float = 1e-3, reach_at_least: float = 0.75, pre_select: bool = False) -> None:
         """
         Initialize a sampling tree for sparse spatial refinement (:math:`S^3`).
 
@@ -205,7 +207,7 @@ class SamplingTree(object):
         # same as L2, because the metric is always a vector)
         self._target_norm = pt.linalg.norm(target).item()
 
-    def _update_gain(self, new_cells: Union[set, list]) -> None:
+    def _update_gain(self, new_cells: set[int] | list[int]) -> None:
         """
         Update the gain for all new leaf cells.
 
@@ -241,7 +243,7 @@ class SamplingTree(object):
             # metric at the cell center of the current cell
             self._cells[idx].metric = _metric[i, 0]
 
-    def _update_leaf_cells(self, idx_parents: set, idx_children: set) -> None:
+    def _update_leaf_cells(self, idx_parents: set[int], idx_children: set[int]) -> None:
         """
         Update the leaf cells and ensure that all parent cells are removed from the leaf cell set.
 
@@ -397,8 +399,8 @@ class SamplingTree(object):
         # update the leaf cells, so the initial cell is now seen as leaf cell
         self._leaf_cells.add(0)
 
-    def _compute_cell_centers(self, _idx: Union[int, list, set] = None, _factor: float = 0.25,
-                              _keep_parent_center: bool = True, _cell: Cell = None) -> pt.Tensor:
+    def _compute_cell_centers(self, _idx: int | list[int] | set[int] | None = None, _factor: float = 0.25,
+                              _keep_parent_center: bool = True, _cell: Cell | None = None) -> pt.Tensor:
         """
         Compute the cell centers of child cells for a given parent cell, or the vertices of a given cell.
 
@@ -446,7 +448,7 @@ class SamplingTree(object):
         # centers of each cell, but we need the parent cell center, e.g., for computing the gain)
         return _coord[1:, :, :].squeeze(-1) if not _keep_parent_center else _coord.squeeze(-1)
 
-    def _check_nb(self, _cell_no: int) -> list:
+    def _check_nb(self, _cell_no: int) -> list[int]:
         """
         Check whether a cell and its neighbors satisfy the maximum refinement level difference constraint.
 
@@ -465,7 +467,7 @@ class SamplingTree(object):
         return [n.index for n in self._cells[_cell_no].nb if n is not None and n.leaf_cell() and
                 n.level < self._cells[_cell_no].level]
 
-    def _check_constraint(self, nb_violating_constraint: set) -> set:
+    def _check_constraint(self, nb_violating_constraint: set[int]) -> set[int]:
         """
         Check if the maximum level difference constraint is violated when refining neighbors of a given cell.
 
@@ -668,8 +670,8 @@ class SamplingTree(object):
                         " reduced without further loss of information for this metric field, since the metric field is "
                         "over-approximated.")
 
-    def _remove_invalid_cells(self, _refined_cells: set, _refine_geometry: bool = False,
-                              _geometry_no: Union[int, list] = None) -> Union[None, set]:
+    def _remove_invalid_cells(self, _refined_cells: set[int], _refine_geometry: bool = False,
+                              _geometry_no: int | list[int] | None = None) -> set[int] | None:
         """
         Remove newly generated cells that are located inside geometries or outside the domain.
 
@@ -774,7 +776,7 @@ class SamplingTree(object):
         self.all_levels = pt.tensor([self._cells[cell].level for cell in self._leaf_cells]).unsqueeze(-1)
         self._times["t_end_renumber"] = time()
 
-    def _execute_geometry_refinement(self, _geometries: list = None) -> None:
+    def _execute_geometry_refinement(self, _geometries: list[int] | None = None) -> None:
         """
         Refine the grid near geometry objects or domain boundaries.
 
@@ -866,7 +868,7 @@ class SamplingTree(object):
         self._current_max_level = max({self._cells[cell].level for cell in self._leaf_cells})
         logger.info("Finished geometry refinement.")
 
-    def _refine_cells(self, to_refine: set) -> list:
+    def _refine_cells(self, to_refine: set[int]) -> list[Cell]:
         """
         Refine the cells within ``to_refine``.
 
@@ -905,8 +907,8 @@ class SamplingTree(object):
 
         return new_cells
 
-    def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor = None, new_idx: int = None,
-                          children: Union[Tuple, list] = None) -> list:
+    def _assign_neighbors(self, cell: Cell, loc_center: pt.Tensor | None = None, new_idx: int | None = None,
+                          children: tuple | list[Cell] | None = None) -> list[Cell]:
         """
         Create child cell(s) from a given parent cell and assign neighbors correctly.
 
@@ -1189,7 +1191,7 @@ class SamplingTree(object):
 
         return children
 
-    def _assign_indices(self, cells: tuple):
+    def _assign_indices(self, cells: tuple[Cell]) -> None:
         """
         Assign unique indices to the nodes of child cells, ignoring coordinate information.
 
@@ -1587,7 +1589,7 @@ class SamplingTree(object):
             self.data_final_mesh["t_geometry"] = None
             self.data_final_mesh["t_adaptive"] = self._times["t_start_renumber"] - self._times["t_start_adaptive"]
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the total number of cells in the current mesh.
 
@@ -1699,7 +1701,7 @@ class SamplingTree(object):
 
 @njit(parallel=True, fastmath=True, nogil=True)
 def renumber_node_indices_parallel(all_idx: np.ndarray, all_nodes: np.ndarray,
-                                   unused_idx: set, dims: int) -> Tuple[np.ndarray, np.ndarray]:
+                                   unused_idx: set, dims: int) -> tuple[np.ndarray, np.ndarray]:
     """
     Remove unused nodes and their corresponding coordinates, and re-number the remaining node indices.
 
@@ -1761,7 +1763,7 @@ def check_nb_node(_cell: Cell, nb_no: int) -> bool:
     return _cell.nb[nb_no] is not None and _cell.nb[nb_no].leaf_cell() and _cell.level == _cell.nb[nb_no].level
 
 
-def parent_or_child(nb: list, check: bool, nb_idx: int, child_idx: int) -> Cell:
+def parent_or_child(nb: list[Cell | None], check: bool, nb_idx: int, child_idx: int) -> Cell:
     """
     Retrieve the neighbor cell of a newly created child cell.
 
@@ -1819,7 +1821,7 @@ def _initialize_time_dict() -> dict:
             "t_start_renumber": 0.0, "t_end_renumber": 0.0}
 
 
-def _check_cell_validity(args) -> Union[None, int]:
+def _check_cell_validity(args) -> int | None:
     """
     Check whether a cell is valid or should be removed.
 

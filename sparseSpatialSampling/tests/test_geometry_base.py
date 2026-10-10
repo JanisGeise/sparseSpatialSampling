@@ -48,6 +48,9 @@ class DummyGeometry(GeometryObject):
 
     @property
     def center(self):
+        """
+        Dummy implementation of center (returns ``None``).
+        """
         return None
 
     def _compute_main_width(self):

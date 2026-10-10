@@ -1,7 +1,9 @@
 """
 Implements a class for using tetrahedrons (3D) as geometry object.
 """
-from typing import List, Union
+from __future__ import annotations
+
+from typing import Union
 from torch import Tensor, tensor, float64, where, det, ones, cat, cross, dot
 
 from .geometry_base import GeometryObject
@@ -10,8 +12,8 @@ from .geometry_base import GeometryObject
 class TetrahedronGeometry3D(GeometryObject):
     __short_description__ = "tetrahedrons (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, positions: Union[List[Union[list, tuple]], Tensor],
-                 refine: bool = False, min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, positions: list[list | tuple] | Tensor, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using tetrahedrons (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.

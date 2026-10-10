@@ -8,7 +8,17 @@ from ..geometry import CubeGeometry
 from ..s_cube import SamplingTree
 
 
-def test_assignment_nb_uniform_grid_2d():
+def test_assignment_nb_uniform_grid_2d() -> None:
+    """
+    Check the neighbor assignment of ``_assign_neighbors`` for a uniform 4x4 grid in 2D.
+
+    Creates a ``SamplingTree`` on random 2D points, performs two uniform refinement cycles, and
+    verifies the neighbor references (including the ``None`` entries at the domain boundaries) of
+    selected cells against the expected grid layout.
+
+    :return: None
+    :rtype: None
+    """
     # create test data (just randomly distributed points in space)
     xy = pt.randint(0, 11, (25, 2))
     metric = pt.ones(xy.size(0))
@@ -119,7 +129,17 @@ def test_assignment_nb_uniform_grid_2d():
     assert cell_idx20.nb[7] is None
 
 
-def test_assignment_nb_uniform_grid_3d():
+def test_assignment_nb_uniform_grid_3d() -> None:
+    """
+    Check the neighbor assignment of ``_assign_neighbors`` for a uniform 4x4x4 grid in 3D.
+
+    Creates a ``SamplingTree`` on random 3D points, performs two uniform refinement cycles, and
+    verifies the neighbor references of the lower-, middle-, and upper-plane entries of selected
+    cells against the expected grid layout.
+
+    :return: None
+    :rtype: None
+    """
     # create test data (just randomly distributed points in space)
     xy = pt.randint(0, 11, (50, 3))
     metric = pt.ones(xy.size(0))

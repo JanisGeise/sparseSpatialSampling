@@ -1,10 +1,11 @@
 """
 Implements a class for using an ``STL`` file (3D) as geometry object.
 """
+from __future__ import annotations
+
 import logging
 
 from pyvista import PolyData, read
-from typing import Union
 from torch import Tensor, tensor
 from os.path import join
 from pymeshfix import MeshFix
@@ -22,7 +23,7 @@ class GeometrySTL3D(GeometryObject):
     __short_description__ = "usage of STL files for geometries (3D)"
 
     def __init__(self, name: str, keep_inside: bool, path_stl_file: str, refine: bool = False,
-                 min_refinement_level: int = None, reduce_by: Union[int, float] = 0):
+                 min_refinement_level: int | None = None, reduce_by: int | float = 0) -> None:
         """
         Implement a class for using an STL file as a geometry object representing the numerical domain
         or geometries inside the domain (3D case).

@@ -9,7 +9,7 @@ from .const import DummyCells
 
 class TestPyramidGeometry3D:
     @pytest.fixture
-    def pyramid_keep_inside_false(self):
+    def pyramid_keep_inside_false(self) -> PyramidGeometry3D:
         """
         Pyramid with ``keep_inside=False``.
         """
@@ -23,7 +23,7 @@ class TestPyramidGeometry3D:
         return PyramidGeometry3D("pyramid", keep_inside=False, nodes=nodes)
 
     @pytest.fixture
-    def pyramid_keep_inside_true(self):
+    def pyramid_keep_inside_true(self) -> PyramidGeometry3D:
         """
         Pyramid with ``keep_inside=True``.
         """
@@ -37,7 +37,10 @@ class TestPyramidGeometry3D:
         return PyramidGeometry3D("pyramid", keep_inside=True, nodes=nodes)
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
+        """
+        Fixture providing reusable 3D test cells.
+        """
         return DummyCells()
 
     @pytest.mark.parametrize(
@@ -54,7 +57,8 @@ class TestPyramidGeometry3D:
             ("pyramid_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, pyramid_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, pyramid_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -66,7 +70,7 @@ class TestPyramidGeometry3D:
             f"(coords={cell.tolist()}), got '{result}'."
         )
 
-    def test_invalid_nodes(self):
+    def test_invalid_nodes(self) -> None:
         """
         Ensure invalid pyramid definitions raise AssertionError.
         """

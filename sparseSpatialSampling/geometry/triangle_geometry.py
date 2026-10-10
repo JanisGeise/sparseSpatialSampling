@@ -1,6 +1,8 @@
 """
 Implements a class for using triangles (2D) as geometry object.
 """
+from __future__ import annotations
+
 import logging
 from typing import Union
 
@@ -15,8 +17,8 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 class TriangleGeometry(GeometryObject):
     __short_description__ = "triangles (2D)"
 
-    def __init__(self, name: str, keep_inside: bool, points: Union[list, Tensor], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, points: list | Tensor, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using triangles (2D) as geometry objects representing the numerical
         domain or geometries inside the domain.

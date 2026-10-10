@@ -10,37 +10,37 @@ from .import DummyCells
 
 class TestTriangleGeometry2D:
     @pytest.fixture
-    def valid_points(self):
+    def valid_points(self) -> list[tuple[float, float]]:
         return [(-1, -0.5), (0.25, 4), (1.5, -0.5)]
 
-    def test_valid_triangle_does_not_raise(self, valid_points):
+    def test_valid_triangle_does_not_raise(self, valid_points: list[tuple[float, float]]) -> None:
         """
         A valid triangle should pass without AssertionError.
         """
         TriangleGeometry("triangle", keep_inside=False, points=valid_points)
 
-    def test_too_few_points_raises(self):
+    def test_too_few_points_raises(self) -> None:
         """
         Less than 3 points should raise an AssertionError.
         """
         with pytest.raises(AssertionError, match="Expected 3 points"):
             TriangleGeometry("triangle", keep_inside=False, points=[(0, 0), (1, 0)])
 
-    def test_too_many_points_raises(self):
+    def test_too_many_points_raises(self) -> None:
         """
         More than 3 points should raise an AssertionError.
         """
         with pytest.raises(AssertionError, match="Expected 3 points"):
             TriangleGeometry("triangle", keep_inside=False, points=[(0, 0), (1, 0), (0, 1), (1, 1)])
 
-    def test_points_with_wrong_dimension_raises(self):
+    def test_points_with_wrong_dimension_raises(self) -> None:
         """
         Each point must have exactly 2 coordinates.
         """
         with pytest.raises(AssertionError, match="have to contain exactly 2 entries"):
             TriangleGeometry("triangle", keep_inside=False, points=[(0, 0), (1, 1, 5), (0, 1)])
 
-    def test_zero_area_triangle_raises(self):
+    def test_zero_area_triangle_raises(self) -> None:
         """
         Collinear points should raise AssertionError due to zero area.
         This assertion is also raised if we have the same point multiple times.
@@ -48,7 +48,7 @@ class TestTriangleGeometry2D:
         with pytest.raises(AssertionError, match="area of the triangle has to be larger than zero"):
             TriangleGeometry("triangle", keep_inside=False, points=[(0, 0), (1, 1), (2, 2)])
 
-    def test_points_as_tensors_allowed(self):
+    def test_points_as_tensors_allowed(self) -> None:
         """
         Passing torch tensors instead of tuples should work.
         """
@@ -57,7 +57,7 @@ class TestTriangleGeometry2D:
         assert tri.type == "triangle"
 
     @pytest.fixture
-    def triangle_keep_inside_false(self):
+    def triangle_keep_inside_false(self) -> TriangleGeometry:
         """
         Fixture providing a TriangleGeometry with vertices and ``keep_inside=False``:
         [(-1, -0.5), (0.25, 4), (1.5, -0.5)]
@@ -65,7 +65,7 @@ class TestTriangleGeometry2D:
         return TriangleGeometry("triangle", keep_inside=False, points=[(-1, -0.5), (0.25, 4), (1.5, -0.5)])
 
     @pytest.fixture
-    def triangle_keep_inside_true(self):
+    def triangle_keep_inside_true(self) -> TriangleGeometry:
         """
         Fixture providing a TriangleGeometry with vertices and ``keep_inside=True``.
         """
@@ -92,7 +92,8 @@ class TestTriangleGeometry2D:
             ("triangle_keep_inside_true", "cell_partially_2D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, triangle_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, triangle_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """

@@ -1,8 +1,9 @@
 """
 Implement a class for using 2D coordinates as a geometry object.
 """
+from __future__ import annotations
+
 from numpy import ndarray
-from typing import Union
 from shapely import Point, Polygon
 from torch import Tensor, tensor
 
@@ -14,8 +15,8 @@ from .geometry_base import GeometryObject
 class GeometryCoordinates2D(GeometryObject):
     __short_description__ = "2D coordinates for geometries"
 
-    def __init__(self, name: str, keep_inside: bool, coordinates: Union[list, ndarray], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, coordinates: list | ndarray, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implements a class for using coordinates as geometry objects representing the numerical
         domain or geometries inside the domain (2D case only).

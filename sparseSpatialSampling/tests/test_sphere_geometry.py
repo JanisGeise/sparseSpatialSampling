@@ -9,34 +9,34 @@ from .import DummyCells
 
 class TestSphereGeometry:
     @pytest.fixture
-    def circle_2d_keep_inside_false(self):
+    def circle_2d_keep_inside_false(self) -> SphereGeometry:
         """2D circle with ``keep_inside=False``.
         """
         return SphereGeometry("circle2D", keep_inside=False, position=[0.5, 0.5], radius=0.9)
 
     @pytest.fixture
-    def circle_2d_keep_inside_true(self):
+    def circle_2d_keep_inside_true(self) -> SphereGeometry:
         """
         2D circle with ``keep_inside=True``.
         """
         return SphereGeometry("circle2D", keep_inside=True, position=[0.5, 0.5], radius=0.9)
 
     @pytest.fixture
-    def sphere_3d_keep_inside_false(self):
+    def sphere_3d_keep_inside_false(self) -> SphereGeometry:
         """
         3D sphere with ``keep_inside=False``.
         """
         return SphereGeometry("sphere3D", keep_inside=False, position=[0.5, 0.5, 0.5], radius=0.9)
 
     @pytest.fixture
-    def sphere_3d_keep_inside_true(self):
+    def sphere_3d_keep_inside_true(self) -> SphereGeometry:
         """
         3D sphere with ``keep_inside=True``.
         """
         return SphereGeometry("sphere3D", keep_inside=True, position=[0.5, 0.5, 0.5], radius=0.9)
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
         """Reusable 2D/3D test cells."""
         return DummyCells()
 
@@ -64,7 +64,8 @@ class TestSphereGeometry:
             ("sphere_3d_keep_inside_true", "cell_partially_3D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, sphere_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, sphere_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -74,7 +75,7 @@ class TestSphereGeometry:
         assert result is expected, (f"Expected '{expected}' for '{sphere_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_check_cell_wrong_dimensions(self, circle_2d_keep_inside_false):
+    def test_check_cell_wrong_dimensions(self, circle_2d_keep_inside_false: SphereGeometry) -> None:
         """
         check_cell should raise AssertionError if dimensions don't match the center position.
         """
@@ -83,7 +84,7 @@ class TestSphereGeometry:
         with pytest.raises(AssertionError):
             circle_2d_keep_inside_false.check_cell(wrong_dim_cell)
 
-    def test_geometry_assertions(self):
+    def test_geometry_assertions(self) -> None:
         """
         Test that ``SphereGeometry`` raises AssertionError for invalid inputs.
         """

@@ -1,13 +1,14 @@
 """
     Implements the :math:`S^3` algorithm to generate grids for CFD data.
 """
+from __future__ import annotations
+
 import inspect
 import textwrap
 import logging
 import torch as pt
 
 from os.path import join
-from typing import Union
 from os import path, makedirs
 
 from .s_cube import SamplingTree
@@ -20,9 +21,10 @@ logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)-8s %(
 class SparseSpatialSampling:
     def __init__(self, coordinates: pt.Tensor, metric: pt.Tensor, geometry_objects: list, save_path: str,
                  save_name: str, grid_name: str = "grid_s_cube", uniform_levels: int = 5,
-                 n_cells_max: Union[int, float] = None, min_metric: float = 0.75, max_delta_level: bool = False,
-                 n_cells_iter_start: int = None, n_cells_iter_end: int = None, n_jobs: int = 1,
-                 relTol: Union[int, float] = 1e-3, reach_at_least: float = 0.75, pre_select_cells: bool = False):
+                 n_cells_max: int | float | None = None, min_metric: float = 0.75,
+                 max_delta_level: bool = False, n_cells_iter_start: int | None = None,
+                 n_cells_iter_end: int | None = None, n_jobs: int = 1, relTol: int | float = 1e-3,
+                 reach_at_least: float = 0.75, pre_select_cells: bool = False) -> None:
         """
         Class for executing the :math:`S^3` algorithm.
 

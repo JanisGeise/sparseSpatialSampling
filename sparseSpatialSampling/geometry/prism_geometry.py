@@ -1,7 +1,8 @@
 """
 Implements a class for using prisms (3D) as geometry object.
 """
-from typing import List, Union
+from __future__ import annotations
+
 from torch import Tensor, tensor, float64, logical_and, where, allclose, cat, zeros
 
 from .geometry_base import GeometryObject
@@ -10,8 +11,8 @@ from .triangle_geometry import TriangleGeometry
 class PrismGeometry3D(GeometryObject):
     __short_description__ = "prisms (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, positions: List[List[Union[list, tuple]]], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, positions: list[list[list | tuple]], refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using prisms (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.

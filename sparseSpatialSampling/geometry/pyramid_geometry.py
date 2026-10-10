@@ -1,7 +1,9 @@
 """
 Implements a class for using square pyramids (3D) as geometry object.
 """
-from typing import List, Union
+from __future__ import annotations
+
+from typing import Union
 from torch import Tensor, cat, tensor, argmax, cross, nonzero
 
 from .geometry_base import GeometryObject
@@ -11,8 +13,8 @@ from .tetrahedron_geometry import TetrahedronGeometry3D
 class PyramidGeometry3D(GeometryObject):
     __short_description__ = "square pyramids (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, nodes: List[Union[list, tuple]], refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, nodes: list[list | tuple], refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using square pyramids (3D) as geometry objects representing the numerical
         domain or geometries inside the domain.

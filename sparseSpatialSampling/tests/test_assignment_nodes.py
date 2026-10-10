@@ -8,7 +8,16 @@ from ..geometry import CubeGeometry
 from ..s_cube import SamplingTree
 
 
-def test_assignment_nodes_uniform_grid_2d():
+def test_assignment_nodes_uniform_grid_2d() -> None:
+    """
+    Check the node index assignment of ``_assign_indices`` for a uniform 4x4 grid in 2D.
+
+    Creates a ``SamplingTree`` on random 2D points, performs two uniform refinement cycles, and
+    verifies the node indices of selected cells against the expected grid layout.
+
+    :return: None
+    :rtype: None
+    """
     # create test data (just randomly distributed points in space)
     xy = pt.randint(0, 11, (25, 2))
     metric = pt.ones(xy.size(0))
@@ -85,7 +94,16 @@ def test_assignment_nodes_uniform_grid_2d():
     assert cell_idx15.node_idx[3] == 21
 
 
-def test_assignment_nodes_uniform_grid_3d_single_level():
+def test_assignment_nodes_uniform_grid_3d_single_level() -> None:
+    """
+    Check the node index assignment of ``_assign_indices`` for a uniform 2x2x2 grid in 3D.
+
+    Creates a ``SamplingTree`` on random 3D points, performs a single uniform refinement cycle,
+    and verifies the node indices and total node count of all eight child cells.
+
+    :return: None
+    :rtype: None
+    """
     # create test data (just randomly distributed points in space)
     xy = pt.randint(0, 11, (50, 3))
     metric = pt.ones(xy.size(0))

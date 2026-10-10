@@ -1,6 +1,8 @@
 """
 Implement a class for using rectangles (2D) or cubes (3D) as geometry object.
 """
+from __future__ import annotations
+
 from torch import Tensor, tensor
 from flowtorch.data import mask_box
 
@@ -10,8 +12,8 @@ from .geometry_base import GeometryObject
 class CubeGeometry(GeometryObject):
     __short_description__ = "rectangles (2D) or cubes (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, lower_bound: list, upper_bound: list, refine: bool = False,
-                 min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, lower_bound: list[float], upper_bound: list[float],
+                 refine: bool = False, min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using rectangles (2D) or cubes (3D) as geometry objects
         representing the numerical domain or geometries inside the domain.

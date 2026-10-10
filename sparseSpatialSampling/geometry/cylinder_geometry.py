@@ -1,7 +1,10 @@
 """
 Implements a class for using cylinders, cones and conical objects (3D) as geometry object.
 """
-from typing import Union, List
+from __future__ import annotations
+
+from typing import Union
+
 from torch import Tensor, tensor, cross, logical_and, where, float64
 
 from .geometry_base import GeometryObject
@@ -9,8 +12,9 @@ from .geometry_base import GeometryObject
 class CylinderGeometry3D(GeometryObject):
     __short_description__ = "cylinders, conical objects and cones (3D)"
 
-    def __init__(self, name: str, keep_inside: bool, position: List[Union[list, tuple]],
-                 radius: Union[int, float, list, tuple], refine: bool = False, min_refinement_level: int = None):
+    def __init__(self, name: str, keep_inside: bool, position: list[list | tuple],
+                 radius: int | float | list | tuple, refine: bool = False,
+                 min_refinement_level: int | None = None) -> None:
         """
         Implement a class for using cylinders with a constant radius, cones, and conical objects (3D)
         as geometry objects representing the numerical domain or geometries inside the domain.

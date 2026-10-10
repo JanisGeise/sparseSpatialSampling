@@ -10,7 +10,7 @@ from .import DummyCells
 
 class TestGeometryCoordinates2D:
     @pytest.fixture
-    def square_keep_inside_false(self):
+    def square_keep_inside_false(self) -> GeometryCoordinates2D:
         """
         Fixture providing GeometryCoordinates2D with ``keep_inside=False``.
         Coordinates form a simple square: [(-1, -1), (-1, 1.25), (1.25, 1.25), (1.25, -1)]
@@ -19,7 +19,7 @@ class TestGeometryCoordinates2D:
                                      coordinates=[(-1, -1), (-1, 1.25), (1.25, 1.25), (1.25, -1)])
 
     @pytest.fixture
-    def square_keep_inside_true(self):
+    def square_keep_inside_true(self) -> GeometryCoordinates2D:
         """
         Fixture providing GeometryCoordinates2D with ``keep_inside=True``.
         The coordinates are the same as used in ``square_keep_inside_false``
@@ -28,7 +28,7 @@ class TestGeometryCoordinates2D:
                                      coordinates=[(-1, -1), (-1, 1.25), (1.25, 1.25), (1.25, -1)])
 
     @pytest.fixture
-    def dummy_cells(self):
+    def dummy_cells(self) -> DummyCells:
         """
         Fixture providing reusable 2D/3D test cells.
         """
@@ -48,7 +48,8 @@ class TestGeometryCoordinates2D:
             ("square_keep_inside_true", "cell_partially_2D", False),
         ]
     )
-    def test_check_cell(self, request, dummy_cells, square_fixture, cell_attr, expected):
+    def test_check_cell(self, request: pytest.FixtureRequest, dummy_cells: DummyCells, square_fixture: str,
+                        cell_attr: str, expected: bool) -> None:
         """
         Test ``check_cell`` with both ``keep_inside=False`` and ``keep_inside=True``.
         """
@@ -58,7 +59,7 @@ class TestGeometryCoordinates2D:
         assert result is expected, (f"Expected '{expected}' for '{square_fixture}' with '{cell_attr}' "
                                     f"(coords={cell.tolist()}), got '{result}'.")
 
-    def test_pre_check_cell(self, square_keep_inside_false):
+    def test_pre_check_cell(self, square_keep_inside_false: GeometryCoordinates2D) -> None:
         """
         Test that ``pre_check_cell`` works correctly.
         """

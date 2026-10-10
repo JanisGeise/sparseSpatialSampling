@@ -20,7 +20,7 @@ from ..data import Dataloader
 FILENAME = r"s_cube_test_dataset.h5"
 
 
-def test_dataloader():
+def test_dataloader() -> None:
     """
     Test that the ``Dataloader`` correctly loads the synthetic test dataset.
 
