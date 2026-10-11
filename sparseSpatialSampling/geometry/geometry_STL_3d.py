@@ -148,13 +148,12 @@ class GeometrySTL3D(GeometryObject):
             # replace the STL with the fixed one
             self._stl_file = mFix.mesh
 
-        # check if the fix worked, if not exit
+        # check if the fix worked, if not raise
         try:
             # pyVista will throw a RuntimeError if the surface is not closed and manifold
             _ = test_data.select_enclosed_points(self._stl_file, check_surface=True)
-        except RuntimeError:
-            logger.critical("Was not able to close the STL file.")
-            exit(0)
+        except RuntimeError as err:
+            raise RuntimeError("Was not able to close the STL file.") from err
 
 
         # print a warning if the STL file contains many points, since it will slow down S^3 significantly

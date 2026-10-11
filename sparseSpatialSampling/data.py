@@ -229,7 +229,12 @@ class Dataloader:
         with File(join(self._load_path, self._file_name), "r") as f:
             self._n_cells = f.get(f"{GRID}/{CENTERS}")[()].shape[0]
             self._n_dimensions = f.get(f"{GRID}/{CENTERS}")[()].shape[1]
-            self._size_initial_cell = f.get(f"{CONST}/size_initial_cell")[()]
+
+            try:
+                self._size_initial_cell = f.get(f"{CONST}/size_initial_cell")[()]
+            except TypeError:
+                logger.warning("Could not load initial cell size.")
+
         self._write_times = None
         self._weights = None
         self._levels = None
@@ -433,8 +438,7 @@ class Datawriter:
 
             self._grid.create_dataset(name, data=data)
         else:
-            logger.critical(f"Unknown group type, available types are '{DATA}', '{CONST}' and '{GRID}'.")
-            exit()
+            raise ValueError(f"Unknown group type, available types are '{DATA}', '{CONST}' and '{GRID}'.")
 
     def write_xdmf_file(self) -> None:
         """
@@ -445,9 +449,8 @@ class Datawriter:
         """
         # check if an HDF file exists
         if not isfile(join(self._file_path, self._file_name)):
-            logger.error(f"Could not find {join(self._file_path, self._file_name)}. Make sure the file exists and the "
-                         f"provided path is correct.")
-            exit(0)
+            raise FileNotFoundError(f"Could not find {join(self._file_path, self._file_name)}. Make sure the file "
+                                    f"exists and the provided path is correct.")
 
         # if yes, generate an XDMF file based on the contents of the HDF5 file
         logger.info(f"Writing XDMF file for file {self._file_name}")
@@ -771,20 +774,16 @@ class XDMFWriter:
         """
         if GRID in self._file.keys():
             if FACES not in self._file[GRID].keys():
-                logger.error(f"Unable to find cell faces in group {GRID}. Make sure the key to the cell faces is "
-                             f"present and named {FACES}.")
-                exit(0)
+                raise ValueError(f"Unable to find cell faces in group {GRID}. Make sure the key to the cell faces is "
+                                 f"present and named {FACES}.")
             if CENTERS not in self._file[GRID].keys():
-                logger.error(f"Unable to find cell centers in group {GRID}. Make sure the key to the cell centers is "
-                             f"present and named {CENTERS}.")
-                exit(0)
+                raise ValueError(f"Unable to find cell centers in group {GRID}. Make sure the key to the cell centers "
+                                 f"is present and named {CENTERS}.")
             if VERTICES not in self._file[GRID].keys():
-                logger.error(f"Unable to find cell vertices in group {GRID}. Make sure the key to the cell vertices is"
-                             f"present and named {VERTICES}.")
-                exit(0)
+                raise ValueError(f"Unable to find cell vertices in group {GRID}. Make sure the key to the cell "
+                                 f"vertices is present and named {VERTICES}.")
         else:
-            logger.error("Found no grid in the provided HDF5 file. Unable to create XDMF file without a grid.")
-            exit(0)
+            raise ValueError("Found no grid in the provided HDF5 file. Unable to create XDMF file without a grid.")
 
 
 if __name__ == "__main__":
