@@ -7,5 +7,6 @@ shapely
 h5py
 matplotlib
 pyvista
+numpy-stl
 pytest
 pymeshfix

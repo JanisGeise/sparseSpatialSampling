@@ -483,14 +483,26 @@ class Datawriter:
     def mode(self, value: str) -> None:
         """
         Set the file access mode for the ``HDF5`` file and reopen it with the new mode.
+        The previous file handle is closed before reopening to avoid leaking (write-locked) file
+        handles, and the cached group references are re-derived from the new file handle in the
+        same way as in the constructor.
 
         :param value: File access mode (e.g., ``'r'`` for read, ``'w'`` for write)
         :type value: str
         :return: None
         :rtype: None
         """
+        # close the existing handle before reopening, otherwise the old (write-locked) file handle leaks
+        # and blocks other processes (e.g., ParaView) from opening the file until this process exits
+        self._file.close()
         self._mode = value
         self._file = File(join(self._file_path, self._file_name), self._mode)
+
+        # re-allocate groups for DATA, GRID & CONST from the new file handle if they exist, otherwise the
+        # cached references would point to the closed file
+        self._data = None if DATA not in self._file.keys() else self._file[DATA]
+        self._const = None if CONST not in self._file.keys() else self._file[CONST]
+        self._grid = None if GRID not in self._file.keys() else self._file[GRID]
 
     @property
     def n_cells(self) -> int | None:

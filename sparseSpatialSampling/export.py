@@ -261,10 +261,12 @@ class ExportData:
             self._datawriter.write_data("size_initial_cell", group=CONST, data=self._size_initial_cell)
             self._initialized_hdf5 = True
 
-            # since we wrote the level and metric fields, we can free up some memory
-            self._levels = None
-            self._metric = None
-            self._size_initial_cell = None
+            # since we wrote the level and metric fields, we can free up some memory, but only if all fields share a
+            # single file, because each new file needs the constants again
+            if not self._new_file:
+                self._levels = None
+                self._metric = None
+                self._size_initial_cell = None
 
         else:
             # if we append to existing file we have to instantiate the Datawrite first (only necessary if
