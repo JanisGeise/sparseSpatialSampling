@@ -379,9 +379,13 @@ class Datawriter:
         :type data: any
         :param group: Target group for the data. Available groups are:
 
-            - ``'constant'``: arbitrary values and fields without time dependency
-            - ``'grid'``: grid datasets including ``'centers'``, ``'vertices'``, and ``'faces'`` from :math:`S^3`
-            - ``'data'``: temporal data such as flow fields
+            - ``'constant'``: arbitrary values and fields without time dependency. Writing a dataset that already
+              exists is skipped with a warning
+            - ``'grid'``: grid datasets including ``'centers'``, ``'vertices'``, and ``'faces'`` from :math:`S^3`.
+              Writing an existing dataset is skipped with a warning if the data is identical; otherwise a
+              ``ValueError`` is raised (the grid must not differ between fields)
+            - ``'data'``: temporal data such as flow fields. Writing a dataset that already exists in the same time
+              step is skipped with a warning
 
         :type group: str
         :param time_step: Time step associated with the field when writing temporal data.
@@ -427,7 +431,8 @@ class Datawriter:
             try:
                 self._const.create_dataset(name, data=data)
             except ValueError:
-                logger.warning(f"Field {name} already exists in time step {time_step}. Skipping field {name}.")
+                logger.warning(f"Field {name} already exists in group {CONST} of "
+                               f"{join(self._file_path, self._file_name)}. Skipping field {name}.")
 
         # ... and the grid
         elif group == GRID:
@@ -436,7 +441,22 @@ class Datawriter:
             else:
                 self._grid = self._file[GRID]
 
-            self._grid.create_dataset(name, data=data)
+            # a dataset that already exists is only skipped if the data is identical; otherwise we raise, since the
+            # grid defines the mesh for all fields of the file and must not be overwritten. the new data is compared
+            # in the dtype of the stored dataset
+            if name in self._grid:
+                _existing = pt.as_tensor(self._grid[name][()])
+                if pt.equal(pt.as_tensor(data, dtype=_existing.dtype), _existing):
+                    logger.warning(f"Dataset {name} already exists in group {GRID} of "
+                                   f"{join(self._file_path, self._file_name)} with identical data. Skipping dataset "
+                                   f"{name}.")
+                else:
+                    raise ValueError(f"Dataset {name} already exists in group {GRID} of "
+                                     f"{join(self._file_path, self._file_name)} with different data. The grid defines "
+                                     f"the mesh for all fields of the file and must not be overwritten; write the "
+                                     f"grid to a new file instead.")
+            else:
+                self._grid.create_dataset(name, data=data)
         else:
             raise ValueError(f"Unknown group type, available types are '{DATA}', '{CONST}' and '{GRID}'.")
 
