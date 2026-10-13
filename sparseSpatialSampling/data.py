@@ -288,30 +288,27 @@ class Dataloader:
             field_name = [field_name]
 
         # create a file object and an empty list for storing the data matrices
-        _file = File(join(self._load_path, self._file_name), "r")
-        _dm = []
+        with File(join(self._load_path, self._file_name), "r") as _file:
+            _dm = []
 
-        for f in field_name:
-            # get the shape of the field (scalar / vector field)
-            shape = _file.get(f"{DATA}/{write_times[0]}/{f}_center")[()].shape
+            for f in field_name:
+                # get the shape of the field (scalar / vector field)
+                shape = _file.get(f"{DATA}/{write_times[0]}/{f}_center")[()].shape
 
-            # allocate the data matrix accordingly
-            if len(shape) == 1:
-                _data_matrix = pt.zeros((self._n_cells, len(write_times)), dtype=self._dtype)
-            else:
-                _data_matrix = pt.zeros((shape[0], shape[1], len(write_times)), dtype=self._dtype)
-
-            # assemble the data matrix for the given time steps
-            for i, k in enumerate(write_times):
+                # allocate the data matrix accordingly
                 if len(shape) == 1:
-                    _data_matrix[:, i] = pt.from_numpy(_file.get(f"{DATA}/{k}/{f}_center")[()])
+                    _data_matrix = pt.zeros((self._n_cells, len(write_times)), dtype=self._dtype)
                 else:
-                    _data_matrix[:, :, i] = pt.from_numpy(_file.get(f"{DATA}/{k}/{f}_center")[()])
+                    _data_matrix = pt.zeros((shape[0], shape[1], len(write_times)), dtype=self._dtype)
 
-            _dm.append(_data_matrix)
+                # assemble the data matrix for the given time steps
+                for i, k in enumerate(write_times):
+                    if len(shape) == 1:
+                        _data_matrix[:, i] = pt.from_numpy(_file.get(f"{DATA}/{k}/{f}_center")[()])
+                    else:
+                        _data_matrix[:, :, i] = pt.from_numpy(_file.get(f"{DATA}/{k}/{f}_center")[()])
 
-        # close the file
-        _file.close()
+                _dm.append(_data_matrix)
 
         return _dm[0] if len(_dm) == 1 else _dm
 
@@ -535,6 +532,10 @@ class Datawriter:
         """
         Write an ``XDMF`` file based on the contents of a given ``HDF5`` file.
 
+        .. note:: This method closes the ``Datawriter`` at the end, so writing to the file afterwards fails with
+            an opaque error; re-set ``mode`` (e.g., ``'a'``) to continue writing, which re-derives the cached
+            group references.
+
         :return: None
         :rtype: None
         """
@@ -638,47 +639,69 @@ class XDMFWriter:
         self._mixed = mixed
         self._hdf_file_name = file_name
         self._file = File(join(self._file_path, self._hdf_file_name), "r")
-        self._header = '<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n'
-        self._temporal_grid = False
-        self._const_attributes = False
-        self._keys_const_attributes = []
 
-        # get the file name of the corresponding XDMF file
-        self._xdmf_file_name = f"{self._hdf_file_name.split('.h5')[0]}.xdmf"
+        # close the file handle if the initialization fails, otherwise a failed check leaks a locked read handle
+        # for the remaining lifetime of the process (a kept traceback, e.g., in a notebook session, pins the handle)
+        try:
+            self._header = '<?xml version="1.0"?>\n<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>\n<Xdmf Version="2.0">\n'
+            self._temporal_grid = False
+            self._const_attributes = False
+            self._keys_const_attributes = []
 
-        # check if the grid is present and if all required keys exist, if not then we can't create the XDMF
-        self._check_grid()
+            # get the file name of the corresponding XDMF file
+            self._xdmf_file_name = f"{self._hdf_file_name.split('.h5')[0]}.xdmf"
 
-        # get the number of dimensions based on the coordinates of the grid
-        self._n_dimensions = self._file.get(f"{GRID}/{CENTERS}")[()].shape[-1]
-        self._n_cells = self._file.get(f"{GRID}/{CENTERS}")[()].shape[0]
-        self._n_faces = self._file.get(f"{GRID}/{FACES}")[()].shape[0]
-        self._n_vertices = self._file.get(f"{GRID}/{VERTICES}")[()].shape[0]
+            # check if the grid is present and if all required keys exist, if not then we can't create the XDMF
+            self._check_grid()
 
-        # grid type and dimensions
-        if self._mixed:
-            self._grid_type = "Mixed"
-        else:
-            self._grid_type = "Quadrilateral" if self._n_dimensions == 2 else "Hexahedron"
-        self._dims = "XY" if self._n_dimensions == 2 else "XYZ"
+            # get the number of dimensions based on the coordinates of the grid
+            self._n_dimensions = self._file.get(f"{GRID}/{CENTERS}")[()].shape[-1]
+            self._n_cells = self._file.get(f"{GRID}/{CENTERS}")[()].shape[0]
+            self._n_faces = self._file.get(f"{GRID}/{FACES}")[()].shape[0]
+            self._n_vertices = self._file.get(f"{GRID}/{VERTICES}")[()].shape[0]
+
+            # grid type and dimensions
+            if self._mixed:
+                self._grid_type = "Mixed"
+            else:
+                self._grid_type = "Quadrilateral" if self._n_dimensions == 2 else "Hexahedron"
+            self._dims = "XY" if self._n_dimensions == 2 else "XYZ"
+        except Exception:
+            self._file.close()
+            raise
 
     def write_xdmf(self) -> None:
         """
         Wrapper function for writing the ``XDMF`` file.
 
+        .. note:: The ``XDMFWriter`` is a one-shot object: the ``HDF5`` read handle is closed after writing,
+            no matter if writing succeeded. Reusing the instance for a second ``write_xdmf()`` call raises a
+            ``ValueError``; create a new instance instead.
+
         :return: None
         :rtype: None
         """
-        # 1. check if we have temporal data available
-        self._temporal_grid = True if self._check_data() else False
+        # the writer is a one-shot object; on a closed handle the temporal-data check below would silently return
+        # False (h5py membership tests evaluate to False on invalid ids) and a second call would overwrite the
+        # XDMF file with an incomplete grid without temporal data
+        if not self._file.id.valid:
+            raise ValueError("The XDMFWriter instance was already used to write an XDMF file and its file handle "
+                             "is closed. Create a new XDMFWriter instance to write the file again.")
 
-        # 2. check what is available in const. to write ->> if we found something then it will be written into the
-        # first time step of the temporal grid structure
-        self._keys_const_attributes = self._get_const_keys()
-        self._const_attributes = True if self._keys_const_attributes else False
+        try:
+            # 1. check if we have temporal data available
+            self._temporal_grid = True if self._check_data() else False
 
-        # write the XDMF file
-        self._write_temporal_grid() if self._temporal_grid else self._write_const_grid()
+            # 2. check what is available in const. to write ->> if we found something then it will be written into
+            # the first time step of the temporal grid structure
+            self._keys_const_attributes = self._get_const_keys()
+            self._const_attributes = True if self._keys_const_attributes else False
+
+            # 3. write the XDMF file; the finally block below guarantees that the read handle is released even if
+            # any step fails
+            self._write_temporal_grid() if self._temporal_grid else self._write_const_grid()
+        finally:
+            self._file.close()
 
     def _write_temporal_grid(self) -> None:
         """
