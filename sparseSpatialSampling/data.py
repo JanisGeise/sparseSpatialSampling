@@ -7,15 +7,21 @@ Module containing classes for handling input and output of :math:`S^3` data.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import torch as pt
 
-from h5py import File
+from h5py import Dataset, File
 from os.path import join, isfile
 
 from .const import DATA, GRID, CONST, CENTERS, VERTICES, FACES
 
 logger = logging.getLogger(__name__)
+
+# name of the dataset attribute that stores the checksum of a grid dataset
+CHECKSUM_ATTR = "checksum"
+# number of rows per chunk when streaming a stored grid dataset to compute its checksum
+GRID_HASH_CHUNK = 1_000_000
 
 
 class Dataloader:
@@ -65,7 +71,7 @@ class Dataloader:
         The time steps at which a specific field is present are stored in the ``field_names`` property.
 
         :return: List of available write times
-        :rtype: list
+        :rtype: list[str]
         """
         if self._write_times is None:
             with File(join(self._load_path, self._file_name), "r") as f:
@@ -138,7 +144,7 @@ class Dataloader:
         fields available at each corresponding time step.
 
         :return: Dictionary mapping each time step to its available fields
-        :rtype: dict[int, list]
+        :rtype: dict
         """
         if self._field_names is None:
             # we can't use CENTERS, because CENTERS only stands for the cell centers of the grid; the location of the
@@ -166,7 +172,7 @@ class Dataloader:
     @property
     def metric(self) -> pt.Tensor:
         """
-        Load the metric field used to generate the grid
+        Load the metric field used to generate the grid.
 
         :return: Tensor containing the metric field used to generate the grid
         :rtype: pt.Tensor
@@ -262,7 +268,7 @@ class Dataloader:
         :type field_name: str
         :param write_times: Time steps for which the data matrix should be created.
             If ``None``, all available time steps will be used.
-        :type write_times: Union[str, List[str], None]
+        :type write_times: str | list[str] | None
         :return:
 
             - Data matrix containing snapshots:
@@ -271,7 +277,7 @@ class Dataloader:
               - ``[N_cells, N_snapshots]`` for scalar fields
 
             - Or a list of data matrices if multiple fields are loaded
-        :rtype: Union[pt.Tensor, List[pt.Tensor]]
+        :rtype: list[pt.Tensor] | pt.Tensor
         """
         if write_times is None:
             write_times = self.write_times
@@ -281,7 +287,7 @@ class Dataloader:
         if isinstance(field_name, str):
             field_name = [field_name]
 
-        # create a file object and empty list for storing the data matrices
+        # create a file object and an empty list for storing the data matrices
         _file = File(join(self._load_path, self._file_name), "r")
         _dm = []
 
@@ -368,6 +374,45 @@ class Datawriter:
         self.write_data("vertices", group="grid", data=loader.nodes)
         self.write_data("faces", group="grid", data=loader.faces)
 
+    @staticmethod
+    def _checksum_from_tensor(values: pt.Tensor) -> str:
+        """
+        Compute a deterministic ``SHA-256`` checksum over the dtype, the shape, and the raw byte content of a tensor.
+
+        :param values: Tensor to compute the checksum for
+        :type values: pt.Tensor
+        :return: Hex digest of the checksum
+        :rtype: str
+        """
+        _values = values.detach().cpu()
+        _flat = _values.flatten()
+        _hasher = hashlib.sha256()
+        _hasher.update(f"{_values.numpy().dtype.str}|{tuple(_values.shape)}|".encode())
+        _hasher.update(memoryview(_flat.view(pt.uint8).numpy()))
+        return _hasher.hexdigest()
+
+    @staticmethod
+    def _checksum_from_dataset(dataset: Dataset) -> str:
+        """
+        Compute the same deterministic ``SHA-256`` checksum as
+        :meth:`_checksum_from_tensor` for a stored ``HDF5`` dataset by streaming it in chunks, so the full dataset
+        is never held in memory.
+
+        :param dataset: Dataset to compute the checksum for
+        :type dataset: Dataset
+        :return: Hex digest of the checksum
+        :rtype: str
+        """
+        _hasher = hashlib.sha256()
+        _hasher.update(f"{dataset.dtype.str}|{tuple(dataset.shape)}|".encode())
+        _rows = dataset.shape[0] if dataset.shape else 0
+        for _start in range(0, _rows, GRID_HASH_CHUNK):
+            _stop = min(_start + GRID_HASH_CHUNK, _rows)
+            _hasher.update(memoryview(dataset[_start:_stop]))
+        if not dataset.shape:
+            _hasher.update(memoryview(dataset[()]))
+        return _hasher.hexdigest()
+
     def write_data(self, name: str, data: any, group: str = "constant",
                    time_step: int | float | str | None = None) -> None:
         """
@@ -380,10 +425,12 @@ class Datawriter:
         :param group: Target group for the data. Available groups are:
 
             - ``'constant'``: arbitrary values and fields without time dependency. Writing a dataset that already
-              exists is skipped with a warning
+              exists is skipped with a warning; the stored data is kept and not compared against the new data
             - ``'grid'``: grid datasets including ``'centers'``, ``'vertices'``, and ``'faces'`` from :math:`S^3`.
-              Writing an existing dataset is skipped with a warning if the data is identical; otherwise a
-              ``ValueError`` is raised (the grid must not differ between fields)
+              Duplicates are detected via a ``SHA-256`` checksum stored as a dataset attribute (over dtype, shape,
+              and raw values, computed on the first write): identical data is skipped with a warning, different
+              data raises a ``ValueError`` (the grid must not differ between fields); a nested group with a
+              dataset's name also raises
             - ``'data'``: temporal data such as flow fields. Writing a dataset that already exists in the same time
               step is skipped with a warning
 
@@ -415,11 +462,12 @@ class Datawriter:
             else:
                 self._data = self._file[f"{DATA}/{time_step}"]
 
-            # write the data to HDF
+            # write the data to HDF5
             try:
                 self._data.create_dataset(name, data=data)
             except ValueError:
-                logger.warning(f"Field {name} already exists in the HDF file. Skipping field {name}.")
+                logger.warning(f"Field {name} already exists in time step {time_step} of "
+                               f"{join(self._file_path, self._file_name)}. Skipping field {name}.")
 
         # do the same for the constant properties...
         elif group == CONST:
@@ -432,7 +480,8 @@ class Datawriter:
                 self._const.create_dataset(name, data=data)
             except ValueError:
                 logger.warning(f"Field {name} already exists in group {CONST} of "
-                               f"{join(self._file_path, self._file_name)}. Skipping field {name}.")
+                               f"{join(self._file_path, self._file_name)}. Skipping field {name}; the stored "
+                               f"data is kept and not compared against the new data.")
 
         # ... and the grid
         elif group == GRID:
@@ -445,8 +494,22 @@ class Datawriter:
             # grid defines the mesh for all fields of the file and must not be overwritten. the new data is compared
             # in the dtype of the stored dataset
             if name in self._grid:
-                _existing = pt.as_tensor(self._grid[name][()])
-                if pt.equal(pt.as_tensor(data, dtype=_existing.dtype), _existing):
+                _existing = self._grid[name]
+                # a nested group with the same name cannot be compared to data and is always a conflict
+                if not isinstance(_existing, Dataset):
+                    raise ValueError(f"Item {name} already exists in group {GRID} of "
+                                     f"{join(self._file_path, self._file_name)} as a group instead of a dataset. The "
+                                     f"grid group must only contain datasets; write the grid to a new file instead.")
+
+                # the checksum attribute avoids reading the stored dataset; files written before the checksum was
+                # introduced get it computed once (streamed) and stored for all future calls
+                _stored_checksum = _existing.attrs.get(CHECKSUM_ATTR)
+                if _stored_checksum is None:
+                    _stored_checksum = self._checksum_from_dataset(_existing)
+                    _existing.attrs[CHECKSUM_ATTR] = _stored_checksum
+                # map the stored numpy dtype to the matching torch dtype without loading the full dataset
+                _probe = pt.as_tensor(_existing[:1]) if _existing.shape else pt.as_tensor(_existing[()])
+                if self._checksum_from_tensor(pt.as_tensor(data, dtype=_probe.dtype)) == _stored_checksum:
                     logger.warning(f"Dataset {name} already exists in group {GRID} of "
                                    f"{join(self._file_path, self._file_name)} with identical data. Skipping dataset "
                                    f"{name}.")
@@ -456,7 +519,15 @@ class Datawriter:
                                      f"the mesh for all fields of the file and must not be overwritten; write the "
                                      f"grid to a new file instead.")
             else:
-                self._grid.create_dataset(name, data=data)
+                _dataset = self._grid.create_dataset(name, data=data)
+                # only the cell centers carry a checksum eagerly: the grid is always written as one consistent set
+                # (centers, vertices, faces) from a single source, so one quantity identifies the whole grid. the
+                # remaining datasets get their checksum lazily if they are ever re-written
+                if name == CENTERS:
+                    # store the checksum of the stored content with the dataset, so duplicate checks never have to
+                    # read the stored data again; the incoming data is hashed in the dtype the dataset stores it with
+                    _probe = pt.as_tensor(_dataset[:1]) if _dataset.shape else pt.as_tensor(_dataset[()])
+                    _dataset.attrs[CHECKSUM_ATTR] = self._checksum_from_tensor(pt.as_tensor(data, dtype=_probe.dtype))
         else:
             raise ValueError(f"Unknown group type, available types are '{DATA}', '{CONST}' and '{GRID}'.")
 
@@ -467,7 +538,7 @@ class Datawriter:
         :return: None
         :rtype: None
         """
-        # check if an HDF file exists
+        # check if an HDF5 file exists
         if not isfile(join(self._file_path, self._file_name)):
             raise FileNotFoundError(f"Could not find {join(self._file_path, self._file_name)}. Make sure the file "
                                     f"exists and the provided path is correct.")
@@ -529,7 +600,7 @@ class Datawriter:
         """
         Get the number of cells in the grid from :math:`S^3`.
         :return: Number of cells from the :math:`S^3` ``Dataloader``.
-        :rtype: Union[int, None]
+        :rtype: int | None
         """
         return self._n_cells
 
@@ -540,6 +611,7 @@ class Datawriter:
 
         :param value: Number of cells from the :math:`S^3` ``Dataloader``.
         :type value: int
+        :return: None
         :rtype: None
         """
         self._n_cells = value
@@ -627,7 +699,7 @@ class XDMFWriter:
             f_out.write(_domain_header)
 
             # loop over all available time steps and write all specified data to XDMF & HDF5 files, since we have the
-            # HDMF5 file written completely for all specified snapshots, we can now iterate over all time steps
+            # HDF5 file written completely for all specified snapshots, we can now iterate over all time steps
             for i, t in enumerate(sorted(self._file.get(DATA).keys(), key=lambda x: float(x))):
                 # write grid specific header
                 tmp = f'<Grid Name="{self._grid_name} {t}" GridType="Uniform">\n<Time Value="{t}"/>\n' \
@@ -773,7 +845,7 @@ class XDMFWriter:
         :rtype: list
         """
         if CONST in self._file.keys():
-            # loop over all entries in const. and add everything, which has the same dimensions as we have number of
+            # loop over all entries in const. and add everything, which has the same dimensions as the number of
             # cells -> means we have some sort of field
             keys = []
             for k in self._file[CONST].keys():
