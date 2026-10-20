@@ -94,7 +94,6 @@ class ExportData:
         self._field_name = None
         self._datawriter = None
         self._snapshot_counter = 0
-        self._field_name = None
         self._initialized_hdf5 = False if not append_existing else True
         self._interpolated_metric = False if not append_existing else True
         # we still need to re-compute the weights of the KNN if we add a field to an existing file

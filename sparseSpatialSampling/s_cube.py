@@ -164,7 +164,6 @@ class SamplingTree(object):
         self._cells = None
         self._leaf_cells = set()
         self._n_cells_after_uniform = None
-        self._N_cells_per_iter = []
         self.all_nodes = []
         self.all_centers = []
         self.face_ids = None
