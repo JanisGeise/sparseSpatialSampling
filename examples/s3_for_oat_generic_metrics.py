@@ -1,5 +1,5 @@
 """
-execute s^3 for the generic metrics.
+execute S^3 for the generic metrics.
 """
 import torch as pt
 from os.path import join
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # load the corresponding write times
     times = pt.load(join(load_path, "oat15_tandem_times.pt"))[::10]
 
-    # load the airfoil geometries of the leading airfoil from an STL file
+    # load the airfoil geometry of the leading airfoil from an STL file
     oat15 = load_airfoil_from_stl_file(join(load_path, "oat15_airfoil_no_TE.stl"), dimensions="xz")
     naca = load_airfoil_from_stl_file(join(load_path, "naca_airfoil_no_TE.stl"), dimensions="xz")
 
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         # execute S^3
         s_cube.execute_grid_generation()
 
-        # create export instance, export all fields into the same HFD5 file and create single XDMF from it
+        # create an export instance, export all fields into the same HDF5 file and create a single XDMF file from it
         export = ExportData(s_cube, write_times=times.tolist())
 
         # loop over the specified fields and export them onto the S^3 grid
